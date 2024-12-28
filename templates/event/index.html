@@ -1,0 +1,15 @@
+{% extends "event/base_generic.html" %}
+{% block content %}
+    <h1>Доступные мероприятия</h1>
+    {% if event_list %}
+        <ul>
+        {% for event in event_list %}
+            <li>
+                <a href="/event/parent/{{ event.id }}/">{{ event.name }}</a>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Нет подходящих мероприятий.</p>
+    {% endif %}
+{% endblock %}

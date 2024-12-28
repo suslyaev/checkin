@@ -1,0 +1,20 @@
+{% extends "event/base_generic.html" %}
+{% block content %}
+    <h1>Мероприятие: {{ event_detail.name }}</h1>
+
+    <p><strong>Тип события:</strong> {{ event_detail.event_type }}</p>
+    <p><strong>Возрастная группа:</strong> {{ event_detail.age }}</p>
+    <p><strong>Филиал:</strong> {{ event_detail.campus }}</p>
+    <p><strong>Описание:</strong> {{ event_detail.comment }}</p>
+
+    <div style="margin-left:20px;margin-top:20px">
+    <h4>Конкретные события</h4>
+
+    {% for instance in instance_list %}
+    <hr>
+    <p><strong>Наименование:</strong> {{instance.module.name}}</p>
+    <p class="text-muted"><strong>Даты:</strong> {{instance.date_start}} - {{instance.date_end}}</p>
+    <a href="/event/instance/{{ instance.id }}/">Зарегистрироваться</a>
+    {% endfor %}
+  </div>
+{% endblock %}

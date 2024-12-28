@@ -1,0 +1,15 @@
+{% extends "event/base_generic.html" %}
+{% load qr_code %}
+{% block content %}
+    <h1>Зарегистрирован</h1>
+
+    <p><strong>Имя:</strong> {{ last_name }}</p>
+    <p><strong>Телефон:</strong> {{ phone }}</p>
+    <p><strong>Email:</strong> {{ email }}</p>
+    {% with link_qr as url %}
+        {% qr_from_text url size="M" %}
+    {% endwith %}
+
+    <div style="margin-left:20px;margin-top:20px">
+  </div>
+{% endblock %}
