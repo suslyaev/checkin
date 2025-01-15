@@ -3,7 +3,7 @@ def get_params_visible_buttons_save(request, obj):
     button_save = obj is None
     return {
         'show_save_and_continue': False if request.user.is_superuser == True else False,
-        'show_save': button_save if request.user.is_superuser == True else False,
+        'show_save': button_save if request.user.is_superuser or request.user.is_staff == True else False,
         'show_save_and_add_another': False if request.user.is_superuser == True else False,
         'show_delete': False if request.user.is_superuser == True else False
     }
