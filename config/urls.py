@@ -19,8 +19,10 @@ from django.urls import path, include
 
 from django.conf import settings
 from django.conf.urls.static import static
+from config import views
 
 urlpatterns = [
+    path('', views.redirect_admin),
     path('admin/', admin.site.urls),
     path('api/', include('config.api.urls')), #API
     path('event/', include('event.urls')), 
