@@ -1,6 +1,6 @@
 from django.contrib import admin
 import event.services as service
-from .models import Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
+from .models import CustomUser, Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
 from .forms import ActionForm, CheckinOrCancelForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
@@ -9,6 +9,24 @@ from .resources import ContactResource, CheckinResource
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
 from django.urls import reverse
+from django import forms
+from django.contrib.admin.widgets import FilteredSelectMultiple
+
+
+@admin.register(CustomUser)
+class CustomUserAdmin(admin.ModelAdmin):
+    search_fields = ['username', 'first_name', 'last_name']  # Поля для поиска
+    list_display = ['username', 'first_name', 'last_name', 'email']  # Для отображения в списке
+
+# Форма для модели ModuleInstance
+class ModuleInstanceForm(forms.ModelForm):
+    class Meta:
+        model = ModuleInstance
+        fields = '__all__'
+        widgets = {
+            'admins': FilteredSelectMultiple('Администраторы', is_stacked=False),
+            'checkers': FilteredSelectMultiple('Проверяющие', is_stacked=False),
+        }
 
 
 # Базовый класс с параметрами по умолчанию
@@ -135,7 +153,11 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         ('Когда', {
             'fields': [('date_start', 'date_end')]
         }),
+        ('Администрирование', {
+            'fields': [('admins', 'checkers')]
+        }),
     )
+    autocomplete_fields = ['admins', 'checkers',]
     list_display = ('name', 'date_start', 'date_end')
     inlines = [RegistrationInline, CheckinInline, CancelInline]
     save_on_top = True

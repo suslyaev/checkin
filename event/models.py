@@ -1,10 +1,23 @@
 from django.db import models
+from django.contrib.auth.models import User
 import event.services as service
 from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
 from PIL import Image
 
+
+# Кастомная модель пользователей
+class CustomUser(User):
+    class Meta:
+        proxy = True
+        ordering = ['last_name', 'first_name']  # Сортировка по фамилии и имени
+
+    def __str__(self):
+        # Отображение имени, фамилии или логина, если имя и фамилия пустые
+        if self.first_name and self.last_name:
+            return f"{self.last_name} {self.first_name}"
+        return self.username
 
 # Базовый класс с параметрами по умолчанию
 class BaseModelClass(models.Model):
@@ -87,6 +100,19 @@ class ModuleInstance(models.Model):
     address = models.TextField(verbose_name='Адрес проведения', blank=True, null=True)
     date_start = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время начала')
     date_end = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время окончания')
+
+    admins = models.ManyToManyField(
+        CustomUser,
+        related_name='admin_events',
+        verbose_name='Администраторы',
+        blank=True
+    )
+    checkers = models.ManyToManyField(
+        CustomUser,
+        related_name='checker_events',
+        verbose_name='Проверяющие',
+        blank=True
+    )
     
     def link_module_instance(self):
         mess = 'Перейти к мероприятию'
