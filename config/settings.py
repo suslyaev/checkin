@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-
+from operator import truediv
 from pathlib import Path
 import os
 import environ
@@ -31,7 +31,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['192.168.3.115', 'localhost', '127.0.0.1', '5.35.87.216']
 
 # Application definition
 
@@ -49,9 +49,11 @@ INSTALLED_APPS = [
     'import_export',
     'admin_auto_filters',
     'event',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -59,6 +61,21 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://portal.sukiasyan.pro',
+    'https://checker.sukiasyan.pro'
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://192.168.3.115:3000"
 ]
 
 ROOT_URLCONF = 'config.urls'

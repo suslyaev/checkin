@@ -12,3 +12,4 @@ pillow==10.4.0
 sqlparse==0.5.3
 tablib==3.5.0
 typing_extensions==4.12.2
+django-cors-headers==4.6.0
