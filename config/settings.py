@@ -33,6 +33,8 @@ DEBUG = env.bool('DEBUG', default=False)
 
 ALLOWED_HOSTS = ['192.168.3.115', 'localhost', '127.0.0.1', '5.35.87.216']
 
+TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN')
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -42,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'telegram_bot.apps.TelegramBotConfig',
 
     # АПИ
     'rest_framework', # API
