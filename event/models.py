@@ -44,7 +44,7 @@ class Company(BaseModelClass):
 class CategoryContact(BaseModelClass):
     name = models.CharField(max_length=100, verbose_name='Наименование категории')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
-    color = models.CharField(max_length=7, verbose_name='Цвет')
+    color = models.CharField(max_length=7, default="#FFFFFF", verbose_name="Цвет")
 
     class Meta:
         verbose_name = 'Категория'
@@ -142,8 +142,11 @@ class ModuleInstance(models.Model):
 # Действие
 class Action(models.Model):
     contact = models.ForeignKey('Contact', on_delete=models.CASCADE, null=True, verbose_name='Контакт')
-    module_instance = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, verbose_name='Мероприятие')
-    action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),  verbose_name='Тип действия', default='new')
+    module_instance = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True,
+                                        verbose_name='Мероприятие')
+    action_type = models.CharField(max_length=100,
+                                   choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),
+                                   verbose_name='Тип действия', default='new')
     action_date = models.DateTimeField(null=True, blank=True, auto_now=True, verbose_name='Дата и время действия')
     is_last_state = models.BooleanField(default=True, verbose_name='Текущее состояние')
 

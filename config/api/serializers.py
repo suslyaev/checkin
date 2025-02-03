@@ -16,7 +16,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CategoryContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = CategoryContact
-        fields = ['id', 'name', 'comment']
+        fields = ['id', 'name', 'color', 'comment']
         read_only_fields = ('id',)
 
 class ContactSerializer(serializers.ModelSerializer):
