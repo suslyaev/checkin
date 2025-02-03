@@ -1,7 +1,7 @@
 from django.contrib import admin
 import event.services as service
 from .models import CustomUser, Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
-from .forms import ActionForm, CheckinOrCancelForm
+from .forms import ActionForm, CheckinOrCancelForm, CategoryContactForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ImportExportActionModelAdmin
@@ -17,6 +17,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 class CustomUserAdmin(admin.ModelAdmin):
     search_fields = ['username', 'first_name', 'last_name']  # Поля для поиска
     list_display = ['username', 'first_name', 'last_name', 'email']  # Для отображения в списке
+
 
 # Форма для модели ModuleInstance
 class ModuleInstanceForm(forms.ModelForm):
@@ -34,18 +35,22 @@ class BaseAdminPage(admin.ModelAdmin):
     list_per_page = 25
     view_on_site = False
 
+
 # Фильтр с автозаполнением для module_instance
 class ModuleInstanceFilter(AutocompleteFilter):
     title = 'Мероприятие'  # Название фильтра
     field_name = 'module_instance'  # Поле модели, по которому будет фильтрация
 
+
 class CompanyFilter(AutocompleteFilter):
     title = 'Компания'
     field_name = 'company'
 
+
 class CategoryContactFilter(AutocompleteFilter):
     title = 'Категория'
     field_name = 'category'
+
 
 # Инлайн регистраций для страницы событий
 class RegistrationInline(admin.TabularInline):
@@ -65,6 +70,7 @@ class RegistrationInline(admin.TabularInline):
     def get_queryset(self, request):
         return Action.objects.filter(is_last_state=True, action_type='new')
 
+
 # Инлайн посетителей для страницы событий
 class CheckinInline(admin.TabularInline):
     model = Action
@@ -82,6 +88,7 @@ class CheckinInline(admin.TabularInline):
     # Выборка чекинов
     def get_queryset(self, request):
         return Action.objects.filter(is_last_state=True, action_type='checkin')
+
 
 # Инлайн отмененных регистраций для страницы событий
 class CancelInline(admin.TabularInline):
@@ -101,6 +108,7 @@ class CancelInline(admin.TabularInline):
     def get_queryset(self, request):
         return Action.objects.filter(is_last_state=True, action_type='cancel')
 
+
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportActionModelAdmin):
@@ -108,7 +116,7 @@ class ContactAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     list_display = ('fio', 'company', 'category', 'photo_preview', 'comment')
     list_filter = (CompanyFilter, CategoryContactFilter,)
     readonly_fields = ('photo_preview',)
-    autocomplete_fields = ['company', 'category',]
+    autocomplete_fields = ['company', 'category', ]
     search_fields = ['fio']
     fieldsets = (
         (None, {
@@ -125,6 +133,7 @@ class ContactAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         }),
     )
 
+
 # Компания
 @admin.register(Company)
 class CompanyAdmin(BaseAdminPage):
@@ -132,12 +141,23 @@ class CompanyAdmin(BaseAdminPage):
     list_editable = ('name', 'comment')
     search_fields = ['name']
 
+
 # Категория
 @admin.register(CategoryContact)
 class CategoryContactAdmin(BaseAdminPage):
-    list_display = ('id', 'name', 'comment')
-    list_editable = ('name', 'comment')
+    form = CategoryContactForm
+    list_display = ('id', 'name', 'color', 'colored_box', 'comment')
+    list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+
+    def colored_box(self, obj):
+        """Функция для отображения цвета в админке"""
+        return format_html(
+            '<div style="width: 30px; height: 30px; background-color: {}"></div>', obj.color
+        )
+
+    colored_box.short_description = "Цвет"
+
 
 # Событие
 @admin.register(ModuleInstance)
@@ -157,12 +177,13 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             'fields': [('admins', 'checkers')]
         }),
     )
-    autocomplete_fields = ['admins', 'checkers',]
+    autocomplete_fields = ['admins', 'checkers', ]
     list_display = ('name', 'date_start', 'date_end')
     inlines = [RegistrationInline, CheckinInline, CancelInline]
     save_on_top = True
     list_per_page = 25
     view_on_site = False
+
 
 # Чекин
 @admin.register(Checkin)
@@ -171,7 +192,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     search_fields = ['contact__fio', 'module_instance__module__name']
     list_display = ('contact', 'photo_contact', 'module_instance', 'get_buttons_action',)
     autocomplete_fields = ['contact', 'module_instance']
-    list_filter = (ModuleInstanceFilter, )
+    list_filter = (ModuleInstanceFilter,)
     list_per_page = 25
     view_on_site = False
 
@@ -179,7 +200,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         js = ('js/checkin_list.js',)
 
     def get_fields(self, request, obj=None):
-        
+
         if obj:  # Редактирование записи
             return [
                 ('action_type',),
@@ -193,12 +214,13 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
                 ('contact',),
                 ('module_instance',),
             ]
-    
+
     def get_readonly_fields(self, request, obj=None):
         if obj:  # Редактирование записи
-            return ['contact', 'action_type', 'action_date', 'is_last_state', 'module_instance', 'get_buttons_action', 'photo_contact']
+            return ['contact', 'action_type', 'action_date', 'is_last_state', 'module_instance', 'get_buttons_action',
+                    'photo_contact']
         else:  # Создание новой записи
-            return [ 'action_type', 'get_buttons_action']
+            return ['action_type', 'get_buttons_action']
 
     # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
     def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
@@ -224,7 +246,6 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
 
     get_buttons_action.short_description = 'Действия'
 
-
     @admin.action(description='Чекин')
     def checkin_actions(self, request, queryset):
         message_title = 'Ниже указаны регистрации на событие, которые будут подтверждены:'
@@ -239,10 +260,13 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
                 return HttpResponseRedirect(request.get_full_path())
 
         if not form:
-            form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
+            form = CheckinOrCancelForm(
+                initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
 
-        return render(request, 'event/update_actions.html', {'action_def': 'checkin_actions', 'message_title': message_title, 'items': queryset,'form': form, 'title':u'Подтверждение посещения'})
-    
+        return render(request, 'event/update_actions.html',
+                      {'action_def': 'checkin_actions', 'message_title': message_title, 'items': queryset, 'form': form,
+                       'title': u'Подтверждение посещения'})
+
     @admin.action(description='Отмена')
     def cancel_actions(self, request, queryset):
         message_title = 'Ниже указаны регистрации на событие, которые будут отменены:'
@@ -257,9 +281,12 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
                 return HttpResponseRedirect(request.get_full_path())
 
         if not form:
-            form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
+            form = CheckinOrCancelForm(
+                initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
 
-        return render(request, 'event/update_actions.html', {'action_def': 'cancel_actions','message_title': message_title, 'items': queryset,'form': form, 'title':u'Отмена регистрации'})
+        return render(request, 'event/update_actions.html',
+                      {'action_def': 'cancel_actions', 'message_title': message_title, 'items': queryset, 'form': form,
+                       'title': u'Отмена регистрации'})
 
     # Выборка регистраций
     def get_queryset(self, request):
