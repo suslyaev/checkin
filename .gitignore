@@ -18,14 +18,6 @@ venv/
 *.sqlite3
 db.sqlite3
 
-# Static files
-/static/
-staticfiles/
-*.svg
-*.png
-*.jpg
-*.jpeg
-*.gif
 
 # Media files
 /media/
