@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from colorfield.fields import ColorField
 import event.services as service
 from django import forms
 from django.urls import reverse
@@ -12,12 +13,16 @@ class CustomUser(User):
     class Meta:
         proxy = True
         ordering = ['last_name', 'first_name']  # Сортировка по фамилии и имени
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
 
     def __str__(self):
         # Отображение имени, фамилии или логина, если имя и фамилия пустые
         if self.first_name and self.last_name:
             return f"{self.last_name} {self.first_name}"
         return self.username
+    
+
 
 # Базовый класс с параметрами по умолчанию
 class BaseModelClass(models.Model):
@@ -39,6 +44,7 @@ class Company(BaseModelClass):
 # Категория
 class CategoryContact(BaseModelClass):
     name = models.CharField(max_length=100, verbose_name='Наименование категории')
+    color = ColorField(default='#FFFFFF', verbose_name='Цвет категории')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
     class Meta:
@@ -101,10 +107,10 @@ class ModuleInstance(models.Model):
     date_start = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время начала')
     date_end = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время окончания')
 
-    admins = models.ManyToManyField(
+    managers = models.ManyToManyField(
         CustomUser,
         related_name='admin_events',
-        verbose_name='Администраторы',
+        verbose_name='Менеджеры',
         blank=True
     )
     checkers = models.ManyToManyField(
@@ -130,9 +136,10 @@ class ModuleInstance(models.Model):
 # Действие
 class Action(models.Model):
     contact = models.ForeignKey('Contact', on_delete=models.CASCADE, null=True, verbose_name='Контакт')
-    module_instance = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, verbose_name='Мероприятие')
+    module_instance = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, blank=True, verbose_name='Мероприятие')
     action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),  verbose_name='Тип действия', default='new')
     action_date = models.DateTimeField(null=True, blank=True, auto_now=True, verbose_name='Дата и время действия')
+    operator = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Оператор')
     is_last_state = models.BooleanField(default=True, verbose_name='Текущее состояние')
 
     def __str__(self):

@@ -33,7 +33,7 @@ class ActionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Action
         fields = ['id', 'contact', 'contact_obj', 'module_instance', 'module_instance_obj', 'action_type', 'action_date']
-        read_only_fields = ('id',)
+        read_only_fields = ('id', 'operator')
 
     def validate(self, data):
         """
@@ -42,3 +42,9 @@ class ActionSerializer(serializers.ModelSerializer):
         instance = Action(**data)
         instance.clean()
         return data
+    
+    def create(self, validated_data):
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            validated_data['operator'] = request.user
+        return super().create(validated_data)

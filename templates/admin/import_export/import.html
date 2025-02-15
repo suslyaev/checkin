@@ -1,0 +1,21 @@
+{% extends "admin/import_export/import.html" %}
+
+{% block content %}
+    <p>Для создания новых записей используйте шаблон:</p>
+    <a type="button" href="{% url 'admin:checkin_template_create' %}" class="button-confirm" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px;">Скачать шаблон</a>
+    <p>Так же можно просто экспортировать несколько записей без столбца ID и использовать файл в качестве шаблона</p>
+    <p>Мероприятия, ФИО, Компания, Категория, Комментарий</p>
+    <p>Будут импортированы следующие поля: <code>module_instance, fio, company, category, comment</code></p>
+    <p>Если поле <code>module_instance</code> оставить пустым, обновляться/создаваться будут только контакты</p>
+    
+</br>
+    {{ block.super }}  {# Оставляем другие элементы родительского шаблона #}
+{% endblock %}
+
+{% block field_list %}
+    {# Полностью убираем стандартный блок с полями #}
+{% endblock %}
+
+{% block resource %}  
+    {# Очищаем блок "Ресурс: CheckinResource", если он мешает #}
+{% endblock %}

@@ -36,6 +36,9 @@ class ActionSerializerViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(module_instance=int(module_instance_portal))
         return queryset[:50]
     
+    def perform_create(self, serializer):
+        serializer.save(operator=self.request.user)
+    
 
 class ContactSerializerViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()

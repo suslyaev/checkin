@@ -45,9 +45,9 @@ INSTALLED_APPS = [
 
     # АПИ
     'rest_framework', # API
-    'rest_framework.authtoken', # Аутентификация токенами
     'import_export',
     'admin_auto_filters',
+    'colorfield',
     'event',
 ]
 
@@ -111,6 +111,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ),
+}
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
@@ -127,8 +134,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = '/static/'  # Это уже должно быть настроено
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')  # Добавьте это
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
