@@ -31,7 +31,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = ['192.168.3.115', 'localhost', '127.0.0.1', '5.35.87.216']
+ALLOWED_HOSTS = env('HOST')
 
 TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN')
 
