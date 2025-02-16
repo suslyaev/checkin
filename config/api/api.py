@@ -3,14 +3,12 @@ from rest_framework import viewsets, permissions
 from django.utils.timezone import now
 from .serializers import ModuleInstanceSerializer, ActionSerializer, ContactSerializer
 
-
 class ModuleInstanceViewSet(viewsets.ModelViewSet):
     queryset = ModuleInstance.objects.filter(date_start__gte=now()) | ModuleInstance.objects.filter(date_end__gte=now())
     serializer_class = ModuleInstanceSerializer
     permission_classes = [
-        permissions.AllowAny
+        permissions.DjangoModelPermissions
     ]
-
     def get_queryset(self):
         queryset = ModuleInstance.objects.filter(date_start__gte=now()) | ModuleInstance.objects.filter(date_end__gte=now())
         id_portal = self.request.query_params.get('id', None)
@@ -18,12 +16,11 @@ class ModuleInstanceViewSet(viewsets.ModelViewSet):
             queryset = ModuleInstance.objects.filter(id=int(id_portal))
         return queryset[:50]
 
-
 class ActionSerializerViewSet(viewsets.ModelViewSet):
     queryset = Action.objects.filter(is_last_state=True)
     serializer_class = ActionSerializer
     permission_classes = [
-        permissions.AllowAny
+        permissions.DjangoModelPermissions
     ]
 
     def get_queryset(self):
@@ -39,14 +36,17 @@ class ActionSerializerViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(module_instance=int(module_instance_portal))
         return queryset[:50]
 
+    def perform_create(self, serializer):
+        serializer.save(operator=self.request.user)
+
 
 class ContactSerializerViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [
-        permissions.AllowAny
+        permissions.DjangoModelPermissions
     ]
-
+    
     def get_queryset(self):
         queryset = Contact.objects.all()
         user_id_portal = self.request.query_params.get('id', None)

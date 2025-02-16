@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block branding %}
+    <div id="site-branding">
+        <a href="{% url 'admin:index' %}" style="text-decoration: none; color: white; display: flex; align-items: center;">
+            <img src="{% static 'img/logo.png' %}" alt="Логотип" style="height:40px;">
+            <span class="site-title">Attendly</span>
+        </a>
+    </div>
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/custom_admin.css' %}">
+{% endblock %}
