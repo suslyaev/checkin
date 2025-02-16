@@ -72,13 +72,15 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = True
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://portal.sukiasyan.pro',
-    'https://checker.sukiasyan.pro'
+    'https://attendly.space',
+    'https://checker.attendly.space'
 ]
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://192.168.3.115:3000"
+    "http://5.35.87.216:8000",
+    "https://checker.attendly.space",
+    "https://attendly.space"
 ]
 
 ROOT_URLCONF = 'config.urls'
