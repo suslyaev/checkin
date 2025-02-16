@@ -3,7 +3,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 import event.services as service
 from .models import CustomUser, Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
-from .forms import ActionForm, CheckinOrCancelForm, CategoryContactForm
+from .forms import ActionForm, CheckinOrCancelForm
 from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
@@ -267,19 +267,9 @@ class CompanyAdmin(BaseAdminPage):
 # Категория
 @admin.register(CategoryContact)
 class CategoryContactAdmin(BaseAdminPage):
-    form = CategoryContactForm
-    list_display = ('id', 'name', 'color', 'colored_box', 'comment')
+    list_display = ('id', 'name', 'color', 'comment')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
-
-    def colored_box(self, obj):
-        """Функция для отображения цвета в админке"""
-        return format_html(
-            '<div style="width: 30px; height: 30px; background-color: {}"></div>', obj.color
-        )
-
-    colored_box.short_description = "Цвет"
-
 
 # Событие
 @admin.register(ModuleInstance)
