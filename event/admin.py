@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 import event.services as service
-from .models import CustomUser, Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
+from .models import CustomUser, ManagerUser, CheckerUser, Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
 from .forms import ActionForm, CheckinOrCancelForm
 from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm
 from django.shortcuts import render
@@ -43,7 +43,7 @@ class CustomUserForm(UserCreationForm):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'first_name', 'last_name', 'group']
+        fields = ['phone', 'first_name', 'last_name', 'group']
 
 class CustomUserChangeForm(UserChangeForm):
     group = forms.ModelChoiceField(queryset=Group.objects.all(), required=True, widget=forms.Select, label="Роль")
@@ -61,7 +61,7 @@ class CustomUserChangeForm(UserChangeForm):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'first_name', 'last_name', 'group']
+        fields = ['phone', 'first_name', 'last_name', 'group']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -89,8 +89,8 @@ class CustomUserAdmin(admin.ModelAdmin):
     app_label = 'event'
     form = CustomUserChangeForm
     add_form = CustomUserForm
-    search_fields = ['username', 'last_name', 'first_name']  # Поля для поиска
-    list_display = ['username', 'last_name', 'first_name', 'get_group']  # Для отображения в списке
+    search_fields = ['phone', 'last_name', 'first_name']  # Поля для поиска
+    list_display = ['phone', 'last_name', 'first_name', 'get_group']  # Для отображения в списке
     list_filter = ('groups',)
     readonly_fields = ['date_joined', 'last_login', 'get_group']
 
@@ -103,19 +103,15 @@ class CustomUserAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         # Получаем базовый queryset
-        queryset = super().get_queryset(request)
-
-        #if request.user.groups.filter(name='Менеджер').exists():
-        #    qs = qs.filter(checkers=request.user)
-
+        qs = super().get_queryset(request)
         # Исключаем пользователей с is_superuser=True
-        return queryset.exclude(is_superuser=True)
+        return qs.exclude(is_superuser=True)
 
     def get_fields(self, request, obj=None):
 
         if obj:  # Редактирование записи
             return [
-                ('username', ),
+                ('phone', 'ext_id'),
                 ('first_name', 'last_name'),
                 ('group',),
                 ('date_joined', 'last_login'),
@@ -123,19 +119,16 @@ class CustomUserAdmin(admin.ModelAdmin):
             ]
         else:  # Создание новой записи
             return [
-                ('username',),
+                ('phone', ),
                 ('password1', 'password2'),
                 ('first_name', 'last_name'),
                 ('group',),
-                ('date_joined', 'last_login'),
             ]
 
     def get_group(self, obj):
         # Если у пользователя есть группа, показываем её
         return obj.groups.first().name if obj.groups.exists() else None
     get_group.short_description = 'Роль'
-
-
 
     def save_model(self, request, obj, form, change):
 
@@ -153,6 +146,45 @@ class CustomUserAdmin(admin.ModelAdmin):
         group = form.cleaned_data['group']
         obj.groups.set([group])
         super().save_model(request, obj, form, change)
+    
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Фильтруем queryset в зависимости от того, 
+        для какого поля (managers/checkers) идёт автокомплит.
+        """
+        # Сначала получаем стандартные результаты
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+
+        # Django при автокомплите передаёт GET-параметр 'field_name'
+        field_name = request.GET.get('field_name')
+
+        if field_name == 'managers':
+            # Оставляем только тех, кто в группе "Менеджер"
+            queryset = queryset.filter(groups__name='Менеджер')
+        elif field_name == 'checkers':
+            # Оставляем только тех, кто в группе "Проверяющий"
+            queryset = queryset.filter(groups__name='Проверяющий')
+
+        return queryset, use_distinct
+
+
+@admin.register(ManagerUser)
+class ManagerUserAdmin(admin.ModelAdmin):
+    search_fields = ["phone", "first_name", "last_name"]
+
+    def get_queryset(self, request):
+        # Показываем только пользователей из группы "Менеджер"
+        qs = super().get_queryset(request)
+        return qs.filter(groups__name='Менеджер')
+
+@admin.register(CheckerUser)
+class CheckerUserAdmin(admin.ModelAdmin):
+    search_fields = ["phone", "first_name", "last_name"]
+
+    def get_queryset(self, request):
+        # Показываем только пользователей из группы "Проверяющий"
+        qs = super().get_queryset(request)
+        return qs.filter(groups__name='Проверяющий')
 
 # Базовый класс с параметрами по умолчанию
 class BaseAdminPage(admin.ModelAdmin):
@@ -172,59 +204,6 @@ class CategoryContactFilter(AutocompleteFilter):
     title = 'Категория'
     field_name = 'category'
 
-# Инлайн регистраций для страницы событий
-class RegistrationInline(admin.TabularInline):
-    model = Action
-    fields = ['contact', 'action_type', 'action_date']
-    readonly_fields = ['contact', 'action_type', 'action_date']
-    extra = 0
-    ordering = ('-action_date',)
-
-    verbose_name = "Регистрация"
-    verbose_name_plural = "Зарегистрировавшиеся"
-
-    def has_add_permission(self, request, obj=None, **kwargs):
-        return False
-
-    # Выборка регистраций
-    def get_queryset(self, request):
-        return Action.objects.filter(is_last_state=True, action_type='new')
-
-# Инлайн посетителей для страницы событий
-class CheckinInline(admin.TabularInline):
-    model = Action
-    fields = ['contact', 'action_type', 'action_date']
-    readonly_fields = ['contact', 'action_type', 'action_date']
-    extra = 0
-    ordering = ('-action_date',)
-
-    verbose_name = "Чекин"
-    verbose_name_plural = "Посетившие событие"
-
-    def has_add_permission(self, request, obj=None, **kwargs):
-        return False
-
-    # Выборка чекинов
-    def get_queryset(self, request):
-        return Action.objects.filter(is_last_state=True, action_type='checkin')
-
-# Инлайн отмененных регистраций для страницы событий
-class CancelInline(admin.TabularInline):
-    model = Action
-    fields = ['contact', 'action_type', 'action_date']
-    readonly_fields = ['contact', 'action_type', 'action_date']
-    extra = 0
-    ordering = ('-action_date',)
-
-    verbose_name = "Отмена регистрации"
-    verbose_name_plural = "Отменившие регистрацию"
-
-    def has_add_permission(self, request, obj=None, **kwargs):
-        return False
-
-    # Выборка отмененных регистраций
-    def get_queryset(self, request):
-        return Action.objects.filter(is_last_state=True, action_type='cancel')
 
 # Человек
 @admin.register(Contact)
@@ -234,6 +213,7 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
     readonly_fields = ('photo_preview',)
     autocomplete_fields = ['company', 'category',]
     search_fields = ['fio']
+    show_change_form_export = False
     fieldsets = (
         (None, {
             'fields': [('fio',)]
@@ -286,13 +266,118 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         ('Администрирование', {
             'fields': [('managers', 'checkers')]
         }),
+        ('Участники', {
+            'fields': ['registered_list', 'checkin_list', 'cancel_list'],
+        }),
     )
+    readonly_fields = ['registered_list', 'checkin_list', 'cancel_list']
     autocomplete_fields = ['managers', 'checkers',]
     list_display = ('name', 'date_start', 'date_end')
-    inlines = [RegistrationInline, CheckinInline, CancelInline]
+    show_change_form_export = False
     save_on_top = True
     list_per_page = 25
     view_on_site = False
+
+    def registered_list(self, obj):
+        actions = Action.objects.filter(
+            is_last_state=True,
+            action_type='new',
+            module_instance=obj
+        ).select_related('contact')
+
+        if not actions:
+            return "Нет зарегистрированных"
+
+        html = ['<ul style="padding-left: 20px;">']
+        for a in actions:
+            if a.contact:
+                contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
+                contact_name = a.contact.fio or f"Контакт #{a.contact.pk}"
+
+                # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
+                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+
+                # Ссылка с popup-открытием
+                link = f"""
+                <a href="{contact_url}" 
+                onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
+                {contact_name}
+                </a>
+                """
+
+                # Добавляем дату после имени, например, в круглых скобках
+                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
+        html.append('</ul>')
+
+        return format_html(''.join(html))
+
+    registered_list.short_description = "Зарегистрировавшиеся"
+
+    def checkin_list(self, obj):
+        """
+        Список чекинившихся (action_type='checkin')
+        """
+        actions = Action.objects.filter(
+            is_last_state=True,
+            action_type='checkin',
+            module_instance=obj
+        ).select_related('contact')
+
+        if not actions:
+            return "Нет чекинов"
+
+        html = ['<ul style="padding-left: 20px;">']
+        for a in actions:
+            if a.contact:
+                contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
+                contact_name = a.contact.fio or f"Контакт #{a.contact.pk}"
+                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+
+                link = f"""
+                <a href="{contact_url}"
+                onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
+                {contact_name}
+                </a>
+                """
+                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
+        html.append('</ul>')
+
+        return format_html(''.join(html))
+
+    checkin_list.short_description = "Чекин"
+
+    def cancel_list(self, obj):
+        """
+        Список отменивших регистрацию (action_type='cancel')
+        """
+        actions = Action.objects.filter(
+            is_last_state=True,
+            action_type='cancel',
+            module_instance=obj
+        ).select_related('contact')
+
+        if not actions:
+            return "Нет отмен"
+
+        html = ['<ul style="padding-left: 20px;">']
+        for a in actions:
+            if a.contact:
+                contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
+                contact_name = a.contact.fio or f"Контакт #{a.contact.pk}"
+                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+
+                link = f"""
+                <a href="{contact_url}"
+                onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
+                {contact_name}
+                </a>
+                """
+                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
+        html.append('</ul>')
+
+        return format_html(''.join(html))
+
+    cancel_list.short_description = "Отменившие регистрацию"
 
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
@@ -484,7 +569,6 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     # Выборка регистраций
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-
         if request.user.groups.filter(name='Проверяющий').exists():
             qs = qs.filter(module_instance__checkers=request.user)
         return qs.filter(is_last_state=True, action_type='new')

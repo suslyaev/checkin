@@ -7,20 +7,76 @@ from django.urls import reverse
 from django.utils.html import format_html
 from PIL import Image
 
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 
-# Кастомная модель пользователей
-class CustomUser(User):
+class CustomUserManager(BaseUserManager):
+    """
+    Менеджер пользователей, использующий телефон как логин (USERNAME_FIELD).
+    """
+    def create_user(self, phone, password=None, **extra_fields):
+        if not phone:
+            raise ValueError("Телефон обязателен для создания пользователя")
+        phone = str(phone).strip()
+        user = self.model(phone=phone, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, phone, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Суперпользователь должен иметь is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Суперпользователь должен иметь is_superuser=True.')
+
+        return self.create_user(phone, password, **extra_fields)
+
+class CustomUser(AbstractBaseUser, PermissionsMixin):
+    """
+    Кастомная модель пользователя с логином по телефону.
+    """
+    phone = models.CharField(max_length=20, unique=True, verbose_name='Телефон')
+    first_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='Имя')
+    last_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='Фамилия')
+
+    ext_id = models.CharField(max_length=150, blank=True, null=True, verbose_name='Внешний ID')
+    
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    date_joined = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
+
+    objects = CustomUserManager()
+
+    USERNAME_FIELD = 'phone'
+    REQUIRED_FIELDS = []  # Если хотите, можно добавить first_name/last_name
+
     class Meta:
-        proxy = True
-        ordering = ['last_name', 'first_name']  # Сортировка по фамилии и имени
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
+        ordering = ['last_name', 'first_name']
 
     def __str__(self):
-        # Отображение имени, фамилии или логина, если имя и фамилия пустые
-        if self.first_name and self.last_name:
-            return f"{self.last_name} {self.first_name}"
-        return self.username
+        if self.last_name or self.first_name:
+            return f"{self.last_name or ''} {self.first_name or ''}".strip()
+        return self.phone
+
+
+class ManagerUser(CustomUser):
+    class Meta:
+        proxy = True
+        verbose_name = "Менеджер"
+        verbose_name_plural = "Менеджеры"
+
+class CheckerUser(CustomUser):
+    class Meta:
+        proxy = True
+        verbose_name = "Проверяющий"
+        verbose_name_plural = "Проверяющие"
+
+
 
 # Базовый класс с параметрами по умолчанию
 class BaseModelClass(models.Model):
@@ -107,7 +163,7 @@ class ModuleInstance(models.Model):
 
     managers = models.ManyToManyField(
         CustomUser,
-        related_name='admin_events',
+        related_name='manager_events',
         verbose_name='Менеджеры',
         blank=True
     )
