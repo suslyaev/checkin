@@ -32,7 +32,7 @@ class Command(BaseCommand):
 
                 user = await sync_to_async(CustomUser.objects.get)(ext_id=str(message.from_user.id))
                 token = await sync_to_async(user.generate_auth_token)()
-                auth_url = f"{BASE_URL}/telegram-auth/?token={token}"
+                auth_url = f"{BASE_URL}/event/telegram-auth/?token={token}"
 
                 await state.set_state(Menu.start)
                 text = markdown.text(
