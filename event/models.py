@@ -4,6 +4,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from colorfield.fields import ColorField
 from django.utils import timezone
+from django.core.validators import RegexValidator
 
 import event.services as service
 from django import forms
@@ -12,6 +13,11 @@ from django.utils.html import format_html
 from PIL import Image
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+
+phone_regex = RegexValidator(
+    regex=r'^\+7\d{10}$',
+    message='Номер телефона должен быть в формате +7XXXXXXXXXX (11 цифр)'
+)
 
 class CustomUserManager(BaseUserManager):
     """
@@ -41,7 +47,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     """
     Кастомная модель пользователя с логином по телефону.
     """
-    phone = models.CharField(max_length=20, unique=True, verbose_name='Телефон')
+    phone = models.CharField(max_length=20, unique=True, verbose_name='Телефон', validators=[phone_regex])
     first_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='Имя')
     last_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='Фамилия')
 

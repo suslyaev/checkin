@@ -456,7 +456,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
 @admin.register(Checkin)
 class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = CheckinResource
-    search_fields = ['contact__fio', 'module_instance__module__name']
+    search_fields = ['contact__fio', 'module_instance__name']
     list_display = ('contact', 'photo_contact', 'module_instance', 'get_buttons_action',)
     readonly_fields = ('operator',)
     autocomplete_fields = ['contact', 'module_instance']
