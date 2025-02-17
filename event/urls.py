@@ -6,4 +6,5 @@ urlpatterns = [
     # Маршруты для действий Checkin
     path('checkin-confirm/<int:pk>/', views.confirm_checkin, name='checkin_confirm'),
     path('checkin-cancel/<int:pk>/', views.cancel_checkin, name='checkin_cancel'),
+    path('telegram-auth/', views.telegram_admin_auth, name='telegram_admin_auth'),
 ]

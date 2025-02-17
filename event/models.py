@@ -1,6 +1,10 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import User
 from colorfield.fields import ColorField
+from django.utils import timezone
+
 import event.services as service
 from django import forms
 from django.urls import reverse
@@ -45,6 +49,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    auth_token = models.UUIDField(blank=True, null=True, unique=True)
+    token_expires = models.DateTimeField(blank=True, null=True)
 
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
 
@@ -52,6 +58,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     USERNAME_FIELD = 'phone'
     REQUIRED_FIELDS = []  # Если хотите, можно добавить first_name/last_name
+
+    def generate_auth_token(self):
+        self.auth_token = uuid.uuid4()
+        self.token_expires = timezone.now() + timezone.timedelta(minutes=2)
+        self.save(update_fields=['auth_token', 'token_expires'])
+        return self.auth_token
 
     class Meta:
         verbose_name = 'Пользователь'

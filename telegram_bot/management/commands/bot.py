@@ -5,21 +5,23 @@ from aiogram import Dispatcher, Bot, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.utils import markdown
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from asgiref.sync import sync_to_async
 
-from config.settings import TELEGRAM_BOT_TOKEN
+from config.settings import TELEGRAM_BOT_TOKEN, BASE_URL
+from event.models import CustomUser
 from telegram_bot.management.commands.services.DjangoStorage import DjangoStorage
 from telegram_bot.management.commands.services.logging_config import logger
 from telegram_bot.management.commands.states.user import Menu
-from telegram_bot.management.commands.keyboards.inline import keyboard
-
 
 storage = DjangoStorage()
 
+
 class Command(BaseCommand):
     help = "Telegram bot commands"
+
     def handle(self, *args, **options):
 
         router = Router(name=__name__)
@@ -27,6 +29,11 @@ class Command(BaseCommand):
         @router.message(CommandStart())
         async def start(message: Message, state: FSMContext) -> None:
             try:
+
+                user = await sync_to_async(CustomUser.objects.get)(ext_id=str(message.from_user.id))
+                token = await sync_to_async(user.generate_auth_token)()
+                auth_url = f"{BASE_URL}/telegram-auth/?token={token}"
+
                 await state.set_state(Menu.start)
                 text = markdown.text(
                     markdown.hbold(
@@ -35,9 +42,17 @@ class Command(BaseCommand):
                     'Ниже нажми на кнопку, чтобы открыть Attendly',
                     sep='\n'
                 )
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="Открыть Attendly",
+                        web_app=WebAppInfo(url=auth_url)
+                    )]
+                ])
 
                 message_id = await message.answer(text=text, reply_markup=keyboard)
                 await state.update_data(data={'last_message_id': message_id.message_id})
+            except CustomUser.DoesNotExist:
+                await message.answer("Доступ запрещен!")
 
             except Exception as e:
                 logger.exception(e)
