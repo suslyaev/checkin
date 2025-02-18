@@ -70,6 +70,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         self.token_expires = timezone.now() + timezone.timedelta(minutes=2)
         self.save(update_fields=['auth_token', 'token_expires'])
         return self.auth_token
+    
+    def get_short_name(self):
+        if self.first_name:
+            return f"{self.first_name or ''}".strip()
+        return self.phone
 
     class Meta:
         verbose_name = 'Пользователь'
