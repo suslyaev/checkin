@@ -1,0 +1,92 @@
+<!-- event/checkin_list.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Список заявок</title>
+</head>
+<body>
+
+<h1>Список заявок (Checkin)</h1>
+
+<!-- Форма поиска (если нужно) -->
+<form method="get">
+  <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск...">
+  <button type="submit">Найти</button>
+</form>
+
+<table border="1" cellpadding="5" style="border-collapse: collapse;">
+  <thead>
+    <tr>
+      <th>ФИО</th>
+      <th>Мероприятие</th>
+      <th>Действия</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for c in checkins %}
+    <tr>
+      <td>{{ c.contact.fio }}</td>
+      <td>{{ c.module_instance.name }}</td>
+      <td>
+        <!-- Кнопка Подтвердить (AJAX) -->
+        <button onclick="confirmCheckin({{ c.pk }})" style="background-color: #28a745; color: white;">
+          Подтвердить
+        </button>
+        <!-- Кнопка Отменить (AJAX) -->
+        <button onclick="cancelCheckin({{ c.pk }})" style="background-color: #dc3545; color: white;">
+          Отменить
+        </button>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="3">Нет заявок</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<!-- Простой скрипт с AJAX для отправки POST-запросов -->
+<script>
+function confirmCheckin(pk) {
+  fetch(`/event/checkins/${pk}/confirm/`, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRFToken': '{{ csrf_token }}'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert(data.message);
+      location.reload(); // Обновляем страницу, чтобы скрыть эту запись
+    } else {
+      alert('Ошибка при подтверждении');
+    }
+  })
+  .catch(err => console.error(err));
+}
+
+function cancelCheckin(pk) {
+  fetch(`/event/checkins/${pk}/cancel/`, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRFToken': '{{ csrf_token }}'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert(data.message);
+      location.reload(); // Обновляем страницу
+    } else {
+      alert('Ошибка при отмене');
+    }
+  })
+  .catch(err => console.error(err));
+}
+</script>
+
+</body>
+</html>

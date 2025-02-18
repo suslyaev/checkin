@@ -16,13 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.contrib.auth import views as auth_views
 
 from django.conf import settings
 from django.conf.urls.static import static
 from config import views
 
 urlpatterns = [
-    path('', views.redirect_admin),
+    path('', views.home, name='home'),  # Главная страница
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('admin/', admin.site.urls),
     path('api/', include('config.api.urls')), #API
     path('event/', include('event.urls')), 

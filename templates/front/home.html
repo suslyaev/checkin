@@ -1,0 +1,26 @@
+<!-- home.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Главная страница</title>
+</head>
+<body>
+    <h1>
+        {% if user.first_name %}
+            Привет, {{ user.first_name }}!
+        {% else %}
+            Привет, Администратор!
+        {% endif %}
+    </h1>
+    <p>Добро пожаловать на сайт.</p>
+
+    <!-- Кнопка выхода -->
+    {% if user.is_authenticated %}
+        <form action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit">Выход</button>
+        </form>
+    {% endif %}
+</body>
+</html>

@@ -17,6 +17,8 @@ from django.http import FileResponse
 import os
 from django.forms import Textarea
 from django.db import models
+from django.db.models.functions import Lower
+from django.db.models import Q
 
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import get_user_model
@@ -256,6 +258,7 @@ class CategoryContactAdmin(BaseAdminPage):
 class ModuleInstanceAdmin(ExportActionModelAdmin):
     form = ModuleInstanceForm
     search_fields = ['get_name_module_instance']
+    show_change_form_export = False
     fieldsets = (
         (None, {
             'fields': [('name', 'address',)]
@@ -456,13 +459,45 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
 @admin.register(Checkin)
 class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = CheckinResource
-    search_fields = ['contact__fio', 'module_instance__name']
+    #search_fields = ['contact__fio', 'module_instance__name']
     list_display = ('contact', 'photo_contact', 'module_instance', 'get_buttons_action',)
     readonly_fields = ('operator',)
     autocomplete_fields = ['contact', 'module_instance']
     list_filter = (ModuleInstanceFilter, )
     list_per_page = 25
     view_on_site = False
+
+    search_fields = ('dummy',)
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Кастомный поиск без учёта регистра (особенно для кириллицы в SQLite).
+        """
+        # 1) Если строка поиска пуста, ничего не фильтруем
+        if not search_term:
+            return queryset, False
+
+        # 2) Приводим поисковую строку к нижнему регистру
+        search_term_lower = search_term.lower()
+
+        # 3) Применяем Lower() к нужным полям (fio, module_instance.name, и т.д.)
+        queryset = queryset.annotate(
+            fio_lower=Lower('contact__fio'),
+            module_lower=Lower('module_instance__name')
+        )
+
+        # 4) Фильтруем, используя __contains
+        queryset = queryset.filter(
+            Q(fio_lower__contains=search_term_lower) |
+            Q(module_lower__contains=search_term_lower)
+        )
+
+        # Можно добавить debug-лог, чтобы проверить, вызывается ли метод
+        print("DEBUG: custom search, term =", search_term, "->", search_term_lower, "found:", queryset.count())
+
+        # Второй параметр (use_distinct) укажем False (или True, если нужно)
+        return queryset, False
+
 
     class Media:
         js = ('js/checkin_list.js',)

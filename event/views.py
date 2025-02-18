@@ -5,6 +5,36 @@ from django.utils import timezone
 from .models import Checkin, Action, CustomUser
 from django.http import JsonResponse
 
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.db.models.functions import Lower
+
+@login_required
+def checkin_list(request):
+    qs = Checkin.objects.filter(is_last_state=True, action_type='new')
+
+    # Если пользователь в группе "Проверяющий" — фильтруем
+    if request.user.groups.filter(name='Проверяющий').exists():
+        qs = qs.filter(module_instance__checkers=request.user)
+
+    # Опционально: поиск
+    search_term = request.GET.get('q', '')
+    if search_term:
+        term_lower = search_term.lower()
+        qs = qs.annotate(
+            fio_lower=Lower('contact__fio'),
+            module_lower=Lower('module_instance__name')
+        ).filter(
+            Q(fio_lower__contains=term_lower) | Q(module_lower__contains=term_lower)
+        )
+
+    return render(request, 'front/checkin_list.html', {
+        'checkins': qs,
+        'search_term': search_term,
+    })
+
+
 
 def confirm_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
