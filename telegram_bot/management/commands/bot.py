@@ -96,7 +96,7 @@ class Command(BaseCommand):
                             'Вы успешно авторизованы.',
                             sep='\n'
                         )
-                        text_2 = 'Нажмите кнопку ниже, чтобы открыть Attendly',
+                        text_2 = 'Нажмите кнопку ниже, чтобы открыть Attendly'
 
                         keyboard = InlineKeyboardMarkup(inline_keyboard=[
                             [InlineKeyboardButton(
