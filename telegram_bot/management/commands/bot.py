@@ -31,35 +31,37 @@ class Command(BaseCommand):
         @router.message(CommandStart())
         async def start(message: Message, state: FSMContext) -> None:
             try:
-
-                user = await sync_to_async(CustomUser.objects.get)(ext_id=str(message.from_user.id))
-                token = await sync_to_async(user.generate_auth_token)()
-                auth_url = f"{BASE_URL}/event/telegram-auth/?token={token}"
-
-                await state.set_state(Menu.start)
-                text = markdown.text(
-                    markdown.hbold(
-                        f'Здравствуй, {message.from_user.first_name} {message.from_user.last_name if message.from_user.last_name else ""}'),
-                    'Attendly — простой и удобный инструмент для управления гостями на ваших мероприятиях.',
-                    'Ниже нажми на кнопку, чтобы открыть Attendly',
-                    sep='\n'
-                )
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text="Открыть Attendly",
-                        web_app=WebAppInfo(url=auth_url)
-                    )]
-                ])
-
+                # Создаем клавиатуру с кнопкой контакта заранее
                 builder_contact = ReplyKeyboardBuilder()
                 builder_contact.button(text="Отправить контакт", request_contact=True)
 
-                message_id = await message.answer(text=text, reply_markup=keyboard)
-                await state.update_data(data={'last_message_id': message_id.message_id})
-            except CustomUser.DoesNotExist:
-                await message.answer(
-                    "У вас нет доступа.\n\nОтправьте свой контакт, чтобы я проверил есть ли вы в базе.",
-                    reply_markup=builder_contact.as_markup())
+                try:
+                    user = await sync_to_async(CustomUser.objects.get)(ext_id=str(message.from_user.id))
+                    token = await sync_to_async(user.generate_auth_token)()
+                    auth_url = f"{BASE_URL}/event/telegram-auth/?token={token}"
+
+                    await state.set_state(Menu.start)
+                    text = markdown.text(
+                        markdown.hbold(
+                            f'Здравствуй, {message.from_user.first_name} {message.from_user.last_name if message.from_user.last_name else ""}'),
+                        'Attendly — простой и удобный инструмент для управления гостями на ваших мероприятиях.',
+                        'Ниже нажми на кнопку, чтобы открыть Attendly',
+                        sep='\n'
+                    )
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(
+                            text="Открыть Attendly",
+                            web_app=WebAppInfo(url=auth_url)
+                        )]
+                    ])
+
+                    message_id = await message.answer(text=text, reply_markup=keyboard)
+                    await state.update_data(data={'last_message_id': message_id.message_id})
+                    
+                except CustomUser.DoesNotExist:
+                    await message.answer(
+                        "У вас нет доступа.\n\nОтправьте свой контакт, чтобы я проверил есть ли вы в базе.",
+                        reply_markup=builder_contact.as_markup(resize_keyboard=True))
 
             except Exception as e:
                 logger.exception(e)
