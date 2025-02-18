@@ -1,8 +1,8 @@
 from django.contrib.auth import login
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import Checkin, Action, CustomUser
+from .models import Checkin, Action, CustomUser, ModuleInstance
 from django.http import JsonResponse
 
 from django.shortcuts import render
@@ -10,28 +10,60 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.db.models.functions import Lower
 
+
 @login_required
-def checkin_list(request):
-    qs = Checkin.objects.filter(is_last_state=True, action_type='new')
+def checkin_list(request, pk):
+    # Проверяем, есть ли такое мероприятие
+    inst = get_object_or_404(ModuleInstance, pk=pk)
 
-    # Если пользователь в группе "Проверяющий" — фильтруем
+    # Фильтруем checkin: is_last_state=True, action_type='new', module_instance=inst
+    qs = Checkin.objects.filter(
+        is_last_state=True,
+        action_type='new',
+        module_instance=inst
+    )
+
+    # Если пользователь - проверяющий, проверяем, что inst.checkers=user
+    # (или если в админке get_queryset требует module_instance.checkers=user)
     if request.user.groups.filter(name='Проверяющий').exists():
-        qs = qs.filter(module_instance__checkers=request.user)
+        # Если мероприятие вообще не связано с этим user, можно запретить доступ
+        if not inst.checkers.filter(pk=request.user.pk).exists():
+            return render(request, 'front/no_access.html')
+        # Иначе qs уже правильно отфильтрован
 
-    # Опционально: поиск
+    # Поиск (опционально)
     search_term = request.GET.get('q', '')
     if search_term:
         term_lower = search_term.lower()
         qs = qs.annotate(
-            fio_lower=Lower('contact__fio'),
-            module_lower=Lower('module_instance__name')
+            fio_lower=Lower('contact__fio')
         ).filter(
-            Q(fio_lower__contains=term_lower) | Q(module_lower__contains=term_lower)
+            Q(fio_lower__contains=term_lower)
         )
 
     return render(request, 'front/checkin_list.html', {
+        'instance': inst,
         'checkins': qs,
         'search_term': search_term,
+    })
+
+
+@login_required
+def checkin_detail(request, pk):
+    """
+    Отображает детальную страницу для одного Checkin.
+    Содержит информацию о мероприятии, человеке, 
+    и кнопки "Подтвердить"/"Отменить".
+    """
+    checkin = get_object_or_404(Checkin, pk=pk)
+
+    # Доп. проверка: если "Проверяющий", убедиться, что checkin.module_instance.checkers содержит user
+    if request.user.groups.filter(name='Проверяющий').exists():
+        if not checkin.module_instance.checkers.filter(pk=request.user.pk).exists():
+            return render(request, 'front/no_access.html')
+
+    return render(request, 'front/checkin_detail.html', {
+        'checkin': checkin,
     })
 
 

@@ -1,0 +1,34 @@
+<!-- base.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Мой сайт{% endblock title %}</title>
+</head>
+<body style="font-family: Arial, sans-serif; margin: 20px;">
+
+{% if user.is_authenticated %}
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+      {% if user.first_name %}
+        Привет, <strong>{{ user.first_name }}</strong>!
+      {% else %}
+        Привет, <strong>Администратор</strong>!
+      {% endif %}
+    </div>
+    <div>
+        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+        {% csrf_token %}
+            <button type="submit">Выйти</button>
+        </form>
+    </div>
+  </div>
+{% endif %}
+
+<hr style="margin-bottom: 20px;">
+
+<!-- Секция для основного контента страниц -->
+{% block content %}{% endblock content %}
+
+</body>
+</html>

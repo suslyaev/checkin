@@ -1,42 +1,61 @@
-<!-- event/checkin_list.html -->
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Список заявок</title>
-</head>
-<body>
+{% extends "front/base.html" %}
+{% load static %}
 
-<h1>Список заявок (Checkin)</h1>
+{% block title %}Заявки для {{ instance.name }}{% endblock title %}
 
-<!-- Форма поиска (если нужно) -->
-<form method="get">
-  <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск...">
+{% block content %}
+<h2>Заявки для мероприятия: {{ instance.name }}</h2>
+<small style="color: #555;">{{ instance.address }}</small>
+
+<!-- Кнопка "Назад" -->
+<div style="margin: 10px 0;">
+  <a href="{% url 'home' %}" style="color: #007bff; text-decoration: none;">← Назад к списку мероприятий</a>
+</div>
+
+<!-- Поле поиска -->
+<form method="get" style="margin-bottom: 10px;">
+  <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск..." style="padding: 4px;">
   <button type="submit">Найти</button>
 </form>
 
 <table border="1" cellpadding="5" style="border-collapse: collapse;">
   <thead>
     <tr>
+      <th>Фото</th>
       <th>ФИО</th>
-      <th>Мероприятие</th>
       <th>Действия</th>
     </tr>
   </thead>
   <tbody>
   {% for c in checkins %}
     <tr>
-      <td>{{ c.contact.fio }}</td>
-      <td>{{ c.module_instance.name }}</td>
+      <!-- Фото -->
       <td>
-        <!-- Кнопка Подтвердить (AJAX) -->
-        <button onclick="confirmCheckin({{ c.pk }})" style="background-color: #28a745; color: white;">
-          Подтвердить
-        </button>
-        <!-- Кнопка Отменить (AJAX) -->
-        <button onclick="cancelCheckin({{ c.pk }})" style="background-color: #dc3545; color: white;">
-          Отменить
-        </button>
+        {% if c.contact.photo %}
+          <a href="{% url 'checkin_detail' c.pk %}">
+            <img src="{{ c.contact.photo.url }}" 
+                 style="width: 50px; height: auto; border-radius: 3px;"
+                 alt="Фото {{ c.contact.fio }}">
+          </a>
+        {% else %}
+          Нет фото
+        {% endif %}
+      </td>
+
+      <!-- ФИО -->
+      <td>
+        <a href="{% url 'checkin_detail' c.pk %}" style="color: #007bff; text-decoration: none;">
+          {{ c.contact.fio }}
+        </a>
+      </td>
+
+      <td>
+         <button onclick="confirmCheckin({{ c.pk }})" style="background-color: #28a745; color: white; padding: 5px;">
+            Подтвердить
+         </button>
+         <button onclick="cancelCheckin({{ c.pk }})" style="background-color: #dc3545; color: white; padding: 5px;">
+            Отменить
+         </button>
       </td>
     </tr>
   {% empty %}
@@ -45,7 +64,7 @@
   </tbody>
 </table>
 
-<!-- Простой скрипт с AJAX для отправки POST-запросов -->
+<!-- Скрипт для AJAX -->
 <script>
 function confirmCheckin(pk) {
   fetch(`/event/checkins/${pk}/confirm/`, {
@@ -59,7 +78,7 @@ function confirmCheckin(pk) {
   .then(data => {
     if (data.status === 'success') {
       alert(data.message);
-      location.reload(); // Обновляем страницу, чтобы скрыть эту запись
+      location.reload();
     } else {
       alert('Ошибка при подтверждении');
     }
@@ -79,7 +98,7 @@ function cancelCheckin(pk) {
   .then(data => {
     if (data.status === 'success') {
       alert(data.message);
-      location.reload(); // Обновляем страницу
+      location.reload();
     } else {
       alert('Ошибка при отмене');
     }
@@ -87,6 +106,4 @@ function cancelCheckin(pk) {
   .catch(err => console.error(err));
 }
 </script>
-
-</body>
-</html>
+{% endblock content %}

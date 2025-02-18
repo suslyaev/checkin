@@ -24,7 +24,7 @@ from config import views
 
 urlpatterns = [
     path('', views.home, name='home'),  # Главная страница
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('logout/', views.custom_logout, name='logout'),
     path('admin/', admin.site.urls),
     path('api/', include('config.api.urls')), #API
     path('event/', include('event.urls')), 
