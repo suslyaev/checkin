@@ -57,7 +57,7 @@ class Command(BaseCommand):
 
                     message_id = await message.answer(text=text, reply_markup=keyboard)
                     await state.update_data(data={'last_message_id': message_id.message_id})
-                    
+
                 except CustomUser.DoesNotExist:
                     await message.answer(
                         "У вас нет доступа.\n\nОтправьте свой контакт, чтобы я проверил есть ли вы в базе.",
@@ -81,11 +81,11 @@ class Command(BaseCommand):
                     try:
                         # Проверяем существование пользователя с таким телефоном
                         user = await sync_to_async(CustomUser.objects.get)(phone=phone)
-                        
+
                         # Обновляем ext_id пользователя
                         user.ext_id = str(message.from_user.id)
                         await sync_to_async(user.save)(update_fields=['ext_id'])
-                        
+
                         # Генерируем токен для авторизации
                         token = await sync_to_async(user.generate_auth_token)()
                         auth_url = f"{BASE_URL}/event/telegram-auth/?token={token}"
@@ -94,19 +94,24 @@ class Command(BaseCommand):
                         text = markdown.text(
                             markdown.hbold(f'Здравствуйте, {message.from_user.first_name}!'),
                             'Вы успешно авторизованы.',
-                            'Нажмите кнопку ниже, чтобы открыть Attendly',
                             sep='\n'
                         )
-                        
+                        text_2 = 'Нажмите кнопку ниже, чтобы открыть Attendly',
+
                         keyboard = InlineKeyboardMarkup(inline_keyboard=[
                             [InlineKeyboardButton(
                                 text="Открыть Attendly",
                                 web_app=WebAppInfo(url=auth_url)
                             )]
                         ])
-                        
+
                         await message.answer(
                             text=text,
+                            reply_markup=ReplyKeyboardRemove()
+                        )
+
+                        await message.answer(
+                            text=text_2,
                             reply_markup=keyboard
                         )
 
