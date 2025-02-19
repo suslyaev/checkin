@@ -1,0 +1,128 @@
+/* style.css */
+
+/* Общие стили для body */
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background-color: #F2F3F5; /* Светлый фон, напоминающий VKUI */
+  color: #000;
+}
+
+/* Верхняя «шапка» */
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #fff; /* Белый фон */
+  padding: 10px 20px;
+  border-bottom: 1px solid #D7D8D9;
+  margin-bottom: 20px;
+}
+
+.header-bar .header-left {
+  font-size: 16px;
+}
+
+.header-bar .header-right form {
+  display: inline;
+}
+
+.header-bar button {
+  background-color: #5181B8; /* Синий цвет, как у VK */
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Заголовки */
+h1, h2, h3 {
+  color: #000;
+  margin: 10px 0;
+}
+
+/* Кнопки */
+.button-primary {
+  background-color: #28a745; /* Зелёная кнопка */
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.button-danger {
+  background-color: #dc3545; /* Красная кнопка */
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Поле поиска */
+.search-form {
+  margin-bottom: 10px;
+}
+.search-form input[type="text"] {
+  padding: 4px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 200px;
+}
+.search-form button {
+  background-color: #5181B8; /* Синий цвет */
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  margin-left: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Ссылки */
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Таблицы */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  background-color: #fff;
+}
+table thead {
+  background-color: #E7E8EA;
+}
+table thead th {
+  padding: 8px;
+  border-bottom: 1px solid #ccc;
+}
+table td {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Пример для карточек / групп */
+.card {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  border: 1px solid #D7D8D9;
+}
+
+/* Цветной ярлычок для категории */
+.category-badge {
+  padding: 4px 8px;
+  color: #fff;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+/* и т.д. */

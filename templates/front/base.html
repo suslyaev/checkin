@@ -1,33 +1,32 @@
 <!-- base.html -->
 <!DOCTYPE html>
+{% load static %}
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Мой сайт{% endblock title %}</title>
+    <title>{% block title %}Attendly{% endblock title %}</title>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/style.css' %}">
 </head>
-<body style="font-family: Arial, sans-serif; margin: 20px;">
+<body>
 
 {% if user.is_authenticated %}
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-    <div>
+  <div class="header-bar">
+    <div class="header-left">
       {% if user.first_name %}
         Привет, <strong>{{ user.first_name }}</strong>!
       {% else %}
         Привет, <strong>Администратор</strong>!
       {% endif %}
     </div>
-    <div>
-        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+    <div class="header-right">
+      <form action="{% url 'logout' %}" method="post" style="display:inline;">
         {% csrf_token %}
-            <button type="submit">Выйти</button>
-        </form>
+        <button type="submit">Выйти</button>
+      </form>
     </div>
   </div>
 {% endif %}
 
-<hr style="margin-bottom: 20px;">
-
-<!-- Секция для основного контента страниц -->
 {% block content %}{% endblock content %}
 
 </body>

@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 import event.services as service
-from .models import CustomUser, ManagerUser, CheckerUser, Company, CategoryContact, Contact, ModuleInstance, Action, Checkin
+from .models import CustomUser, ManagerUser, CheckerUser, CompanyContact, CategoryContact, StatusContact, Contact, ModuleInstance, Action, Checkin
 from .forms import ActionForm, CheckinOrCancelForm
 from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm
 from django.shortcuts import render
@@ -114,17 +114,18 @@ class CustomUserAdmin(admin.ModelAdmin):
         if obj:  # Редактирование записи
             return [
                 ('phone', 'ext_id'),
-                ('first_name', 'last_name'),
                 ('group',),
+                ('first_name', 'last_name'),
                 ('date_joined', 'last_login'),
                 ('new_password1', 'new_password2'),
             ]
         else:  # Создание новой записи
             return [
                 ('phone', ),
-                ('password1', 'password2'),
-                ('first_name', 'last_name'),
                 ('group',),
+                ('password1', ),
+                ('password2', ),
+                ('first_name', 'last_name'),
             ]
 
     def get_group(self, obj):
@@ -193,12 +194,12 @@ class BaseAdminPage(admin.ModelAdmin):
     list_per_page = 25
     view_on_site = False
 
-# Фильтр с автозаполнением для module_instance
+# Фильтр с автозаполнением для event
 class ModuleInstanceFilter(AutocompleteFilter):
     title = 'Мероприятие'  # Название фильтра
-    field_name = 'module_instance'  # Поле модели, по которому будет фильтрация
+    field_name = 'event'  # Поле модели, по которому будет фильтрация
 
-class CompanyFilter(AutocompleteFilter):
+class CompanyContactFilter(AutocompleteFilter):
     title = 'Компания'
     field_name = 'company'
 
@@ -206,14 +207,27 @@ class CategoryContactFilter(AutocompleteFilter):
     title = 'Категория'
     field_name = 'category'
 
+class StatusContactFilter(AutocompleteFilter):
+    title = 'Статус'
+    field_name = 'status'
+
+
+class CategoryContactCheckinFilter(AutocompleteFilter):
+    title = 'Категория человека'
+    field_name = 'contact__category'
+
+class StatusContactCheckinFilter(AutocompleteFilter):
+    title = 'Статус человека'
+    field_name = 'contact__status'
+
 
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
     list_display = ('fio', 'company', 'category', 'photo_preview', 'comment')
-    list_filter = (CompanyFilter, CategoryContactFilter,)
+    list_filter = (CompanyContactFilter, CategoryContactFilter, StatusContactFilter)
     readonly_fields = ('photo_preview',)
-    autocomplete_fields = ['company', 'category',]
+    autocomplete_fields = ['company', 'category', 'status']
     search_fields = ['fio']
     show_change_form_export = False
     fieldsets = (
@@ -221,7 +235,7 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
             'fields': [('fio',)]
         }),
         (None, {
-            'fields': [('company', 'category')]
+            'fields': [('company', 'category', 'status')]
         }),
         ('Фото', {
             'fields': ['photo', 'photo_preview'],
@@ -240,8 +254,8 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
     }
 
 # Компания
-@admin.register(Company)
-class CompanyAdmin(BaseAdminPage):
+@admin.register(CompanyContact)
+class CompanyContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'comment')
     list_editable = ('name', 'comment')
     search_fields = ['name']
@@ -253,11 +267,18 @@ class CategoryContactAdmin(BaseAdminPage):
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
 
+# Статус
+@admin.register(StatusContact)
+class StatusContactAdmin(BaseAdminPage):
+    list_display = ('id', 'name', 'color', 'comment')
+    list_editable = ('name', 'color', 'comment')
+    search_fields = ['name']
+
 # Событие
 @admin.register(ModuleInstance)
 class ModuleInstanceAdmin(ExportActionModelAdmin):
     form = ModuleInstanceForm
-    search_fields = ['get_name_module_instance']
+    search_fields = ['get_name_event']
     show_change_form_export = False
     fieldsets = (
         (None, {
@@ -285,7 +306,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         actions = Action.objects.filter(
             is_last_state=True,
             action_type='new',
-            module_instance=obj
+            event=obj
         ).select_related('contact')
 
         if not actions:
@@ -323,7 +344,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         actions = Action.objects.filter(
             is_last_state=True,
             action_type='checkin',
-            module_instance=obj
+            event=obj
         ).select_related('contact')
 
         if not actions:
@@ -356,7 +377,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         actions = Action.objects.filter(
             is_last_state=True,
             action_type='cancel',
-            module_instance=obj
+            event=obj
         ).select_related('contact')
 
         if not actions:
@@ -459,10 +480,10 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
 @admin.register(Checkin)
 class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = CheckinResource
-    #search_fields = ['contact__fio', 'module_instance__name']
-    list_display = ('contact', 'photo_contact', 'module_instance', 'get_buttons_action',)
+    #search_fields = ['contact__fio', 'event']
+    list_display = ('contact', 'photo_contact', 'event', 'get_buttons_action',)
     readonly_fields = ('operator',)
-    autocomplete_fields = ['contact', 'module_instance']
+    autocomplete_fields = ['contact', 'event']
     list_filter = (ModuleInstanceFilter, )
     list_per_page = 25
     view_on_site = False
@@ -480,10 +501,10 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         # 2) Приводим поисковую строку к нижнему регистру
         search_term_lower = search_term.lower()
 
-        # 3) Применяем Lower() к нужным полям (fio, module_instance.name, и т.д.)
+        # 3) Применяем Lower() к нужным полям (fio, event.name, и т.д.)
         queryset = queryset.annotate(
             fio_lower=Lower('contact__fio'),
-            module_lower=Lower('module_instance__name')
+            module_lower=Lower('event__name')
         )
 
         # 4) Фильтруем, используя __contains
@@ -522,7 +543,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         if obj:  # Редактирование записи
             return [
                 ('action_type',),
-                ('module_instance',),
+                ('event',),
                 ('contact',),
                 ('photo_contact',),
                 ('get_buttons_action',),
@@ -531,12 +552,12 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         else:  # Создание новой записи
             return [
                 ('contact',),
-                ('module_instance',),
+                ('event',),
             ]
     
     def get_readonly_fields(self, request, obj=None):
         if obj:  # Редактирование записи
-            return ['contact', 'action_type', 'action_date', 'is_last_state', 'module_instance', 'get_buttons_action', 'photo_contact', 'operator']
+            return ['contact', 'action_type', 'action_date', 'is_last_state', 'event', 'get_buttons_action', 'photo_contact', 'operator']
         else:  # Создание новой записи
             return [ 'action_type', 'get_buttons_action']
 
@@ -605,7 +626,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.groups.filter(name='Проверяющий').exists():
-            qs = qs.filter(module_instance__checkers=request.user)
+            qs = qs.filter(event__checkers=request.user)
         return qs.filter(is_last_state=True, action_type='new')
 
     def save_model(self, request, obj, form, change):
@@ -617,10 +638,10 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
 @admin.register(Action)
 class ActionAdmin(ExportActionModelAdmin):
     form = ActionForm
-    list_display = ('contact', 'action_type', 'module_instance', 'action_date')
-    list_filter = (ModuleInstanceFilter, 'action_type', 'module_instance__date_start')
-    autocomplete_fields = ['contact', 'module_instance']
-    readonly_fields = ('contact', 'action_type', 'module_instance', 'action_date', 'is_last_state')
+    list_display = ('contact', 'action_type', 'event', 'action_date')
+    list_filter = (ModuleInstanceFilter, 'action_type', 'event__date_start')
+    autocomplete_fields = ['contact', 'event']
+    readonly_fields = ('contact', 'action_type', 'event', 'action_date', 'is_last_state')
     list_per_page = 25
     view_on_site = False
 

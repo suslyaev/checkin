@@ -8,20 +8,18 @@
     <h2>Список мероприятий</h2>
 
     <!-- Форма поиска мероприятий -->
-    <form method="get" style="margin-bottom: 10px;">
-      <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск..." style="padding: 4px;">
+    <form method="get" class="search-form">
+      <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск...">
       <button type="submit">Найти</button>
     </form>
 
     <ul style="list-style-type: none; padding-left: 0;">
       {% for inst in instances %}
         <li style="margin-bottom: 15px;">
-          <a href="{% url 'checkin_list' inst.pk %}" style="font-size: 18px; color: #007bff; text-decoration: none;">
+          <a href="{% url 'checkin_list' inst.pk %}" style="font-size: 18px;">
             {{ inst.name }}
           </a><br>
-          <!-- Отображаем адрес (мелким шрифтом) -->
           <small style="color: #555;">{{ inst.address }}</small><br>
-          <!-- Отображаем дату начала мероприятия (без времени) -->
           {% if inst.date_start %}
             <small style="color: #333;">
               Дата начала: {{ inst.date_start|date:"Y-m-d" }}

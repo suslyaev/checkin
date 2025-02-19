@@ -5,7 +5,7 @@ from .models import Action
 class ActionForm(forms.ModelForm):
     class Meta:
         model = Action
-        fields = ('contact', 'module_instance', 'action_type',)
+        fields = ('contact', 'event', 'action_type',)
 
 
 class CheckinOrCancelForm(forms.Form):

@@ -27,13 +27,13 @@ class ActionSerializerViewSet(viewsets.ModelViewSet):
         queryset = Action.objects.filter(is_last_state=True)
         contact_portal = self.request.query_params.get('contact', None)
         action_type_portal = self.request.query_params.get('action_type', None)
-        module_instance_portal = self.request.query_params.get('module_instance', None)
+        event_portal = self.request.query_params.get('event', None)
         if contact_portal is not None:
             queryset = queryset.filter(contact=int(contact_portal))
         if action_type_portal is not None:
             queryset = queryset.filter(action_type=str(action_type_portal))
-        if module_instance_portal is not None:
-            queryset = queryset.filter(module_instance=int(module_instance_portal))
+        if event_portal is not None:
+            queryset = queryset.filter(event=int(event_portal))
         return queryset[:50]
 
     def perform_create(self, serializer):

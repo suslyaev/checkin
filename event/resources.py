@@ -1,7 +1,7 @@
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from import_export.results import RowResult
-from .models import Contact, Company, CategoryContact, Checkin, ModuleInstance
+from .models import Contact, CompanyContact, CategoryContact, Checkin, ModuleInstance
 
 class ForeignKeyWidgetWithFallback(ForeignKeyWidget):
     """
@@ -20,17 +20,17 @@ class ForeignKeyWidgetWithFallback(ForeignKeyWidget):
 class CheckinResource(resources.ModelResource):
     """
     Один ресурс для:
-      - Импорта/обновления Контактов (если module_instance пуст),
-      - Импорта/обновления Чекинов (если module_instance указан).
+      - Импорта/обновления Контактов (если event пуст),
+      - Импорта/обновления Чекинов (если event указан).
     """
     id = fields.Field(
         column_name='id',
         attribute='id',
         readonly=True
     )
-    module_instance = fields.Field(
-        column_name='module_instance',
-        attribute='module_instance',
+    event = fields.Field(
+        column_name='event',
+        attribute='event',
         widget=ForeignKeyWidgetWithFallback(ModuleInstance, 'name')
     )
     fio = fields.Field(
@@ -41,7 +41,7 @@ class CheckinResource(resources.ModelResource):
     company = fields.Field(
         column_name='company',
         attribute='contact__company',
-        widget=ForeignKeyWidgetWithFallback(Company, 'name')
+        widget=ForeignKeyWidgetWithFallback(CompanyContact, 'name')
     )
     category = fields.Field(
         column_name='category',
@@ -55,8 +55,8 @@ class CheckinResource(resources.ModelResource):
 
     def import_row(self, row, *args, **kwargs):
         """
-        - Если module_instance пуст, создаём/обновляем Contact и показываем изменения в diff.
-        - Если module_instance заполнен, создаём/обновляем Checkin (через super()).
+        - Если event пуст, создаём/обновляем Contact и показываем изменения в diff.
+        - Если event заполнен, создаём/обновляем Checkin (через super()).
         """
         # Извлекаем row_number из kwargs, чтобы избежать ошибки "multiple values"
         row_number = kwargs.pop('row_number', None)
@@ -66,7 +66,7 @@ class CheckinResource(resources.ModelResource):
         company_name = (row.get('company') or '').strip()
         category_name = (row.get('category') or '').strip()
         comment = (row.get('comment') or '').strip()
-        module_instance_name = (row.get('module_instance') or '').strip()
+        event_name = (row.get('event') or '').strip()
 
         # Создаём результат (RowResult), чтобы настроить вывод в отчёте
         result = self.get_row_result_class()()
@@ -102,7 +102,7 @@ class CheckinResource(resources.ModelResource):
 
         # Обновляем поля у контакта
         if company_name:
-            company_obj, _ = Company.objects.get_or_create(name=company_name)
+            company_obj, _ = CompanyContact.objects.get_or_create(name=company_name)
             contact.company = company_obj
         if category_name:
             category_obj, _ = CategoryContact.objects.get_or_create(name=category_name)
@@ -133,17 +133,17 @@ class CheckinResource(resources.ModelResource):
 
         result.diff = diff_list
 
-        # Если module_instance пуст -> НЕ создаём Checkin
-        if not module_instance_name:
+        # Если event пуст -> НЕ создаём Checkin
+        if not event_name:
             return result
 
-        # Иначе (module_instance заполнен) -> вызываем super() для создания/обновления Checkin
+        # Иначе (event заполнен) -> вызываем super() для создания/обновления Checkin
         checkin_result = super().import_row(row, row_number=row_number, *args, **kwargs)
         return checkin_result
 
     # Методы для экспорта (dehydrate), если нужна выгрузка
-    def dehydrate_module_instance(self, obj):
-        return obj.module_instance.name if obj.module_instance else ''
+    def dehydrate_event(self, obj):
+        return obj.event.name if obj.event else ''
 
     def dehydrate_fio(self, obj):
         return obj.contact.fio if obj.contact else ''
@@ -159,5 +159,5 @@ class CheckinResource(resources.ModelResource):
 
     class Meta:
         model = Checkin
-        fields = ('id', 'module_instance', 'fio', 'company', 'category', 'comment')
-        export_order = ('id', 'module_instance', 'fio', 'company', 'category', 'comment')
+        fields = ('id', 'event', 'fio', 'company', 'category', 'comment')
+        export_order = ('id', 'event', 'fio', 'company', 'category', 'comment')

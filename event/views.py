@@ -16,15 +16,15 @@ def checkin_list(request, pk):
     # Проверяем, есть ли такое мероприятие
     inst = get_object_or_404(ModuleInstance, pk=pk)
 
-    # Фильтруем checkin: is_last_state=True, action_type='new', module_instance=inst
+    # Фильтруем checkin: is_last_state=True, action_type='new', event=inst
     qs = Checkin.objects.filter(
         is_last_state=True,
         action_type='new',
-        module_instance=inst
+        event=inst
     )
 
     # Если пользователь - проверяющий, проверяем, что inst.checkers=user
-    # (или если в админке get_queryset требует module_instance.checkers=user)
+    # (или если в админке get_queryset требует event.checkers=user)
     if request.user.groups.filter(name='Проверяющий').exists():
         # Если мероприятие вообще не связано с этим user, можно запретить доступ
         if not inst.checkers.filter(pk=request.user.pk).exists():
@@ -57,9 +57,9 @@ def checkin_detail(request, pk):
     """
     checkin = get_object_or_404(Checkin, pk=pk)
 
-    # Доп. проверка: если "Проверяющий", убедиться, что checkin.module_instance.checkers содержит user
+    # Доп. проверка: если "Проверяющий", убедиться, что checkin.event.checkers содержит user
     if request.user.groups.filter(name='Проверяющий').exists():
-        if not checkin.module_instance.checkers.filter(pk=request.user.pk).exists():
+        if not checkin.event.checkers.filter(pk=request.user.pk).exists():
             return render(request, 'front/no_access.html')
 
     return render(request, 'front/checkin_detail.html', {
@@ -74,7 +74,7 @@ def confirm_checkin(request, pk):
         action_type_confirm = 'checkin'  # ID типа действия для подтверждения
         Action.objects.create(
             contact=checkin.contact,
-            module_instance=checkin.module_instance,
+            event=checkin.event,
             action_type=action_type_confirm,
             is_last_state=True
         )
@@ -87,7 +87,7 @@ def cancel_checkin(request, pk):
         action_type_cancel = 'cancel'  # ID типа действия для отмены
         Action.objects.create(
             contact=checkin.contact,
-            module_instance=checkin.module_instance,
+            event=checkin.event,
             action_type=action_type_cancel,
             is_last_state=True
         )

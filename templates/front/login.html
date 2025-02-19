@@ -1,16 +1,16 @@
-<!-- login.html -->
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Вход</title>
-</head>
-<body>
-    <h1>Пожалуйста, войдите</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Войти</button>
-    </form>
-</body>
-</html>
+{% extends "front/base.html" %}
+{% load static %}
+
+{% block title %}Вход{% endblock title %}
+
+{% block content %}
+<h1>Пожалуйста, войдите</h1>
+
+<form method="post" style="max-width: 300px;">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" style="background-color: #5181B8; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+        Войти
+    </button>
+</form>
+{% endblock content %}

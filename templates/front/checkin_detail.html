@@ -6,30 +6,27 @@
 {% block content %}
 <h2>Детали заявки</h2>
 
-<!-- Кнопка "Назад" -->
 <div style="margin: 10px 0;">
-  <a href="javascript:history.back()" style="color: #007bff; text-decoration: none;">← Назад</a>
+  <a href="javascript:history.back()">← Назад</a>
 </div>
 
-<!-- Информация о мероприятии -->
-{% if checkin.module_instance %}
-  <h3>{{ checkin.module_instance.name }}</h3>
+{% if checkin.event %}
+  <h3>{{ checkin.event.name }}</h3>
   <p style="color: #555;">
-    {{ checkin.module_instance.address }}<br>
-    {% if checkin.module_instance.date_start %}
-      Начало: {{ checkin.module_instance.date_start|date:"Y-m-d H:i" }}<br>
+    {{ checkin.event.address }}<br>
+    {% if checkin.event.date_start %}
+      Начало: {{ checkin.event.date_start|date:"Y-m-d H:i" }}<br>
     {% endif %}
-    {% if checkin.module_instance.date_end %}
-      Окончание: {{ checkin.module_instance.date_end|date:"Y-m-d H:i" }}<br>
+    {% if checkin.event.date_end %}
+      Окончание: {{ checkin.event.date_end|date:"Y-m-d H:i" }}<br>
     {% endif %}
   </p>
 {% endif %}
 
-<!-- Информация о человеке -->
 <h4>{{ checkin.contact.fio }}</h4>
 <div style="display: flex; align-items: center; gap: 10px;">
   {% if checkin.contact.photo %}
-    <img src="{{ checkin.contact.photo.url }}" style="width: 100px; height: auto; border-radius: 5px;" alt="Фото {{ checkin.contact.fio }}">
+    <img src="{{ checkin.contact.photo.url }}" style="width: 100px; height: auto; border-radius: 5px;">
   {% else %}
     Нет фото
   {% endif %}
@@ -38,11 +35,9 @@
     {% if checkin.contact.company %}
       <p>Компания: {{ checkin.contact.company.name }}</p>
     {% endif %}
-
     {% if checkin.contact.category %}
-      <!-- Категория с цветным прямоугольником -->
       <p>Категория:
-        <span style="background-color: {{ checkin.contact.category.color }}; padding: 4px 8px; color: #fff; border-radius: 3px;">
+        <span class="category-badge" style="background-color: {{ checkin.contact.category.color }}">
           {{ checkin.contact.category.name }}
         </span>
       </p>
@@ -50,56 +45,55 @@
   </div>
 </div>
 
-<!-- Кнопки Подтвердить / Отменить (AJAX) -->
 <div style="margin-top: 20px;">
-  <button onclick="confirmCheckin({{ checkin.pk }})" style="background-color: #28a745; color: white; padding: 5px;">
+  <button onclick="confirmCheckin({{ checkin.pk }})" class="button-primary">
     Подтвердить
   </button>
-  <button onclick="cancelCheckin({{ checkin.pk }})" style="background-color: #dc3545; color: white; padding: 5px;">
+  <button onclick="cancelCheckin({{ checkin.pk }})" class="button-danger">
     Отменить
   </button>
 </div>
 
 <!-- Скрипт AJAX, такой же как в checkin_list -->
 <script>
-function confirmCheckin(pk) {
-  fetch(`/event/checkins/${pk}/confirm/`, {
-    method: 'POST',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': '{{ csrf_token }}'
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      alert(data.message);
-      location.reload();
-    } else {
-      alert('Ошибка при подтверждении');
-    }
-  })
-  .catch(err => console.error(err));
-}
-
-function cancelCheckin(pk) {
-  fetch(`/event/checkins/${pk}/cancel/`, {
-    method: 'POST',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': '{{ csrf_token }}'
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      alert(data.message);
-      location.reload();
-    } else {
-      alert('Ошибка при отмене');
-    }
-  })
-  .catch(err => console.error(err));
-}
-</script>
+  function confirmCheckin(pk) {
+    fetch(`/event/checkins/${pk}/confirm/`, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': '{{ csrf_token }}'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert('Ошибка при подтверждении');
+      }
+    })
+    .catch(err => console.error(err));
+  }
+  
+  function cancelCheckin(pk) {
+    fetch(`/event/checkins/${pk}/cancel/`, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': '{{ csrf_token }}'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert('Ошибка при отмене');
+      }
+    })
+    .catch(err => console.error(err));
+  }
+  </script>
 {% endblock content %}

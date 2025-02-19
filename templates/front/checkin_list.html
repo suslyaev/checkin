@@ -7,18 +7,17 @@
 <h2>Заявки для мероприятия: {{ instance.name }}</h2>
 <small style="color: #555;">{{ instance.address }}</small>
 
-<!-- Кнопка "Назад" -->
 <div style="margin: 10px 0;">
-  <a href="{% url 'home' %}" style="color: #007bff; text-decoration: none;">← Назад к списку мероприятий</a>
+  <a href="{% url 'home' %}">← Назад к списку мероприятий</a>
 </div>
 
-<!-- Поле поиска -->
-<form method="get" style="margin-bottom: 10px;">
-  <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск..." style="padding: 4px;">
+<!-- Форма поиска -->
+<form method="get" class="search-form">
+  <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск...">
   <button type="submit">Найти</button>
 </form>
 
-<table border="1" cellpadding="5" style="border-collapse: collapse;">
+<table>
   <thead>
     <tr>
       <th>Фото</th>
@@ -29,31 +28,25 @@
   <tbody>
   {% for c in checkins %}
     <tr>
-      <!-- Фото -->
       <td>
         {% if c.contact.photo %}
           <a href="{% url 'checkin_detail' c.pk %}">
-            <img src="{{ c.contact.photo.url }}" 
-                 style="width: 50px; height: auto; border-radius: 3px;"
-                 alt="Фото {{ c.contact.fio }}">
+            <img src="{{ c.contact.photo.url }}" style="width: 50px; height: auto; border-radius: 3px;">
           </a>
         {% else %}
           Нет фото
         {% endif %}
       </td>
-
-      <!-- ФИО -->
       <td>
-        <a href="{% url 'checkin_detail' c.pk %}" style="color: #007bff; text-decoration: none;">
+        <a href="{% url 'checkin_detail' c.pk %}">
           {{ c.contact.fio }}
         </a>
       </td>
-
       <td>
-         <button onclick="confirmCheckin({{ c.pk }})" style="background-color: #28a745; color: white; padding: 5px;">
+         <button onclick="confirmCheckin({{ c.pk }})" class="button-primary">
             Подтвердить
          </button>
-         <button onclick="cancelCheckin({{ c.pk }})" style="background-color: #dc3545; color: white; padding: 5px;">
+         <button onclick="cancelCheckin({{ c.pk }})" class="button-danger">
             Отменить
          </button>
       </td>
@@ -64,46 +57,8 @@
   </tbody>
 </table>
 
-<!-- Скрипт для AJAX -->
+<!-- AJAX скрипты те же -->
 <script>
-function confirmCheckin(pk) {
-  fetch(`/event/checkins/${pk}/confirm/`, {
-    method: 'POST',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': '{{ csrf_token }}'
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      alert(data.message);
-      location.reload();
-    } else {
-      alert('Ошибка при подтверждении');
-    }
-  })
-  .catch(err => console.error(err));
-}
-
-function cancelCheckin(pk) {
-  fetch(`/event/checkins/${pk}/cancel/`, {
-    method: 'POST',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': '{{ csrf_token }}'
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      alert(data.message);
-      location.reload();
-    } else {
-      alert('Ошибка при отмене');
-    }
-  })
-  .catch(err => console.error(err));
-}
+...
 </script>
 {% endblock content %}
