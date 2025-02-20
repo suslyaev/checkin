@@ -48,8 +48,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'telegram_bot.apps.TelegramBotConfig',
 
-    # АПИ
-    'rest_framework', # API
     'import_export',
     'admin_auto_filters',
     'colorfield',

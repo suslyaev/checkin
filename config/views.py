@@ -1,10 +1,8 @@
-# config/views.py (или где у вас home)
 from django.shortcuts import render, redirect
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth import login, authenticate
 from django.db.models import Q
 from django.db.models.functions import Lower
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
 
 from event.models import ModuleInstance
@@ -12,7 +10,6 @@ from event.models import ModuleInstance
 def home(request):
     if request.user.is_authenticated:
         qs = ModuleInstance.objects.all()
-
         # Ограничения по ролям (как в админке)
         if not request.user.is_superuser:
             # Если проверяющий - фильтруем
@@ -55,5 +52,5 @@ def home(request):
         return render(request, 'front/login.html', {'form': form})
 
 def custom_logout(request):
-    logout(request)  # «Разлогинить» пользователя
-    return redirect('home')  # На главную
+    logout(request)
+    return redirect('home')

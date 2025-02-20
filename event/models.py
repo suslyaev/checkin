@@ -140,7 +140,9 @@ class StatusContact(BaseModelClass):
 
 # Человек
 class Contact(models.Model):
-    fio = models.CharField(max_length=300, verbose_name='ФИО')
+    last_name = models.CharField(max_length=300, verbose_name='Фамилия')
+    first_name = models.CharField(max_length=300, verbose_name='Имя')
+    middle_name = models.CharField(max_length=300, blank=True, null=True, verbose_name='Отчество')
     company = models.ForeignKey('CompanyContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Компания')
     category = models.ForeignKey('CategoryContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Категория')
     status = models.ForeignKey('StatusContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Статус')
@@ -148,7 +150,14 @@ class Contact(models.Model):
     photo = models.ImageField(upload_to='contacts/photos/', blank=True, null=True, verbose_name='Фото сотрудника')
 
     def __str__(self):
-        return f'{self.fio}'
+        return self.get_fio()
+    
+    def get_fio(self):
+        middle_name = ''
+        if self.middle_name is not None:
+            middle_name = self.middle_name
+        return f'{self.last_name} {self.first_name} {middle_name}'
+    get_fio.short_description = 'ФИО'
     
     def photo_link(self):
         if self.photo:
@@ -186,7 +195,13 @@ class Contact(models.Model):
     class Meta:
         verbose_name = 'Человек'
         verbose_name_plural = 'Люди'
-        ordering = ['fio']
+        ordering = ['pk']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['last_name', 'first_name', 'middle_name', 'company', 'category'],
+                name='unique_contact'
+            )
+        ]
 
 # Мероприятие
 class ModuleInstance(models.Model):
@@ -221,7 +236,7 @@ class Action(models.Model):
     event = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, blank=True, verbose_name='Мероприятие')
     action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),  verbose_name='Тип действия', default='new')
     action_date = models.DateTimeField(null=True, blank=True, auto_now=True, verbose_name='Дата и время действия')
-    operator = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Оператор')
+    operator = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Кто зарегистрировал')
     is_last_state = models.BooleanField(default=True, verbose_name='Текущее состояние')
 
     def __str__(self):
@@ -255,11 +270,22 @@ class Checkin(Action):
     def __str__(self):
         return f'Регистрация {self.contact}'
     
+    def get_category_contact(self):
+        if self.contact is not None:
+            return self.contact.category
+        return None
+    get_category_contact.short_description = 'Категория'
+
+    def get_status_contact(self):
+        if self.contact is not None:
+            return self.contact.status
+        return None
+    get_status_contact.short_description = 'Статус'
+    
     def photo_contact(self):
         if self.contact.photo:
             return format_html('<img src="{}" style="width: 100px; height: auto; border-radius: 5px;" />', self.contact.photo.url)
         return "Нет фото"
-
     photo_contact.short_description = 'Фото'
     
     class Meta:
@@ -268,3 +294,27 @@ class Checkin(Action):
         verbose_name_plural = 'Регистрации'
         ordering = ['pk']
     
+# Социальные сети
+class SocialNetwork(BaseModelClass):
+    name = models.CharField(max_length=100, verbose_name='Наименование соцсети')
+    comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
+
+    def __str__(self):
+        return f'{self.name}'
+
+    class Meta:
+        verbose_name = 'Социальная сеть'
+        verbose_name_plural = 'Социальные сети'
+
+# Контакт человека
+class InfoContact(models.Model):
+    contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, verbose_name='Человек')
+    social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть сеть')
+    external_id = models.CharField(max_length=255, verbose_name='Имя или айди')
+
+    def __str__(self):
+        return f'{self.social_network.name} - {self.external_id}'
+
+    class Meta:
+        verbose_name = 'Контакт человека'
+        verbose_name_plural = 'Контакты человека'
