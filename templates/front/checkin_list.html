@@ -39,7 +39,7 @@
       </td>
       <td>
         <a href="{% url 'checkin_detail' c.pk %}">
-          {{ c.contact.fio }}
+          {{ c.contact.get_fio }}
         </a>
       </td>
       <td>
