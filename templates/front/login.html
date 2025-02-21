@@ -4,7 +4,7 @@
 {% block title %}Вход{% endblock title %}
 
 {% block content %}
-<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center;">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; height: 100vh; text-align: center; padding-top: 10vh;">
     <div id="site-branding" style="margin-bottom: 20px;">
         <a href="{% url 'admin:index' %}" style="text-decoration: none; color: white; display: flex; align-items: center; gap: 10px;">
             <img src="{% static 'img/logo.png' %}" alt="Логотип" style="height: 50px;">
@@ -18,7 +18,7 @@
         <div style="width: 100%; text-align: left;">
             {{ form.as_p }}
         </div>
-        <button type="submit" style="width: 100%; background-color: #5181B8; color: #fff; border: none; align-items: center; padding: 14px; border-radius: 8px; cursor: pointer; font-size: 18px; height: 50px;">
+        <button type="submit" style="width: 100%; background-color: #5181B8; color: #fff; align-items: center;border: none; padding: 16px; border-radius: 8px; cursor: pointer; font-size: 18px; height: 50px;">
             Войти
         </button>
     </form>
