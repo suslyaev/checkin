@@ -145,14 +145,14 @@ class CheckinResource(resources.ModelResource):
 
 class ActionResource(resources.ModelResource):
     id = fields.Field(column_name="ID", attribute="id", readonly=True)
-    event = fields.Field(column_name='Мероприятие', attribute='event', widget=ForeignKeyWidgetWithFallback(ModuleInstance, 'name'))
-    last_name = fields.Field(column_name='Фамилия', attribute='contact', widget=ForeignKeyWidgetWithFallback(Contact, 'last_name'))
-    first_name = fields.Field(column_name='Имя', attribute='contact__first_name')
-    middle_name = fields.Field(column_name='Отчество', attribute='contact__middle_name')
-    company = fields.Field(column_name='Компания', attribute='contact__company__name')
-    category = fields.Field(column_name='Категория', attribute='contact__category__name')
-    status = fields.Field(column_name='Статус', attribute='contact__status__name')
-    comment = fields.Field(column_name="Комментарий", attribute="contact__comment")
+    last_name = fields.Field(column_name='last_name', attribute='contact__last_name')
+    first_name = fields.Field(column_name='first_name', attribute='contact__first_name')
+    middle_name = fields.Field(column_name='middle_name', attribute='contact__middle_name')
+    event = fields.Field(column_name='Мероприятие', attribute='event')
+    company = fields.Field(column_name='company', attribute='contact__company')
+    category = fields.Field(column_name='category', attribute='contact__category')
+    status = fields.Field(column_name='status', attribute='contact__status')
+    comment = fields.Field(column_name="comment", attribute="contact__comment")
     action_type = fields.Field(column_name="Тип действия", attribute="action_type")
     action_date = fields.Field(column_name="Дата и время", attribute="action_date")
     operator = fields.Field(column_name="Оператор", attribute="operator")
@@ -161,6 +161,13 @@ class ActionResource(resources.ModelResource):
     class Meta:
         model = Action
         fields = (
-            "id", "event", "last_name", "first_name", "middle_name", "company", "category",
-            "status", "comment", "action_type", "action_date", "operator", "is_last_state", 
+            "id", "last_name", "first_name", "middle_name", "event", "company", "category", "status", "comment", "action_type", "action_date", "operator", "is_last_state", 
         )
+    
+    def dehydrate_action_type(self, action):
+        """Русификация типа действия"""
+        return dict(Action._meta.get_field("action_type").choices).get(action.action_type, action.action_type)
+    
+    def dehydrate_is_last_state(self, action):
+        """Отображение текущего состояния как 'Да'/'Нет'"""
+        return "Да" if action.is_last_state else "Нет"
