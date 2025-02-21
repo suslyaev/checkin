@@ -2,7 +2,7 @@ from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from import_export.results import RowResult
 from django.utils.safestring import mark_safe
-from .models import Contact, CompanyContact, CategoryContact, StatusContact, Checkin, ModuleInstance
+from .models import Contact, CompanyContact, CategoryContact, StatusContact, Checkin, ModuleInstance, Action
 
 class ForeignKeyWidgetWithFallback(ForeignKeyWidget):
     """ Виджет, создающий новую запись, если она не найдена. """
@@ -141,3 +141,26 @@ class CheckinResource(resources.ModelResource):
         model = Checkin
         fields = ('id', 'event', 'last_name', 'first_name', 'middle_name', 'company', 'category', 'status', 'comment')
         export_order = ('id', 'event', 'last_name', 'first_name', 'middle_name', 'company', 'category', 'status', 'comment')
+
+
+class ActionResource(resources.ModelResource):
+    id = fields.Field(column_name="ID", attribute="id", readonly=True)
+    event = fields.Field(column_name='Мероприятие', attribute='event', widget=ForeignKeyWidgetWithFallback(ModuleInstance, 'name'))
+    last_name = fields.Field(column_name='Фамилия', attribute='contact', widget=ForeignKeyWidgetWithFallback(Contact, 'last_name'))
+    first_name = fields.Field(column_name='Имя', attribute='contact__first_name')
+    middle_name = fields.Field(column_name='Отчество', attribute='contact__middle_name')
+    company = fields.Field(column_name='Компания', attribute='contact__company__name')
+    category = fields.Field(column_name='Категория', attribute='contact__category__name')
+    status = fields.Field(column_name='Статус', attribute='contact__status__name')
+    comment = fields.Field(column_name="Комментарий", attribute="contact__comment")
+    action_type = fields.Field(column_name="Тип действия", attribute="action_type")
+    action_date = fields.Field(column_name="Дата и время", attribute="action_date")
+    operator = fields.Field(column_name="Оператор", attribute="operator")
+    is_last_state = fields.Field(column_name="Текущее состояние", attribute="is_last_state")
+
+    class Meta:
+        model = Action
+        fields = (
+            "id", "event", "last_name", "first_name", "middle_name", "company", "category",
+            "status", "comment", "action_type", "action_date", "operator", "is_last_state", 
+        )

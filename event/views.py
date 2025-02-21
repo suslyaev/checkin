@@ -76,6 +76,7 @@ def confirm_checkin(request, pk):
             contact=checkin.contact,
             event=checkin.event,
             action_type=action_type_confirm,
+            operator = request.user,
             is_last_state=True
         )
         return JsonResponse({'status': 'success', 'message': 'Подтверждено'})
@@ -89,6 +90,7 @@ def cancel_checkin(request, pk):
             contact=checkin.contact,
             event=checkin.event,
             action_type=action_type_cancel,
+            operator = request.user,
             is_last_state=True
         )
         return JsonResponse({'status': 'success', 'message': 'Отменено'})

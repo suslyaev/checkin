@@ -8,7 +8,7 @@ from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ImportExportActionModelAdmin
-from .resources import CheckinResource
+from .resources import CheckinResource, ActionResource
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
 from django.urls import reverse
@@ -419,11 +419,11 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     view_on_site = False
 
     def registrations_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='new').count()
+        return Action.objects.filter(event=obj, action_type='new', is_last_state=True).count()
     registrations_count.short_description = 'Регистрации'
 
     def checkins_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='checkin').count()
+        return Action.objects.filter(event=obj, action_type='checkin', is_last_state=True).count()
     checkins_count.short_description = 'Чекины'
 
     def registered_list(self, obj):
@@ -612,6 +612,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         'contact__status',)
     list_per_page = 25
     view_on_site = False
+    show_change_form_export = False
 
     class Media:
         js = ('js/checkin_list.js',)
@@ -727,12 +728,14 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
 @admin.register(Action)
 class ActionAdmin(ExportActionModelAdmin):
     form = ActionForm
-    list_display = ('contact', 'action_type', 'event', 'action_date')
+    resource_class = ActionResource
+    list_display = ('contact', 'action_type', 'event', 'action_date', 'operator')
     list_filter = (ModuleInstanceFilter, 'action_type', 'event__date_start')
     autocomplete_fields = ['contact', 'event']
-    readonly_fields = ('contact', 'action_type', 'event', 'action_date', 'is_last_state')
+    readonly_fields = ('contact', 'action_type', 'event', 'action_date', 'is_last_state', 'operator')
     list_per_page = 25
     view_on_site = False
+    show_change_form_export = False
 
     # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
     def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
