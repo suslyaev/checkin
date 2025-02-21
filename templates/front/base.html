@@ -5,29 +5,59 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}Attendly{% endblock title %}</title>
+    <link rel="stylesheet" href="https://unpkg.com/@vkontakte/vkui/dist/vkui.css">
     <link rel="stylesheet" type="text/css" href="{% static 'css/style.css' %}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
 {% if user.is_authenticated %}
-  <div class="header-bar">
-    <div class="header-left">
-      {% if user.first_name %}
-        Привет, <strong>{{ user.first_name }}</strong>!
-      {% else %}
-        Привет, <strong>Администратор</strong>!
-      {% endif %}
+
+<div class="vkuiPanelHeader__host vkuiInternalPanelHeader vkuiPanelHeader__ios vkuiPanelHeader__static vkuiInternalPanelHeader--static vkuiPanelHeader__sep vkuiInternalPanelHeader--sep vkuiPanelHeader__noBefore vkuiInternalPanelHeader--no-before vkuiPanelHeader__noAfter vkuiPanelHeader__hasFixed vkuiPanelHeader__sizeXNone vkuiPanelHeader__sizeYNone vkuiRootComponent__host">
+  
+  
+  
+  <div data-onboarding-tooltip-container="fixed" class="vkuiFixedLayout__host vkuiInternalFixedLayout--ios vkuiFixedLayout__verticalTop vkuiPanelHeader__fixed vkuiInternalPanelHeader__fixed">
+    <div class="header-bar">
+      <div class="header-left">
+        {% if user.first_name %}
+          Привет, <strong>{{ user.first_name }}</strong>!
+        {% else %}
+          Привет, <strong>Администратор</strong>!
+        {% endif %}
+      </div>
+      <div class="header-right">
+        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit">Выйти</button>
+        </form>
+      </div>
     </div>
-    <div class="header-right">
-      <form action="{% url 'logout' %}" method="post" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit">Выйти</button>
-      </form>
+    
+    <div data-onboarding-tooltip-container="fixed" class="vkuiPanelHeader__in">
+      
+      <div class="vkuiPanelHeader__before vkuiInternalPanelHeader__before">
+        
+      </div>
+      
+      <div class="vkuiPanelHeader__content">
+        
+        <span class="vkuiPanelHeader__contentIn">Список событий</span></div>
+        <div class="vkuiPanelHeader__after vkuiInternalPanelHeader__after"></div>
+      </div>
+    </div>
+    <div class="vkuistyles__-sizeX--compact-mq vkuiSeparator__padded vkuiSeparator__appearancePrimary vkuiSeparator__directionHorizontal vkuiRootComponent__host"><hr class="vkuiSeparator__in"></div>
+    <div class="vkuistyles__-sizeX--regular-mq vkuiSpacing__host vkuiRootComponent__host" style="--vkui_internal--spacing_size: 16px;">
+
     </div>
   </div>
+
+
+  
 {% endif %}
 
 {% block content %}{% endblock content %}
+
 
 </body>
 </html>

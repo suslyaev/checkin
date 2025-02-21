@@ -5,31 +5,45 @@
 
 {% block content %}
 {% if user.is_authenticated %}
-    <h2>Список мероприятий</h2>
 
-    <!-- Форма поиска мероприятий -->
-    <form method="get" class="search-form">
-      <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск...">
-      <button type="submit">Найти</button>
-    </form>
 
-    <ul style="list-style-type: none; padding-left: 0;">
-      {% for inst in instances %}
-        <li style="margin-bottom: 15px;">
-          <a href="{% url 'checkin_list' inst.pk %}" style="font-size: 18px;">
-            {{ inst.name }}
-          </a><br>
-          <small style="color: #555;">{{ inst.address }}</small><br>
-          {% if inst.date_start %}
-            <small style="color: #333;">
-              Дата начала: {{ inst.date_start|date:"Y-m-d" }}
-            </small>
-          {% endif %}
-        </li>
-      {% empty %}
-        <li>Нет мероприятий</li>
-      {% endfor %}
-    </ul>
+<br><br><br>
+<section class="vkuiInternalGroup vkuiGroup__host vkuiGroup__sizeXNone vkuiInternalGroup--sizeX-none vkuiGroup__modeNone vkuiInternalGroup--mode-none vkuiGroup__paddingM vkuiRootComponent__host"><div class="vkuiList__host vkuiRootComponent__host" role="list" style="gap: 0px;"><div class="vkuiInternalSearch vkuiSearch__host vkuiSearch__sizeYNone vkuiSearch__hasAfter vkuiSearch__withPadding"><div class="vkuiSearch__field"><label for="search-:r0:" class="vkuiSearch__label">Поиск</label><div class="vkuiSearch__input"><svg aria-hidden="true" display="block" class="vkuiIcon vkuiIcon--16 vkuiIcon--w-16 vkuiIcon--h-16 vkuiIcon--search_outline_16" width="16" height="16" viewBox="0 0 16 16" style="width: 16px; height: 16px;"><use xlink:href="#search_outline_16" style="fill: currentcolor;"></use></svg>
+  <form method="get" class="search-form">
+  <input class="vkuiSearch__nativeInput vkuiHeadline__sizeYNone vkuiHeadline__level1 vkuiTypography__host vkuiTypography__normalize vkuiTypography__weight3 vkuiRootComponent__host" type="search" id="search-:r0:" name="q" value="{{ search_term }}" placeholder="Поиск" autocomplete="off" value="">
+</form>
+</div>
+  <div class="vkuiSearch__controls">
+    <button class="vkuiSearch__icon vkuiInternalTappable vkuiIconButton__host vkuiIconButton__sizeYNone vkuiIconButton__ios vkuiTappable__host vkuiTappable__sizeXNone vkuiTappable__hasPointerNone vkuiClickable__host vkuiClickable__realClickable vkuistyles__-focus-visible vkuiRootComponent__host" type="button" tabindex="-1"><span class="vkuiVisuallyHidden__host vkuiRootComponent__host">Очистить</span><svg aria-hidden="true" display="block" class="vkuiIcon vkuiIcon--16 vkuiIcon--w-16 vkuiIcon--h-16 vkuiIcon--clear_16" width="16" height="16" viewBox="0 0 16 16" style="width: 16px; height: 16px;"><use xlink:href="#clear_16" style="fill: currentcolor;"></use></svg><span aria-hidden="true" class="vkuiTappable__stateLayer"></span></button></div></div><div class="vkuiSearch__after">
+  <button class="vkuiInternalTappable vkuiButton__host vkuiButton__sizeM vkuiButton__modeTertiary vkuiButton__appearanceAccent vkuiButton__sizeYNone vkuiButton__ios vkuiTappable__host vkuiTappable__sizeXNone vkuiTappable__hasPointerNone vkuiClickable__host vkuiClickable__realClickable vkuistyles__-focus-visible vkuiRootComponent__host" type="button">
+  <span class="vkuiButton__in">
+  <span class="vkuiButton__content">
+    <span class="vkuiSearch__afterTextClip">Отмена</span></span></span></button></div></div>
+    <footer class="vkuiFooter__host vkuiFootnote__sizeYNone vkuiFootnote__host vkuiTypography__host vkuiTypography__normalize vkuiRootComponent__host" role="contentinfo">
+      
+      <ul style="list-style-type: none; padding-left: 0;">
+        {% for inst in instances %}
+          <li style="margin-bottom: 15px;">
+            <a href="{% url 'checkin_list' inst.pk %}" style="font-size: 18px;">
+              {{ inst.name }}
+            </a><br>
+            <small style="color: #555;">{{ inst.address }}</small><br>
+            {% if inst.date_start %}
+              <small style="color: #333;">
+                Дата начала: {{ inst.date_start|date:"Y-m-d" }}
+              </small>
+            {% endif %}
+          </li>
+        {% empty %}
+          <li>Нет мероприятий</li>
+        {% endfor %}
+      </ul>
+      
+    </footer><div aria-hidden="true" data-draggable-placeholder="true" class="vkuiList__placeholder"></div></div></section>
+
+
+
+
 {% else %}
     <h1>Вы не авторизованы</h1>
 {% endif %}
