@@ -419,7 +419,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     view_on_site = False
 
     def registrations_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='new', is_last_state=True).count()
+        return Action.objects.filter(event=obj, action_type='new').count()
     registrations_count.short_description = 'Регистрации'
 
     def checkins_count(self, obj):
