@@ -1,5 +1,6 @@
 from django.db import models
 
+
 class FSMState(models.Model):
     bot_id = models.BigIntegerField(null=False)
     chat_id = models.BigIntegerField(null=False)

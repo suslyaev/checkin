@@ -10,6 +10,8 @@ urlpatterns = [
     path('logout/', views.custom_logout, name='logout'),
     path('admin/', admin.site.urls),
     path('event/', include('event.urls')),
+    path('events-list/', views.get_user_events, name='events-list'),
+    path('actions/', views.ActionView.as_view(), name='actions'),
 ]
 
 if settings.DEBUG:

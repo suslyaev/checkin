@@ -1,18 +1,18 @@
 {% extends "event/base_generic.html" %}
 {% block content %}
-<h1>{{ event_detail.module.name }}</h1>
+    <h1>{{ event_detail.module.name }}</h1>
 
-</br>
-{{ event_detail.date_start }} - {{ event_detail.date_end }}
-</br>
-Описание модуля: {{ event_detail.module.comment }}
-</br>
-Описания мероприятия: {{ event_detail.module.event.comment }}
-</br>
-Зарегистрируйтесь на мероприятие:
-<form method="post" action="/event/instance/{{event_detail.id}}/">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <input type="submit" value="Зарегистрироваться" />
-</form>
+    </br>
+    {{ event_detail.date_start }} - {{ event_detail.date_end }}
+    </br>
+    Описание модуля: {{ event_detail.module.comment }}
+    </br>
+    Описания мероприятия: {{ event_detail.module.event.comment }}
+    </br>
+    Зарегистрируйтесь на мероприятие:
+    <form method="post" action="/event/instance/{{ event_detail.id }}/">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <input type="submit" value="Зарегистрироваться"/>
+    </form>
 {% endblock %}
