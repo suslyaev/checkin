@@ -730,7 +730,7 @@ class ActionAdmin(ExportActionModelAdmin):
     form = ActionForm
     resource_class = ActionResource
     list_display = ('contact', 'action_type', 'event', 'action_date', 'operator')
-    list_filter = (ModuleInstanceFilter, 'action_type', 'event__date_start')
+    list_filter = (ModuleInstanceFilter, 'action_type', 'event__date_start', 'is_last_state')
     autocomplete_fields = ['contact', 'event']
     readonly_fields = ('contact', 'action_type', 'event', 'action_date', 'is_last_state', 'operator')
     list_per_page = 25
