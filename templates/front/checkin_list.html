@@ -59,6 +59,44 @@
 
 <!-- AJAX скрипты те же -->
 <script>
-...
-</script>
+  function confirmCheckin(pk) {
+    fetch(`/event/checkins/${pk}/confirm/`, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': '{{ csrf_token }}'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert('Ошибка при подтверждении');
+      }
+    })
+    .catch(err => console.error(err));
+  }
+  
+  function cancelCheckin(pk) {
+    fetch(`/event/checkins/${pk}/cancel/`, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': '{{ csrf_token }}'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert('Ошибка при отмене');
+      }
+    })
+    .catch(err => console.error(err));
+  }
+  </script>
 {% endblock content %}
