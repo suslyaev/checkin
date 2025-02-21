@@ -97,19 +97,19 @@ def cancel_checkin(request, pk):
 def telegram_admin_auth(request):
     token = request.GET.get('token')
     if not token:
-        return redirect('admin:login')
+        return redirect('/')
 
     try:
         user = CustomUser.objects.get(auth_token=token)
         if user.token_expires < timezone.now():
-            return redirect('admin:login')
+            return redirect('/')
 
         # Авторизуем пользователя
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         user.auth_token = None
         user.token_expires = None
         user.save(update_fields=['auth_token', 'token_expires'])
-        return redirect('admin:index')
+        return redirect('/')
 
     except CustomUser.DoesNotExist:
-        return redirect('admin:login')
+        return redirect('/')
