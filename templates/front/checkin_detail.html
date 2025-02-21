@@ -3,65 +3,61 @@
 
 {% block title %}Детали заявки{% endblock title %}
 
+{% block header_title %}{{ checkin.event.name }}{% endblock header_title %}
+
 {% block content %}
-<h2>Детали заявки</h2>
-
-<div style="margin: 10px 0;">
-  <a href="javascript:history.back()">← Назад</a>
+<div style="padding: 20px; max-width: 600px; margin: auto; text-align: center;">
+    <h2>Детали заявки</h2>
+    
+    <div style="margin: 10px 0; text-align: left;">
+        <a href="javascript:history.back()" style="color: #5181B8; text-decoration: none;">← Назад</a>
+    </div>
+    
+    {% if checkin.event %}
+        <h3>{{ checkin.event.name }}</h3>
+        <p style="color: #aaa; font-size: 14px;">
+            {{ checkin.event.address }}<br>
+            {% if checkin.event.date_start %}
+                Начало: {{ checkin.event.date_start|date:"Y-m-d H:i" }}<br>
+            {% endif %}
+            {% if checkin.event.date_end %}
+                Окончание: {{ checkin.event.date_end|date:"Y-m-d H:i" }}<br>
+            {% endif %}
+        </p>
+    {% endif %}
+    
+    <div style="background: #2C2D2E; padding: 15px; border-radius: 10px; text-align: left;">
+        <h4>{{ checkin.contact.get_fio }}</h4>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            {% if checkin.contact.photo %}
+                <img src="{{ checkin.contact.photo.url }}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
+            {% else %}
+                Нет фото
+            {% endif %}
+            <div>
+                {% if checkin.contact.company %}
+                    <p>Компания: <strong>{{ checkin.contact.company.name }}</strong></p>
+                {% endif %}
+                {% if checkin.contact.category %}
+                    <p>Категория: <span class="category-badge" style="background-color: {{ checkin.contact.category.color }}; padding: 5px 10px; border-radius: 5px; color: white;">{{ checkin.contact.category.name }}</span></p>
+                {% endif %}
+                {% if checkin.contact.status %}
+                    <p>Статус: <span class="category-badge" style="background-color: {{ checkin.contact.status.color }}; padding: 5px 10px; border-radius: 5px; color: white;">{{ checkin.contact.status.name }}</span></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+        <button onclick="confirmCheckin({{ checkin.pk }})" style="background-color: #5181B8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 18px; cursor: pointer; width: 100%;">
+            Подтвердить
+        </button>
+        <button onclick="cancelCheckin({{ checkin.pk }})" style="background-color: #E64646; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 18px; cursor: pointer; width: 100%;">
+            Отменить
+        </button>
+    </div>
 </div>
 
-{% if checkin.event %}
-  <h3>{{ checkin.event.name }}</h3>
-  <p style="color: #555;">
-    {{ checkin.event.address }}<br>
-    {% if checkin.event.date_start %}
-      Начало: {{ checkin.event.date_start|date:"Y-m-d H:i" }}<br>
-    {% endif %}
-    {% if checkin.event.date_end %}
-      Окончание: {{ checkin.event.date_end|date:"Y-m-d H:i" }}<br>
-    {% endif %}
-  </p>
-{% endif %}
-
-<h4>{{ checkin.contact.get_fio }}</h4>
-<div style="display: flex; align-items: center; gap: 10px;">
-  {% if checkin.contact.photo %}
-    <img src="{{ checkin.contact.photo.url }}" style="width: 100px; height: auto; border-radius: 5px;">
-  {% else %}
-    Нет фото
-  {% endif %}
-
-  <div>
-    {% if checkin.contact.company %}
-      <p>Компания: {{ checkin.contact.company.name }}</p>
-    {% endif %}
-    {% if checkin.contact.category %}
-      <p>Категория:
-        <span class="category-badge" style="background-color: {{ checkin.contact.category.color }}">
-          {{ checkin.contact.category.name }}
-        </span>
-      </p>
-    {% endif %}
-    {% if checkin.contact.category %}
-      <p>Статус:
-        <span class="category-badge" style="background-color: {{ checkin.contact.status.color }}">
-          {{ checkin.contact.status.name }}
-        </span>
-      </p>
-    {% endif %}
-  </div>
-</div>
-
-<div style="margin-top: 20px;">
-  <button onclick="confirmCheckin({{ checkin.pk }})" class="button-primary">
-    Подтвердить
-  </button>
-  <button onclick="cancelCheckin({{ checkin.pk }})" class="button-danger">
-    Отменить
-  </button>
-</div>
-
-<!-- Скрипт AJAX, такой же как в checkin_list -->
 <script>
   function confirmCheckin(pk) {
     fetch(`/event/checkins/${pk}/confirm/`, {
@@ -102,5 +98,5 @@
     })
     .catch(err => console.error(err));
   }
-  </script>
+</script>
 {% endblock content %}

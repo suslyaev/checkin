@@ -36,9 +36,9 @@ def checkin_list(request, pk):
     if search_term:
         term_lower = search_term.lower()
         qs = qs.annotate(
-            fio_lower=Lower('contact__fio')
+            last_name_lower=Lower('contact__last_name')
         ).filter(
-            Q(fio_lower__contains=term_lower)
+            Q(last_name_lower__contains=term_lower)
         )
 
     return render(request, 'front/checkin_list.html', {

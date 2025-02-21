@@ -1,50 +1,44 @@
 {% extends "front/base.html" %}
 {% load static %}
 
-{% block title %}Главная{% endblock title %}
+{% block title %}{{ instance.name|default:"Главная" }}{% endblock title %}
+
+{% block header_title %}{{ instance.name|default:"Список мероприятий" }}{% endblock header_title %}
 
 {% block content %}
 {% if user.is_authenticated %}
 
-
-<br><br><br>
-<section class="vkuiInternalGroup vkuiGroup__host vkuiGroup__sizeXNone vkuiInternalGroup--sizeX-none vkuiGroup__modeNone vkuiInternalGroup--mode-none vkuiGroup__paddingM vkuiRootComponent__host"><div class="vkuiList__host vkuiRootComponent__host" role="list" style="gap: 0px;"><div class="vkuiInternalSearch vkuiSearch__host vkuiSearch__sizeYNone vkuiSearch__hasAfter vkuiSearch__withPadding"><div class="vkuiSearch__field"><label for="search-:r0:" class="vkuiSearch__label">Поиск</label><div class="vkuiSearch__input"><svg aria-hidden="true" display="block" class="vkuiIcon vkuiIcon--16 vkuiIcon--w-16 vkuiIcon--h-16 vkuiIcon--search_outline_16" width="16" height="16" viewBox="0 0 16 16" style="width: 16px; height: 16px;"><use xlink:href="#search_outline_16" style="fill: currentcolor;"></use></svg>
-  <form method="get" class="search-form">
-  <input class="vkuiSearch__nativeInput vkuiHeadline__sizeYNone vkuiHeadline__level1 vkuiTypography__host vkuiTypography__normalize vkuiTypography__weight3 vkuiRootComponent__host" type="search" id="search-:r0:" name="q" value="{{ search_term }}" placeholder="Поиск" autocomplete="off" value="">
-</form>
-</div>
-  <div class="vkuiSearch__controls">
-    <button class="vkuiSearch__icon vkuiInternalTappable vkuiIconButton__host vkuiIconButton__sizeYNone vkuiIconButton__ios vkuiTappable__host vkuiTappable__sizeXNone vkuiTappable__hasPointerNone vkuiClickable__host vkuiClickable__realClickable vkuistyles__-focus-visible vkuiRootComponent__host" type="button" tabindex="-1"><span class="vkuiVisuallyHidden__host vkuiRootComponent__host">Очистить</span><svg aria-hidden="true" display="block" class="vkuiIcon vkuiIcon--16 vkuiIcon--w-16 vkuiIcon--h-16 vkuiIcon--clear_16" width="16" height="16" viewBox="0 0 16 16" style="width: 16px; height: 16px;"><use xlink:href="#clear_16" style="fill: currentcolor;"></use></svg><span aria-hidden="true" class="vkuiTappable__stateLayer"></span></button></div></div><div class="vkuiSearch__after">
-  <button class="vkuiInternalTappable vkuiButton__host vkuiButton__sizeM vkuiButton__modeTertiary vkuiButton__appearanceAccent vkuiButton__sizeYNone vkuiButton__ios vkuiTappable__host vkuiTappable__sizeXNone vkuiTappable__hasPointerNone vkuiClickable__host vkuiClickable__realClickable vkuistyles__-focus-visible vkuiRootComponent__host" type="button">
-  <span class="vkuiButton__in">
-  <span class="vkuiButton__content">
-    <span class="vkuiSearch__afterTextClip">Отмена</span></span></span></button></div></div>
-    <footer class="vkuiFooter__host vkuiFootnote__sizeYNone vkuiFootnote__host vkuiTypography__host vkuiTypography__normalize vkuiRootComponent__host" role="contentinfo">
-      
-      <ul style="list-style-type: none; padding-left: 0;">
+<div style="padding: 20px; max-width: 600px; margin: auto;">
+    <h2 style="text-align: center;">{{ instance.name|default:"Список событий" }}</h2>
+    
+    <!-- Форма поиска -->
+    <form method="get" class="search-form" style="margin-bottom: 20px;">
+      <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск..." style="width: 100%; padding: 10px; border-radius: 8px;">
+    </form>
+    
+    <!-- Список мероприятий -->
+    <ul style="list-style-type: none; padding-left: 0;">
         {% for inst in instances %}
-          <li style="margin-bottom: 15px;">
-            <a href="{% url 'checkin_list' inst.pk %}" style="font-size: 18px;">
-              {{ inst.name }}
-            </a><br>
-            <small style="color: #555;">{{ inst.address }}</small><br>
-            {% if inst.date_start %}
-              <small style="color: #333;">
-                Дата начала: {{ inst.date_start|date:"Y-m-d" }}
-              </small>
-            {% endif %}
-          </li>
+            <li style="padding: 15px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                <div style="text-align: left;">
+                    <a href="{% url 'checkin_list' inst.pk %}" style="font-size: 18px; display: block;">
+                        {{ inst.name }}
+                    </a>
+                    <small style="color: #aaa; display: block;">{{ inst.address }}</small>
+                </div>
+                {% if inst.date_start %}
+                    <small style="color: #ccc; text-align: right;">
+                        {{ inst.date_start|date:"Y-m-d" }}
+                    </small>
+                {% endif %}
+            </li>
         {% empty %}
-          <li>Нет мероприятий</li>
+            <li style="text-align: center; padding: 20px;">Нет мероприятий</li>
         {% endfor %}
-      </ul>
-      
-    </footer><div aria-hidden="true" data-draggable-placeholder="true" class="vkuiList__placeholder"></div></div></section>
-
-
-
+    </ul>
+</div>
 
 {% else %}
-    <h1>Вы не авторизованы</h1>
+    <h1 style="text-align: center;">Вы не авторизованы</h1>
 {% endif %}
 {% endblock content %}

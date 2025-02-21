@@ -1,63 +1,56 @@
 {% extends "front/base.html" %}
 {% load static %}
 
-{% block title %}Заявки для {{ instance.name }}{% endblock title %}
+{% block title %}{{ instance.name|default:"Список регистраций" }}{% endblock title %}
+
+{% block header_title %}{{ instance.name|default:"Список регистраций" }}{% endblock header_title %}
 
 {% block content %}
-<h2>Заявки для мероприятия: {{ instance.name }}</h2>
-<small style="color: #555;">{{ instance.address }}</small>
+{% if user.is_authenticated %}
 
-<div style="margin: 10px 0;">
-  <a href="{% url 'home' %}">← Назад к списку мероприятий</a>
+<div style="padding: 20px; max-width: 600px; margin: auto;">
+    <h2 style="text-align: center;">{{ instance.name|default:"Список событий" }}</h2>
+
+    <div style="margin: 10px 0; text-align: left;">
+      <a href="javascript:history.back()" style="color: #5181B8; text-decoration: none;">← Назад</a>
+  </div>
+    
+    <!-- Форма поиска -->
+    <form method="get" class="search-form" style="margin-bottom: 20px;">
+      <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background-color: #2C2D2E; color: white;">
+    </form>
+    
+    <!-- Список чек-инов -->
+    <ul style="list-style-type: none; padding-left: 0;">
+        {% for c in checkins %}
+            <li style="padding: 15px; border-bottom: 1px solid #444; display: flex; align-items: center; gap: 15px;">
+                {% if c.contact.photo %}
+                    <img src="{{ c.contact.photo.url }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                {% else %}
+                    <div style="width: 50px; height: 50px; border-radius: 50%; background-color: #555; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">?</div>
+                {% endif %}
+                <div style="flex-grow: 1;">
+                    <a href="{% url 'checkin_detail' c.pk %}" style="font-size: 18px; color: white; text-decoration: none;">
+                        {{ c.contact.get_fio }}
+                    </a>
+                </div>
+                <button onclick="confirmCheckin({{ c.pk }})" style="background-color: #5181B8; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                    ✔
+                </button>
+                <button onclick="cancelCheckin({{ c.pk }})" style="background-color: #E64646; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                    ✖
+                </button>
+            </li>
+        {% empty %}
+            <li style="text-align: center; padding: 20px;">Нет заявок</li>
+        {% endfor %}
+    </ul>
 </div>
 
-<!-- Форма поиска -->
-<form method="get" class="search-form">
-  <input type="text" name="q" value="{{ search_term }}" placeholder="Поиск...">
-  <button type="submit">Найти</button>
-</form>
+{% else %}
+    <h1 style="text-align: center;">Вы не авторизованы</h1>
+{% endif %}
 
-<table>
-  <thead>
-    <tr>
-      <th>Фото</th>
-      <th>ФИО</th>
-      <th>Действия</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for c in checkins %}
-    <tr>
-      <td>
-        {% if c.contact.photo %}
-          <a href="{% url 'checkin_detail' c.pk %}">
-            <img src="{{ c.contact.photo.url }}" style="width: 50px; height: auto; border-radius: 3px;">
-          </a>
-        {% else %}
-          Нет фото
-        {% endif %}
-      </td>
-      <td>
-        <a href="{% url 'checkin_detail' c.pk %}">
-          {{ c.contact.get_fio }}
-        </a>
-      </td>
-      <td>
-         <button onclick="confirmCheckin({{ c.pk }})" class="button-primary">
-            Подтвердить
-         </button>
-         <button onclick="cancelCheckin({{ c.pk }})" class="button-danger">
-            Отменить
-         </button>
-      </td>
-    </tr>
-  {% empty %}
-    <tr><td colspan="3">Нет заявок</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-
-<!-- AJAX скрипты те же -->
 <script>
   function confirmCheckin(pk) {
     fetch(`/event/checkins/${pk}/confirm/`, {
