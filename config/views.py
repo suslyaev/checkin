@@ -18,19 +18,7 @@ from event.models import ModuleInstance, Action, Contact
 
 def home(request):
     if request.user.is_authenticated:
-        qs = ModuleInstance.objects.all()
-        # Ограничения по ролям (как в админке)
-        if not request.user.is_superuser:
-            # Если проверяющий - фильтруем
-            if request.user.groups.filter(name='Проверяющий').exists():
-                qs = qs.filter(checkers=request.user)
-            # Если менеджер - возможно оставляем всё, 
-            #   или фильтруем managers=request.user (зависит от вашей логики)
-
-        return render(request, 'front/index.html', {
-            'user': request.user,
-            'instances': qs,
-        })
+        return render(request, 'front/index.html')
     else:
         # Если не авторизован -> логин
         if request.method == "POST":
@@ -51,17 +39,18 @@ def home(request):
 def get_user_events(request):
     user = request.user
 
-    if not request.user.is_superuser:
-        events = ModuleInstance.objects.filter(
-            managers=user
-        ) | ModuleInstance.objects.filter(
-            checkers=user
-        )
-    elif request.user.is_superuser:
+    # Получаем события в зависимости от роли пользователя
+    if user.is_superuser or user.groups.filter(name='Администратор').exists():
+        # Суперпользователь или Администратор видят все события
         events = ModuleInstance.objects.all()
+    else:
+        # Остальные пользователи видят только свои события
+        events = ModuleInstance.objects.filter(
+            Q(managers=user) | Q(checkers=user)
+        ).distinct()
 
     data = []
-    for event in events.distinct():
+    for event in events:
         data.append({
             "id": event.id,
             "name": event.name,
@@ -125,7 +114,7 @@ class ActionView(View):
 
     def _get_user_events(self, user):
         """Возвращает QuerySet доступных мероприятий"""
-        if user.is_superuser:
+        if user.is_superuser or user.groups.filter(name='Администратор').exists():
             return ModuleInstance.objects.all()
 
         return ModuleInstance.objects.filter(
