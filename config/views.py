@@ -13,7 +13,7 @@ from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from event.models import ModuleInstance, Action, Contact
+from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact
 
 
 def home(request):
@@ -134,17 +134,31 @@ class ActionView(View):
                 "category_obj": {
                     "name": action.contact.category.name if action.contact.category else None,
                     "color": action.contact.category.color if action.contact.category else None,
-                }
+                    "comment": action.contact.category.comment if action.contact.category else None,
+                },
+                "social_networks": [
+                    {
+                        "network_type": info.social_network.name,
+                        "username": info.external_id,
+                        "link": info.external_id
+                    } for info in InfoContact.objects.filter(
+                        contact=action.contact,
+                        social_network__isnull=False
+                    )
+                ]
             },
             "event": action.event.id,
-            "module_instance": action.event.id,  # Для совместимости со старым фронтом
+            "module_instance": action.event.id,
             "module_instance_obj": {
                 "id": action.event.id,
                 "name": action.event.name,
                 "date_start": action.event.date_start.isoformat()
             },
             "action_type": action.action_type,
-            "action_date": action.action_date.isoformat()
+            "action_date": action.action_date.isoformat(),
+            "operator_obj": {
+                "full_name": f"{action.operator.first_name} {action.operator.last_name}".strip() or action.operator.username
+            } if action.operator else None
         }
 
 
