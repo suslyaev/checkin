@@ -43,6 +43,14 @@ pip install -r requirements.txt
 ```
 SECRET_KEY=ваш-секретный-ключ
 DEBUG=True
+TELEGRAM_BOT_TOKEN=ваш-ключ-телеграм
+HOST=список-ваших-хостов,через-запятую,localhost
+CSRF_COOKIE_SECURE=False
+SESSION_COOKIE_SECURE=False
+SECURE_SSL_REDIRECT=False
+CSRF_TRUSTED_ORIGINS=https://ваш-список-доверенных-доменов,https://через-запятую
+CORS_ALLOWED_ORIGINS=http://ваш-список-доменов,разрешённых-для-доступаhttps://к-приложению-через-запятую,http://localhost:3000
+BASE_URL=https://ваш-базовый-адрес
 ```
 ### Генерация SECRET_KEY
 Для генерации секретного ключа выполните следующую команду в Python:
@@ -56,6 +64,7 @@ print(get_random_secret_key())
 ## 6. Настройка базы данных
 ### Примените миграции для создания таблиц в базе данных:
 ```bash
+python manage.py makemigrations
 python manage.py migrate
 ```
 ---
@@ -66,20 +75,27 @@ python manage.py createsuperuser
 ```
 ---
 
-## 8. Сбор статики
+## 8. Создание ролевой модели
+Создайте базовую ролевую модель для приложения:
+```bash
+python manage.py setup
+```
+---
+
+## 9. Сбор статики
 Соберите все статические файлы в одну папку:
 ```bash
 python manage.py collectstatic
 ```
 ---
-## 9. Запуск тестового сервера
+## 10. Запуск тестового сервера
 Запустите встроенный сервер разработки:
 ```bash
-python manage.py runserver
+python manage.py runserver 0.0.0.0:3000
 ```
-### Сервер будет доступен по адресу: http://127.0.0.1:8000.
+### Сервер будет доступен по адресу: http://localhost:3000.
 ---
-## 10. Доступ к админ-панели
+## 11. Доступ к админ-панели
 Перейдите в админ-панель, чтобы управлять проектом:
-### http://127.0.0.1:8000/admin
+### http://localhost:3000/admin
 Войдите с помощью созданного суперпользователя.
