@@ -8,7 +8,6 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth import login, authenticate
 from django.db.models import Q
-from django.db.models.functions import Lower
 from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -84,7 +83,15 @@ class ActionView(View):
     def post(self, request):
         try:
             data = json.loads(request.body)
+            contact_id = data.get('contact')
             event_id = data.get('event')
+            action_type = data.get('action_type')
+
+            if not all([contact_id, event_id]):
+                return JsonResponse(
+                    {"error": "Не указан контакт или событие"},
+                    status=400
+                )
 
             # Проверка доступа к событию
             if not self._get_user_events(request.user).filter(id=event_id).exists():
@@ -93,24 +100,61 @@ class ActionView(View):
                     status=403
                 )
 
-            # Создание действия
-            action = Action(
-                contact=Contact.objects.get(id=data['contact']),
-                event=ModuleInstance.objects.get(id=event_id),
-                action_type=data['action_type'],
-                operator=request.user
-            )
+            if action_type == 'checkin':
+                # Проверяем существующий чекин
+                existing_action = Action.objects.filter(
+                    contact_id=contact_id,
+                    event_id=event_id,
+                    action_type='checkin'
+                ).first()
+
+                if existing_action:
+                    return JsonResponse(
+                        {"error": "Гость уже зарегистрирован"},
+                        status=400
+                    )
+
+                # Создаем новый чекин
+                action = Action(
+                    contact_id=contact_id,
+                    event_id=event_id,
+                    action_type='checkin',
+                    operator=request.user
+                )
+
+            elif action_type == 'cancel':
+                # Находим и удаляем существующий чекин
+                existing_checkin = Action.objects.filter(
+                    contact_id=contact_id,
+                    event_id=event_id,
+                    action_type='checkin'
+                ).first()
+
+                if existing_checkin:
+                    existing_checkin.delete()
+
+                # Создаем новую запись с типом 'new'
+                action = Action(
+                    contact_id=contact_id,
+                    event_id=event_id,
+                    action_type='new',
+                    operator=request.user
+                )
+
             action.full_clean()
             action.save()
 
-            return JsonResponse(self._serialize_action(action), status=201)
+            return JsonResponse(
+                self._serialize_action(action),
+                status=201
+            )
 
-        except (ObjectDoesNotExist, KeyError) as e:
-            return JsonResponse({"error": "Неверные данные"}, status=400)
-        except ValidationError as e:
-            return JsonResponse({"error": str(e)}, status=400)
         except Exception as e:
-            return JsonResponse({"error": "Ошибка сервера"}, status=500)
+            print(f"Ошибка при создании действия: {str(e)}")
+            return JsonResponse(
+                {"error": str(e)},
+                status=500
+            )
 
     def _get_user_events(self, user):
         """Возвращает QuerySet доступных мероприятий"""
@@ -135,6 +179,11 @@ class ActionView(View):
                     "name": action.contact.category.name if action.contact.category else None,
                     "color": action.contact.category.color if action.contact.category else None,
                     "comment": action.contact.category.comment if action.contact.category else None,
+                },
+                "status_obj": {
+                    "name": action.contact.status.name if action.contact.status else None,
+                    "color": action.contact.status.color if action.contact.status else None,
+                    "comment": action.contact.status.comment if action.contact.status else None,
                 },
                 "social_networks": [
                     {
