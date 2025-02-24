@@ -41,11 +41,11 @@ def get_user_events(request):
     # Получаем события в зависимости от роли пользователя
     if user.is_superuser or user.groups.filter(name='Администратор').exists():
         # Суперпользователь или Администратор видят все события
-        events = ModuleInstance.objects.all()
+        events = ModuleInstance.objects.filter(is_visible=True).all()
     else:
         # Остальные пользователи видят только свои события
         events = ModuleInstance.objects.filter(
-            Q(managers=user) | Q(checkers=user)
+            Q(managers=user) | Q(checkers=user), is_visible=True
         ).distinct()
 
     data = []
@@ -122,6 +122,15 @@ class ActionView(View):
                     operator=request.user
                 )
 
+            elif action_type == 'new':
+                # Создаем новую запись с типом 'new'
+                action = Action(
+                    contact_id=contact_id,
+                    event_id=event_id,
+                    action_type='new',
+                    operator=request.user
+                )
+
             elif action_type == 'cancel':
                 # Находим и удаляем существующий чекин
                 existing_checkin = Action.objects.filter(
@@ -140,6 +149,25 @@ class ActionView(View):
                     action_type='new',
                     operator=request.user
                 )
+
+            elif action_type == 'delete':
+                # Находим и удаляем существующий чекин
+                existing_checkin = Action.objects.filter(
+                    contact_id=contact_id,
+                    event_id=event_id,
+                    action_type='new'
+                ).first()
+
+                if existing_checkin:
+                    existing_checkin.delete()
+                else:
+                    existing_checkin = Action.objects.filter(
+                        contact_id=contact_id,
+                        event_id=event_id,
+                        action_type='checkin'
+                    ).first()
+                    if existing_checkin:
+                        existing_checkin.delete()
 
             action.full_clean()
             action.save()
@@ -214,3 +242,30 @@ class ActionView(View):
 def custom_logout(request):
     logout(request)
     return redirect('home')
+
+
+class AvailableContactsView(View):
+    def get(self, request):
+        event_id = request.GET.get('event_id')
+        if not event_id:
+            return JsonResponse({"error": "Не указан ID события"}, status=400)
+
+        # Получаем всех гостей, которые уже есть в мероприятии
+        existing_guests = Action.objects.filter(
+            event_id=event_id,
+            action_type__in=['new', 'checkin']
+        ).values_list('contact_id', flat=True)
+
+        # Получаем всех доступных гостей, которых нет в мероприятии
+        available_contacts = Contact.objects.exclude(
+            id__in=existing_guests
+        )
+
+        # Сериализуем данные
+        contacts_data = [{
+            'id': contact.id,
+            'fio': contact.get_fio(),
+            'photo_link': contact.photo_link(),
+        } for contact in available_contacts]
+
+        return JsonResponse(contacts_data, safe=False)
