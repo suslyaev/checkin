@@ -209,6 +209,7 @@ class ModuleInstance(models.Model):
     address = models.TextField(verbose_name='Адрес проведения', blank=True, null=True)
     date_start = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время начала')
     date_end = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время окончания')
+    is_visible = models.BooleanField(default=False, verbose_name='Отображать')
 
     managers = models.ManyToManyField(
         CustomUser,

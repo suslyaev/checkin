@@ -398,7 +398,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     show_change_form_export = False
     fieldsets = (
         (None, {
-            'fields': [('name', 'address',)]
+            'fields': [('name', 'is_visible', 'address',)]
         }),
         ('Когда', {
             'fields': [('date_start', 'date_end')]
