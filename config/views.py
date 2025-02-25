@@ -12,7 +12,7 @@ from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact
+from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, StatusContact
 
 
 def home(request):
@@ -269,3 +269,64 @@ class AvailableContactsView(View):
         } for contact in available_contacts]
 
         return JsonResponse(contacts_data, safe=False)
+
+
+class DirectoryView(View):
+    model = None
+
+    def get(self, request):
+        items = self.model.objects.all()
+        data = [{
+            'id': item.id,
+            'name': item.name,
+        } for item in items]
+        return JsonResponse(data, safe=False)
+
+
+class CompaniesView(DirectoryView):
+    model = CompanyContact
+
+
+class CategoriesView(DirectoryView):
+    model = CategoryContact
+
+
+class StatusesView(DirectoryView):
+    model = StatusContact
+
+
+class ContactCreateView(View):
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+
+            print("Приступили к созданию")
+            print(data)
+            
+            # Создаем контакт
+            contact = Contact.objects.create(
+                last_name=data['last_name'],
+                first_name=data['first_name'],
+                middle_name=data.get('middle_name'),
+                company_id=data.get('company'),
+                category_id=data.get('category'),
+                status_id=data.get('status'),
+                comment=data.get('comment')
+            )
+            print(f"Создан контакт {contact.last_name} {contact.first_name}")
+            # Создаем действие для события
+            if data.get('event'):
+                Action.objects.create(
+                    contact=contact,
+                    event_id=data['event'],
+                    action_type='new',
+                    operator=request.user
+                )
+            
+            return JsonResponse({
+                'id': contact.id,
+                'fio': contact.get_fio()
+            }, status=201)
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)

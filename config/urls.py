@@ -13,6 +13,10 @@ urlpatterns = [
     path('events-list/', views.get_user_events, name='events-list'),
     path('actions/', views.ActionView.as_view(), name='actions'),
     path('available-contacts/', views.AvailableContactsView.as_view(), name='available_contacts'),
+    path('api/contacts/', views.ContactCreateView.as_view(), name='contact_create'),
+    path('api/companies/', views.CompaniesView.as_view(), name='companies'),
+    path('api/categories/', views.CategoriesView.as_view(), name='categories'),
+    path('api/statuses/', views.StatusesView.as_view(), name='statuses'),
 ]
 
 if settings.DEBUG:
