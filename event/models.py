@@ -153,10 +153,7 @@ class Contact(models.Model):
         return self.get_fio()
     
     def get_fio(self):
-        middle_name = ''
-        if self.middle_name is not None:
-            middle_name = self.middle_name
-        return f'{self.last_name} {self.first_name} {middle_name}'
+        return f'{self.last_name} {self.first_name}'
     get_fio.short_description = 'ФИО'
     
     def photo_link(self):
@@ -299,7 +296,6 @@ class Checkin(Action):
 class SocialNetwork(BaseModelClass):
     name = models.CharField(max_length=100, verbose_name='Наименование соцсети')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
-
     def __str__(self):
         return f'{self.name}'
 
