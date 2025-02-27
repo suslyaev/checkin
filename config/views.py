@@ -1,7 +1,6 @@
 import json
 
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import models
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
@@ -300,9 +299,6 @@ class ContactCreateView(View):
         try:
             data = json.loads(request.body)
 
-            print("Приступили к созданию")
-            print(data)
-            
             # Создаем контакт
             contact = Contact.objects.create(
                 last_name=data['last_name'],
@@ -313,7 +309,7 @@ class ContactCreateView(View):
                 type_guest_id=data.get('type_guest'),
                 comment=data.get('comment')
             )
-            print(f"Создан контакт {contact.last_name} {contact.first_name}")
+
             # Создаем действие для события
             if data.get('event'):
                 Action.objects.create(
@@ -322,11 +318,11 @@ class ContactCreateView(View):
                     action_type='new',
                     operator=request.user
                 )
-            
+
             return JsonResponse({
                 'id': contact.id,
                 'fio': contact.get_fio()
             }, status=201)
-            
+
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
