@@ -423,7 +423,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         }),
     )
     readonly_fields = ['registered_list', 'checkin_list', 'cancel_list', 'registrations_count', 'checkins_count']
-    autocomplete_fields = ['managers', 'checkers',]
+    autocomplete_fields = ['managers', 'producers', 'checkers',]
     list_display = ('name', 'date_start', 'registrations_count', 'checkins_count')
     show_change_form_export = False
     save_on_top = True
