@@ -416,7 +416,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             'fields': [('date_start', 'date_end')]
         }),
         ('Администрирование', {
-            'fields': [('managers', 'checkers')]
+            'fields': [('managers', 'producers', 'checkers')]
         }),
         ('Участники', {
             'fields': [('registrations_count', 'checkins_count'),'registered_list', 'checkin_list', 'cancel_list'],
