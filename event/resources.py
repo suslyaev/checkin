@@ -2,7 +2,7 @@ from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from import_export.results import RowResult
 from django.utils.safestring import mark_safe
-from .models import Contact, CompanyContact, CategoryContact, StatusContact, Checkin, ModuleInstance, Action
+from .models import Contact, CompanyContact, CategoryContact, TypeGuestContact, Checkin, ModuleInstance, Action
 
 class ForeignKeyWidgetWithFallback(ForeignKeyWidget):
     """ Виджет, создающий новую запись, если она не найдена. """
@@ -25,7 +25,7 @@ class CheckinResource(resources.ModelResource):
 
     company = fields.Field(column_name='company', attribute='contact__company', widget=ForeignKeyWidgetWithFallback(CompanyContact, 'name'))
     category = fields.Field(column_name='category', attribute='contact__category', widget=ForeignKeyWidgetWithFallback(CategoryContact, 'name'))
-    status = fields.Field(column_name='status', attribute='contact__status', widget=ForeignKeyWidgetWithFallback(StatusContact, 'name'))
+    type_guest = fields.Field(column_name='type_guest', attribute='contact__type_guest', widget=ForeignKeyWidgetWithFallback(TypeGuestContact, 'name'))
     comment = fields.Field(column_name='comment', attribute='contact__comment')
 
     def import_row(self, row, *args, **kwargs):
@@ -36,7 +36,7 @@ class CheckinResource(resources.ModelResource):
         middle_name = (row.get('middle_name') or '').strip()
         company_name = (row.get('company') or '').strip()
         category_name = (row.get('category') or '').strip()
-        status_name = (row.get('status') or '').strip()
+        type_guest_name = (row.get('type_guest') or '').strip()
         comment = (row.get('comment') or '').strip()
         event_name = (row.get('event') or '').strip()
 
@@ -60,7 +60,7 @@ class CheckinResource(resources.ModelResource):
         # Сохранение "старых" значений
         old_company = contact.company.name if contact.company else None
         old_category = contact.category.name if contact.category else None
-        old_status = contact.status.name if contact.status else None
+        old_type_guest = contact.type_guest.name if contact.type_guest else None
         old_comment = contact.comment if contact.comment else None
 
         # Обновление полей у контакта
@@ -70,9 +70,9 @@ class CheckinResource(resources.ModelResource):
         if category_name:
             category_obj, _ = CategoryContact.objects.get_or_create(name=category_name)
             contact.category = category_obj
-        if status_name:
-            status_obj, _ = StatusContact.objects.get_or_create(name=status_name)
-            contact.status = status_obj
+        if type_guest_name:
+            type_guest_obj, _ = TypeGuestContact.objects.get_or_create(name=type_guest_name)
+            contact.type_guest = type_guest_obj
         if comment:
             contact.comment = comment
         contact.save()
@@ -106,12 +106,12 @@ class CheckinResource(resources.ModelResource):
             else:
                 diff_list.append(category_name)
         
-        if status_name:
-            if old_status != status_name:
-                diff_html = f'<del style="color: red;">{old_status}</del> → <span style="color: green; font-weight: bold;">{status_name}</span>'
+        if type_guest_name:
+            if old_type_guest != type_guest_name:
+                diff_html = f'<del style="color: red;">{old_type_guest}</del> → <span style="color: green; font-weight: bold;">{type_guest_name}</span>'
                 diff_list.append(mark_safe(diff_html))  # Используем mark_safe
             else:
-                diff_list.append(status_name)
+                diff_list.append(type_guest_name)
         
         if category_name:
             if comment == '':
@@ -139,8 +139,8 @@ class CheckinResource(resources.ModelResource):
 
     class Meta:
         model = Checkin
-        fields = ('id', 'event', 'last_name', 'first_name', 'middle_name', 'company', 'category', 'status', 'comment')
-        export_order = ('id', 'event', 'last_name', 'first_name', 'middle_name', 'company', 'category', 'status', 'comment')
+        fields = ('id', 'event', 'last_name', 'first_name', 'middle_name', 'company', 'category', 'type_guest', 'comment')
+        export_order = ('id', 'event', 'last_name', 'first_name', 'middle_name', 'company', 'category', 'type_guest', 'comment')
 
 
 class ActionResource(resources.ModelResource):
@@ -151,7 +151,7 @@ class ActionResource(resources.ModelResource):
     middle_name = fields.Field(column_name='Отчество', attribute='contact__middle_name')
     company = fields.Field(column_name='Компания', attribute='contact__company')
     category = fields.Field(column_name='Категория', attribute='contact__category')
-    status = fields.Field(column_name='Статус', attribute='contact__status')
+    type_guest = fields.Field(column_name='Тип гостя', attribute='contact__type_guest')
     comment = fields.Field(column_name="Комментарий", attribute="contact__comment")
     action_type = fields.Field(column_name="Тип действия", attribute="action_type")
     action_date = fields.Field(column_name="Дата и время", attribute="action_date")
@@ -161,7 +161,7 @@ class ActionResource(resources.ModelResource):
     class Meta:
         model = Action
         fields = (
-            "ID",  "Мероприятие", "Фамилия", "Имя", "Отчество", "Компания", "Категория", "Статус", "Комментарий", "Тип действия", "Дата и время", "Оператор", "Текущее состояние", 
+            "ID",  "Мероприятие", "Фамилия", "Имя", "Отчество", "Компания", "Категория", "Тип гостя", "Комментарий", "Тип действия", "Дата и время", "Оператор", "Текущее состояние", 
         )
     
     def dehydrate_action_type(self, action):

@@ -16,7 +16,7 @@ urlpatterns = [
     path('api/contacts/', views.ContactCreateView.as_view(), name='contact_create'),
     path('api/companies/', views.CompaniesView.as_view(), name='companies'),
     path('api/categories/', views.CategoriesView.as_view(), name='categories'),
-    path('api/statuses/', views.StatusesView.as_view(), name='statuses'),
+    path('api/types/', views.TypeGuestView.as_view(), name='types'),
 ]
 
 if settings.DEBUG:

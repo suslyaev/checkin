@@ -93,11 +93,17 @@ class ManagerUser(CustomUser):
         verbose_name = "Менеджер"
         verbose_name_plural = "Менеджеры"
 
+class ProducerUser(CustomUser):
+    class Meta:
+        proxy = True
+        verbose_name = "Продюсер"
+        verbose_name_plural = "Продюсеры"
+
 class CheckerUser(CustomUser):
     class Meta:
         proxy = True
-        verbose_name = "Проверяющий"
-        verbose_name_plural = "Проверяющие"
+        verbose_name = "Модератор"
+        verbose_name_plural = "Модераторы"
 
 
 
@@ -128,15 +134,15 @@ class CategoryContact(BaseModelClass):
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
 
-# Статус
-class StatusContact(BaseModelClass):
-    name = models.CharField(max_length=100, verbose_name='Наименование статуса')
-    color = ColorField(default='#FFFFFF', verbose_name='Цвет статуса')
+# Тип гостя
+class TypeGuestContact(BaseModelClass):
+    name = models.CharField(max_length=100, verbose_name='Наименование типа')
+    color = ColorField(default='#FFFFFF', verbose_name='Цвет типа')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
     class Meta:
-        verbose_name = 'Статус'
-        verbose_name_plural = 'Статусы'
+        verbose_name = 'Тип гостя'
+        verbose_name_plural = 'Типы гостя'
 
 # Человек
 class Contact(models.Model):
@@ -145,7 +151,7 @@ class Contact(models.Model):
     middle_name = models.CharField(max_length=300, blank=True, null=True, verbose_name='Отчество')
     company = models.ForeignKey('CompanyContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Компания')
     category = models.ForeignKey('CategoryContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Категория')
-    status = models.ForeignKey('StatusContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Статус')
+    type_guest = models.ForeignKey('TypeGuestContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Тип гостя')
     comment = models.TextField(verbose_name='Комментарий', blank=True, null=True)
     photo = models.ImageField(upload_to='contacts/photos/', blank=True, null=True, verbose_name='Фото сотрудника')
 
@@ -214,10 +220,16 @@ class ModuleInstance(models.Model):
         verbose_name='Менеджеры',
         blank=True
     )
+    producers = models.ManyToManyField(
+        CustomUser,
+        related_name='producer_events',
+        verbose_name='Продюсеры',
+        blank=True
+    )
     checkers = models.ManyToManyField(
         CustomUser,
         related_name='checker_events',
-        verbose_name='Проверяющие',
+        verbose_name='Модераторы',
         blank=True
     )
     
@@ -274,11 +286,11 @@ class Checkin(Action):
         return None
     get_category_contact.short_description = 'Категория'
 
-    def get_status_contact(self):
+    def get_type_guest_contact(self):
         if self.contact is not None:
-            return self.contact.status
+            return self.contact.type_guest
         return None
-    get_status_contact.short_description = 'Статус'
+    get_type_guest_contact.short_description = 'Статус'
     
     def photo_contact(self):
         if self.contact.photo:
@@ -306,7 +318,7 @@ class SocialNetwork(BaseModelClass):
 # Контакт человека
 class InfoContact(models.Model):
     contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, verbose_name='Человек')
-    social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть сеть')
+    social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть')
     external_id = models.CharField(max_length=255, verbose_name='Имя или айди')
 
     def __str__(self):

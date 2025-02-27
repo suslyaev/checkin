@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 import event.services as service
-from .models import CustomUser, ManagerUser, CheckerUser, CompanyContact, CategoryContact, StatusContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, Checkin
+from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, Checkin
 from .forms import ActionForm, CheckinOrCancelForm
 from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm
 from django.shortcuts import render
@@ -164,9 +164,12 @@ class CustomUserAdmin(admin.ModelAdmin):
         if field_name == 'managers':
             # Оставляем только тех, кто в группе "Менеджер"
             queryset = queryset.filter(groups__name='Менеджер')
+        elif field_name == 'producers':
+            # Оставляем только тех, кто в группе "Продюсер"
+            queryset = queryset.filter(groups__name='Продюсер')
         elif field_name == 'checkers':
-            # Оставляем только тех, кто в группе "Проверяющий"
-            queryset = queryset.filter(groups__name='Проверяющий')
+            # Оставляем только тех, кто в группе "Модератор"
+            queryset = queryset.filter(groups__name='Модератор')
 
         return queryset, use_distinct
 
@@ -180,14 +183,23 @@ class ManagerUserAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         return qs.filter(groups__name='Менеджер')
 
+@admin.register(ProducerUser)
+class ProducerUserAdmin(admin.ModelAdmin):
+    search_fields = ["phone", "first_name", "last_name"]
+
+    def get_queryset(self, request):
+        # Показываем только пользователей из группы "Продюсер"
+        qs = super().get_queryset(request)
+        return qs.filter(groups__name='Продюсер')
+
 @admin.register(CheckerUser)
 class CheckerUserAdmin(admin.ModelAdmin):
     search_fields = ["phone", "first_name", "last_name"]
 
     def get_queryset(self, request):
-        # Показываем только пользователей из группы "Проверяющий"
+        # Показываем только пользователей из группы "Модератор"
         qs = super().get_queryset(request)
-        return qs.filter(groups__name='Проверяющий')
+        return qs.filter(groups__name='Модератор')
 
 # Базовый класс с параметрами по умолчанию
 class BaseAdminPage(admin.ModelAdmin):
@@ -207,16 +219,16 @@ class CategoryContactFilter(AutocompleteFilter):
     title = 'Категория'
     field_name = 'category'
 
-class StatusContactFilter(AutocompleteFilter):
-    title = 'Статус'
-    field_name = 'status'
+class TypeGuestContactFilter(AutocompleteFilter):
+    title = 'Тип гостя'
+    field_name = 'type_guest'
 
 class CategoryContactCheckinFilter(AutocompleteFilter):
     title = 'Категория человека'
     field_name = 'get_category_contact'
 
-class StatusContactCheckinFilter(AutocompleteFilter):
-    title = 'Статус человека'
+class TypeGuestContactCheckinFilter(AutocompleteFilter):
+    title = 'Тип гостя'
     field_name = 'contact'
 
 # Социальная сеть
@@ -239,9 +251,9 @@ class InfoContactInline(admin.TabularInline):
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
     list_display = ('get_fio', 'company', 'category', 'photo_preview', 'comment')
-    list_filter = (CompanyContactFilter, CategoryContactFilter, StatusContactFilter)
+    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list', 'cancel_events_list')
-    autocomplete_fields = ['company', 'category', 'status']
+    autocomplete_fields = ['company', 'category', 'type_guest']
     search_fields = ['last_name', 'first_name', 'middle_name']
     inlines = [InfoContactInline, ]
     show_change_form_export = False
@@ -250,7 +262,7 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
             'fields': [('last_name', 'first_name', 'middle_name')]
         }),
         (None, {
-            'fields': [('company', 'category', 'status')]
+            'fields': [('company', 'category', 'type_guest')]
         }),
         ('Фото', {
             'fields': ['photo', 'photo_preview'],
@@ -384,8 +396,8 @@ class CategoryContactAdmin(BaseAdminPage):
     search_fields = ['name']
 
 # Статус
-@admin.register(StatusContact)
-class StatusContactAdmin(BaseAdminPage):
+@admin.register(TypeGuestContact)
+class TypeGuestContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'color', 'comment')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
@@ -553,9 +565,12 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         if db_field.name in ['managers', ]:
             # Исключаем суперпользователей
             kwargs['queryset'] = CustomUser.objects.filter(is_superuser=False, groups__name='Менеджер')
+        if db_field.name in ['producers', ]:
+            # Исключаем суперпользователей
+            kwargs['queryset'] = CustomUser.objects.filter(is_superuser=False, groups__name='Продюсер')
         if db_field.name in ['checkers', ]:
             # Исключаем суперпользователей
-            kwargs['queryset'] = CustomUser.objects.filter(is_superuser=False, groups__name='Проверяющий')
+            kwargs['queryset'] = CustomUser.objects.filter(is_superuser=False, groups__name='Модератор')
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     # Ограничение ролевой модели
@@ -566,9 +581,9 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         if request.user.is_superuser:
             return qs
 
-        # Если пользователь в группе "Проверяющий" — видит только те,
+        # Если пользователь в группе "Модератор" — видит только те,
         # где он указан в массиве checkers
-        if request.user.groups.filter(name='Проверяющий').exists():
+        if request.user.groups.filter(name='Модератор').exists():
             qs = qs.filter(checkers=request.user)
 
         return qs
@@ -606,10 +621,10 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = CheckinResource
     search_fields = ['contact__last_name', 'event__name']
     list_display = ('contact', 'photo_contact', 'event', 'get_buttons_action',)
-    readonly_fields = ('operator', 'get_category_contact', 'get_status_contact')
+    readonly_fields = ('operator', 'get_category_contact', 'get_type_guest_contact')
     autocomplete_fields = ['contact', 'event']
     list_filter = (ModuleInstanceFilter, 'contact__category',
-        'contact__status',)
+        'contact__type_guest',)
     list_per_page = 25
     view_on_site = False
     show_change_form_export = False
@@ -715,7 +730,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     # Выборка регистраций
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        if request.user.groups.filter(name='Проверяющий').exists():
+        if request.user.groups.filter(name='Модератор').exists():
             qs = qs.filter(event__checkers=request.user)
         return qs.filter(is_last_state=True, action_type='new')
 

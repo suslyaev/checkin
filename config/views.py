@@ -12,7 +12,7 @@ from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, StatusContact
+from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, TypeGuestContact
 
 
 def home(request):
@@ -208,10 +208,10 @@ class ActionView(View):
                     "color": action.contact.category.color if action.contact.category else None,
                     "comment": action.contact.category.comment if action.contact.category else None,
                 },
-                "status_obj": {
-                    "name": action.contact.status.name if action.contact.status else None,
-                    "color": action.contact.status.color if action.contact.status else None,
-                    "comment": action.contact.status.comment if action.contact.status else None,
+                "type_guest_obj": {
+                    "name": action.contact.type_guest.name if action.contact.type_guest else None,
+                    "color": action.contact.type_guest.color if action.contact.type_guest else None,
+                    "comment": action.contact.type_guest.comment if action.contact.type_guest else None,
                 },
                 "social_networks": [
                     {
@@ -291,8 +291,8 @@ class CategoriesView(DirectoryView):
     model = CategoryContact
 
 
-class StatusesView(DirectoryView):
-    model = StatusContact
+class TypeGuestView(DirectoryView):
+    model = TypeGuestContact
 
 
 class ContactCreateView(View):
@@ -310,7 +310,7 @@ class ContactCreateView(View):
                 middle_name=data.get('middle_name'),
                 company_id=data.get('company'),
                 category_id=data.get('category'),
-                status_id=data.get('status'),
+                type_guest_id=data.get('type_guest'),
                 comment=data.get('comment')
             )
             print(f"Создан контакт {contact.last_name} {contact.first_name}")

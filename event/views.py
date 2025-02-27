@@ -25,7 +25,7 @@ def checkin_list(request, pk):
 
     # Если пользователь - проверяющий, проверяем, что inst.checkers=user
     # (или если в админке get_queryset требует event.checkers=user)
-    if request.user.groups.filter(name='Проверяющий').exists():
+    if request.user.groups.filter(name='Модератор').exists():
         # Если мероприятие вообще не связано с этим user, можно запретить доступ
         if not inst.checkers.filter(pk=request.user.pk).exists():
             return render(request, 'front/no_access.html')
@@ -57,8 +57,8 @@ def checkin_detail(request, pk):
     """
     checkin = get_object_or_404(Checkin, pk=pk)
 
-    # Доп. проверка: если "Проверяющий", убедиться, что checkin.event.checkers содержит user
-    if request.user.groups.filter(name='Проверяющий').exists():
+    # Доп. проверка: если "Модератор", убедиться, что checkin.event.checkers содержит user
+    if request.user.groups.filter(name='Модератор').exists():
         if not checkin.event.checkers.filter(pk=request.user.pk).exists():
             return render(request, 'front/no_access.html')
 
