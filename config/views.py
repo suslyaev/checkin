@@ -11,7 +11,8 @@ from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, TypeGuestContact
+from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, \
+    TypeGuestContact
 
 
 def home(request):
@@ -40,12 +41,17 @@ def get_user_events(request):
     # Получаем события в зависимости от роли пользователя
     if user.is_superuser or user.groups.filter(name='Администратор').exists():
         # Суперпользователь или Администратор видят все события
-        events = ModuleInstance.objects.filter(is_visible=True).all()
+        events = ModuleInstance.objects.filter().all()
     else:
         # Остальные пользователи видят только свои события
         events = ModuleInstance.objects.filter(
-            Q(managers=user) | Q(checkers=user), is_visible=True
-        ).distinct()
+            Q(managers=user) | Q(checkers=user) | Q(producers=user)).distinct()
+
+    for event in events:
+        # Подсчитываем количество гостей для события
+        guests_count = Action.objects.filter(
+            event=event,
+        ).count()
 
     data = []
     for event in events:
@@ -55,8 +61,9 @@ def get_user_events(request):
             "address": event.address,
             "date_start": event.date_start,
             "date_end": event.date_end,
+            "is_visible": event.is_visible,
+            'guests_count': guests_count
         })
-
     return JsonResponse(data, safe=False)
 
 
