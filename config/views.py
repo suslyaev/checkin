@@ -47,14 +47,14 @@ def get_user_events(request):
         events = ModuleInstance.objects.filter(
             Q(managers=user) | Q(checkers=user) | Q(producers=user)).distinct()
 
-    for event in events:
-        # Подсчитываем количество гостей для события
-        guests_count = Action.objects.filter(
-            event=event,
-        ).count()
-
     data = []
     for event in events:
+        # Подсчитываем количество уникальных гостей для события
+        guests_count = Action.objects.filter(
+            event=event,
+            action_type__in=['new', 'checkin']  # Учитываем только действия регистрации и чекина
+        ).values('contact').distinct().count()  # Считаем уникальных гостей
+
         data.append({
             "id": event.id,
             "name": event.name,
@@ -318,17 +318,49 @@ class ContactCreateView(View):
             )
 
             # Создаем действие для события
+            action = None
             if data.get('event'):
-                Action.objects.create(
+                action = Action.objects.create(
                     contact=contact,
                     event_id=data['event'],
                     action_type='new',
                     operator=request.user
                 )
 
+            # Получаем социальные сети
+            social_networks = [
+                {
+                    "network_type": info.social_network.name,
+                    "username": info.external_id,
+                    "link": info.external_id
+                } for info in InfoContact.objects.filter(
+                    contact=contact,
+                    social_network__isnull=False
+                )
+            ]
+
+            # Возвращаем расширенные данные о госте
             return JsonResponse({
                 'id': contact.id,
-                'fio': contact.get_fio()
+                'contact_obj': {
+                    'id': contact.id,
+                    'fio': contact.get_fio(),
+                    'photo_link': contact.photo_link(),
+                    'category_obj': {
+                        'name': contact.category.name if contact.category else None,
+                        'color': contact.category.color if contact.category else None,
+                        'comment': contact.category.comment if contact.category else None,
+                    },
+                    'type_guest_obj': {
+                        'name': contact.type_guest.name if contact.type_guest else None,
+                        'color': contact.type_guest.color if contact.type_guest else None,
+                        'comment': contact.type_guest.comment if contact.type_guest else None,
+                    },
+                    'social_networks': social_networks
+                },
+                'operator_obj': {
+                    'full_name': f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                } if request.user else None
             }, status=201)
 
         except Exception as e:
