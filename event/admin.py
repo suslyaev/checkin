@@ -32,14 +32,15 @@ class CustomAdminSite(admin.AdminSite):
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
 
-    def get_urls(self):
-        from django.urls import path
+    # Временно убрал, чтобы в мобильной версии можно было выбирать модели в меню
+    #def get_urls(self):
+    #    from django.urls import path
 
-        urls = super().get_urls()
-        custom_urls = [
-            path("event/", lambda request: redirect(reverse("admin:event_moduleinstance_changelist"))),
-        ]
-        return custom_urls + urls
+    #    urls = super().get_urls()
+    #    custom_urls = [
+    #        path("event/", lambda request: redirect(reverse("admin:event_moduleinstance_changelist"))),
+    #    ]
+    #    return custom_urls + urls
 
     def get_app_list(self, request, app_label=None):
         """
