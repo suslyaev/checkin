@@ -20,7 +20,7 @@ html[data-theme="light"],
     --breadcrumbs-fg: #4d4d4d;
     --breadcrumbs-link-fg: #000000;
     --breadcrumbs-bg: var(--secondary);
-    --link-fg: #8e8e8e;
+    --link-fg: #0c0c0c;
     --link-hover-color: #6e6e6e;
     --link-selected-fg: #5b80b2;
     --hairline-color: #e8e8e8;
@@ -38,7 +38,7 @@ html[data-theme="light"],
     --default-button-bg: var(--secondary);
     --default-button-hover-bg: #205067;
     --close-button-bg: #747474;
-    --close-button-hover-bg: #e8f0ff;
+    --close-button-hover-bg: #e8ffea;
     --delete-button-bg: #ba2121;
     --delete-button-hover-bg: #a41515;
     --object-tools-fg: var(--button-fg);
@@ -549,17 +549,16 @@ select[multiple] {
 
 /* FORM BUTTONS */
 
-.button, input[type=submit], input[type=button], .submit-row input, a.button {
-    display: block;
+.submit-row input {
+    height: auto;
+    border: none;
     padding: 10px;
     background: none;
-    color: #1967ff;
-    border: 2px solid #1967ff;
+    color: #26a526;
+    border: 2px solid #26a526;
     border-radius: .5rem;
     font-weight: 600;
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    cursor: pointer;
 }
 
 a.button {
@@ -578,16 +577,15 @@ a.button {
 
 .button.default, input[type=submit].default, .submit-row input.default {
     display: block;
+    height: auto;
+    border: none;
     padding: 10px;
     background: none;
-    color: #1967ff;
-    border: 2px solid #1967ff;
+    color: #26a526;
+    border: 2px solid #26a526;
     border-radius: .5rem;
     font-weight: 600;
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-
+    cursor: pointer;
 }
 
 .button.default:active, input[type=submit].default:active,
@@ -826,8 +824,8 @@ a.deletelink:focus, a.deletelink:hover {
     float: left;
     padding: 10px;
     background: none;
-    color: #1967ff;
-    border: 2px solid #1967ff;
+    color: #26a526;
+    border: 2px solid #26a526;
     border-radius: .5rem;
     font-weight: 600;
     font-size: 0.6875rem;
@@ -910,6 +908,7 @@ a.deletelink:focus, a.deletelink:hover {
 }
 
 .dashboard #content {
+    margin: 0 auto;
     width: 600px;
 }
 
@@ -1015,6 +1014,10 @@ a.deletelink:focus, a.deletelink:hover {
     font-weight: 400;
 }
 
+#user-tools a, #logout-form button {
+    border-bottom: none;
+}
+
 #user-tools a {
     text-decoration: none;
     font-weight: 700;
@@ -1034,8 +1037,8 @@ a.deletelink:focus, a.deletelink:hover {
     font-weight: 400;
     padding: 10px;
     background: none;
-    color: #1967ff;
-    border: 2px solid #1967ff;
+    color: #26a526;
+    border: 2px solid #26a526;
     border-radius: .5rem;
     font-weight: 600;
     font-size: 0.6875rem;
@@ -1226,35 +1229,44 @@ a.deletelink:focus, a.deletelink:hover {
 }
 
 #changelist-filter a {
-    color:  #8e8e8e !important; /* Изменяем синий на зелёный */
+    color:  #0c0c0c !important; /* Изменяем синий на зелёный */
 }
 
 #changelist-filter a:hover {
-    color: #6e6e6e !important; /* Цвет при наведении */
+    color: #575656 !important; /* Цвет при наведении */
 }
 
+html[data-theme="dark"] #changelist-filter a {
+    color:  #ebebeb !important; /* Изменяем синий на зелёный */
+}
 
-
-
+html[data-theme="dark"] #changelist-filter a:hover {
+    color: #575656 !important; /* Цвет при наведении */
+}
 
 
 
 /* При выборе */
+.select2-container--admin-autocomplete .select2-results__option--highlighted[aria-selected] {
+    background-color: #e4e4e4 !important;
+    color: #000000;
+}
+
 .select2-container--default .select2-selection--single {
-    background-color: #2A7D2E !important;
-    color: white !important;
+    background-color: none;
+    color: #000000;
     border: 1px solid #1E5A1E !important;
 }
 
 /* Цвет текста в выпадающем списке */
 .select2-results__option {
-    background-color: rgba(42, 125, 46, 0.7) !important;
-    color: white !important;
+    background-color: none;
+    color: #000000;
 }
 
 /* Цвет при наведении */
 .select2-results__option:hover {
-    background-color: #3CB43C !important;
+    background-color: var(--selected-bg) !important;
 }
 
 /* Меняем цвет стрелки в фильтрах Django Admin */
@@ -1265,6 +1277,19 @@ a.deletelink:focus, a.deletelink:hover {
 /* Для тёмной темы */
 html[data-theme="dark"] #changelist-filter details > summary::before {
     color: #3CB43C !important; /* Светло-зелёный */
+}
+
+html[data-theme="dark"] .select2-container--admin-autocomplete .select2-results__option--highlighted[aria-selected] {
+    background-color: none !important;
+    color: #000000;
+}
+
+html[data-theme="dark"] .select2-container--default .select2-selection--single {
+    color: #000000;
+}
+
+html[data-theme="dark"] .select2-results__option {
+    color: #ffffff;
 }
 
 /* Выравниваем название "Attendly" по центру логотипа */

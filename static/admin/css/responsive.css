@@ -234,7 +234,7 @@ input[type="submit"], button {
     }
 
     .button, input[type=submit], input[type=button], .submit-row input, a.button {
-        padding: 7px;
+        padding: 10px;
     }
 
     /* Related widget */
@@ -549,17 +549,17 @@ input[type="submit"], button {
     /* Forms */
 
     .form-row {
-        padding: 15px 0;
+        padding: 15px 10px;
     }
 
     .aligned .form-row,
     .aligned .form-row > div {
         max-width: 100vw;
     }
-
+/* 
     .aligned .form-row > div {
         width: calc(100vw - 30px);
-    }
+    } */
 
     .flex-container {
         flex-flow: column;
@@ -820,6 +820,8 @@ input[type="submit"], button {
 
     .submit-row input, .submit-row input.default, .submit-row a {
         text-align: center;
+        width: 100%;
+        white-space: break-spaces;
     }
 
     .submit-row a.closelink {
