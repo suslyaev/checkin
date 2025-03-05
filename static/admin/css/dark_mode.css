@@ -1,6 +1,6 @@
 @media (prefers-color-scheme: dark) {
     :root {
-      --primary: #264b5d;
+      --primary: #59c46d;
       --primary-fg: #f7f7f7;
   
       --body-fg: #eeeeee;
@@ -11,8 +11,8 @@
       --breadcrumbs-link-fg: #e0e0e0;
       --breadcrumbs-bg: var(--primary);
   
-      --link-fg: #81d4fa;
-      --link-hover-color: #4ac1f7;
+      --link-fg: #8e8e8e;
+      --link-hover-color: #6e6e6e;
       --link-selected-fg: #6f94c6;
   
       --hairline-color: #272727;
@@ -34,19 +34,20 @@
 
 
 html[data-theme="dark"] {
-    --primary: #264b5d;
+    --primary: #59c46d;
     --primary-fg: #f7f7f7;
+    --secondary: #000000;
 
     --body-fg: #eeeeee;
-    --body-bg: #121212;
+    --body-bg: #000000;
     --body-quiet-color: #e0e0e0;
     --body-loud-color: #ffffff;
 
     --breadcrumbs-link-fg: #e0e0e0;
-    --breadcrumbs-bg: var(--primary);
+    --breadcrumbs-bg: var(--secondary);
 
-    --link-fg: #81d4fa;
-    --link-hover-color: #4ac1f7;
+    --link-fg: #8e8e8e;
+    --link-hover-color: #6e6e6e;
     --link-selected-fg: #6f94c6;
 
     --hairline-color: #272727;
@@ -59,7 +60,7 @@ html[data-theme="dark"] {
 
     --darkened-bg: #212121;
     --selected-bg: #1b1b1b;
-    --selected-row: #00363a;
+    --selected-row: #2d2d2d;
 
     --close-button-bg: #333333;
     --close-button-hover-bg: #666666;
@@ -134,4 +135,8 @@ html[data-theme="light"] .theme-toggle svg.theme-icon-when-light {
     border: 0;
     color: var(--body-fg);
     background-color: var(--body-bg);
+}
+
+.user-tools {
+    color: #ffffff;
 }

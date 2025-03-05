@@ -10,7 +10,35 @@
         </a>
     </div>
 {% endblock branding %}
-
+{% block usertools %}
+{% if has_permission %}
+<div id="user-tools">
+    {% block welcome-msg %}
+        {% translate 'Welcome,' %}
+        {% firstof user.get_short_name user.get_username %}
+    {% endblock %}
+    {% block userlinks %}
+        {% if site_url %}
+            <a href="{{ site_url }}">{% translate 'View site' %}</a> 
+        {% endif %}
+        {% if user.is_active and user.is_staff %}
+            {% url 'django-admindocs-docroot' as docsroot %}
+            {% if docsroot %}
+                <a href="{{ docsroot }}">{% translate 'Documentation' %}</a> 
+            {% endif %}
+        {% endif %}
+        {% if user.has_usable_password %}
+        <a href="{% url 'admin:password_change' %}">{% translate 'Change password' %}</a> 
+        {% endif %}
+        <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+            {% csrf_token %}
+            <button type="submit">{% translate 'Log out' %}</button>
+        </form>
+        {% include "admin/color_theme_toggle.html" %}
+    {% endblock %}
+</div>
+{% endif %}
+{% endblock %}
 {% block extrastyle %}
     {{ block.super }}
     <link rel="stylesheet" type="text/css" href="{% static 'css/custom_admin.css' %}">
