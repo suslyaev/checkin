@@ -28,6 +28,7 @@ from django.urls import reverse
 from django.shortcuts import redirect
 
 class CustomAdminSite(admin.AdminSite):
+
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
 
@@ -39,6 +40,53 @@ class CustomAdminSite(admin.AdminSite):
             path("event/", lambda request: redirect(reverse("admin:event_moduleinstance_changelist"))),
         ]
         return custom_urls + urls
+
+    def get_app_list(self, request, app_label=None):
+        """
+        Кастомный порядок моделей в приложении event с разделителями.
+        """
+        app_list = super().get_app_list(request)
+
+        # Ищем в списке приложение event
+        for app in app_list:
+            if app["app_label"] == "event":
+                # Желаемый порядок моделей
+                custom_order = [
+                    "Люди и события",
+                    "Contact",
+                    "ModuleInstance",
+                    "Checkin",
+                    "Action",
+                    "Справочники",
+                    "CompanyContact",
+                    "CategoryContact",
+                    "TypeGuestContact",
+                    "SocialNetwork",
+                    "Доступы",
+                    "CustomUser",
+                ]
+
+                # Разбиваем модели на словарь {Имя модели: данные}
+                model_dict = {model["object_name"]: model for model in app["models"]}
+
+                # Создаем новый список моделей в заданном порядке
+                new_models = []
+                for model_name in custom_order:
+                    if model_name == "---":
+                        new_models.append({"name": "---", "admin_url": None})
+                    elif model_name == "Люди и события":
+                        new_models.append({"name": "-- Люди и события --", "admin_url": None})
+                    elif model_name == "Справочники":
+                        new_models.append({"name": "-- Справочники --", "admin_url": None})
+                    elif model_name == "Доступы":
+                        new_models.append({"name": "-- Доступы --", "admin_url": None})
+                    elif model_name in model_dict:
+                        new_models.append(model_dict[model_name])
+
+                # Обновляем модели приложения
+                app["models"] = new_models
+
+        return app_list
 
 admin.site.__class__ = CustomAdminSite
 
