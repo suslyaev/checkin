@@ -2,6 +2,8 @@
 {% load i18n %}
 {% load static %}
 
+{% block title %}{{ title }} | Attendly{% endblock %}
+
 {% block branding %}
     <div id="site-branding">
         <a href="{% url 'admin:index' %}" style="text-decoration: none; color: white; display: flex; align-items: center;">
