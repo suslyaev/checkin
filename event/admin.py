@@ -53,7 +53,7 @@ class CustomAdminSite(admin.AdminSite):
             if app["app_label"] == "event":
                 # Желаемый порядок моделей
                 custom_order = [
-                    "Люди и события",
+                    "События",
                     "Contact",
                     "ModuleInstance",
                     "Checkin",
@@ -75,8 +75,8 @@ class CustomAdminSite(admin.AdminSite):
                 for model_name in custom_order:
                     if model_name == "---":
                         new_models.append({"name": "---", "admin_url": None})
-                    elif model_name == "Люди и события":
-                        new_models.append({"name": "-- Люди и события --", "admin_url": None})
+                    elif model_name == "События":
+                        new_models.append({"name": "-- События --", "admin_url": None})
                     elif model_name == "Справочники":
                         new_models.append({"name": "-- Справочники --", "admin_url": None})
                     elif model_name == "Доступы":
