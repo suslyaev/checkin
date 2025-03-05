@@ -25,6 +25,22 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import render
 from django.urls import path
 from django.urls import reverse
+from django.shortcuts import redirect
+
+class CustomAdminSite(admin.AdminSite):
+    def index(self, request, extra_context=None):
+        return redirect(reverse("admin:event_moduleinstance_changelist"))
+
+    def get_urls(self):
+        from django.urls import path
+
+        urls = super().get_urls()
+        custom_urls = [
+            path("event/", lambda request: redirect(reverse("admin:event_moduleinstance_changelist"))),
+        ]
+        return custom_urls + urls
+
+admin.site.__class__ = CustomAdminSite
 
 # В админке можно использовать форму изменения пароля для стандартной модели User
 class CustomUserPasswordChangeForm(PasswordChangeForm):
@@ -424,7 +440,9 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     )
     readonly_fields = ['registered_list', 'checkin_list', 'cancel_list', 'registrations_count', 'checkins_count']
     autocomplete_fields = ['managers', 'producers', 'checkers',]
-    list_display = ('name', 'date_start', 'registrations_count', 'checkins_count')
+    list_display = ('name', 'date_start', 'registrations_count', 'checkins_count', 'is_visible')
+    list_editable = ('is_visible',)
+    list_filter = ('is_visible',)
     show_change_form_export = False
     save_on_top = True
     list_per_page = 25
