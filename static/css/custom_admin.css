@@ -40,7 +40,7 @@ html[data-theme="light"],
     --close-button-bg: #747474;
     --close-button-hover-bg: #e8ffea;
     --delete-button-bg: #ba2121;
-    --delete-button-hover-bg: #a41515;
+    --delete-button-hover-bg: #f3dcdc;
     --object-tools-fg: var(--button-fg);
     --object-tools-bg: var(--close-button-bg);
     --object-tools-hover-bg: var(--close-button-hover-bg);

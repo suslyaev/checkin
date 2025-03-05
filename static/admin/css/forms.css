@@ -284,23 +284,31 @@ body.popup .submit-row {
 }
 
 .submit-row a.deletelink {
-    display: block;
-    background: var(--delete-button-bg);
-    border-radius: 4px;
-    padding: 0.625rem 0.9375rem;
-    height: 0.9375rem;
+    height: auto;
+    padding: 10px;
+    background: none;
+    color: var(--delete-button-bg);
+    border: 2px solid var(--delete-button-bg);
+    border-radius: .5rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 0.8125rem;
     line-height: 0.9375rem;
-    color: var(--button-fg);
 }
 
 .submit-row a.closelink {
-    display: inline-block;
-    background: var(--close-button-bg);
-    border-radius: 4px;
-    padding: 10px 15px;
-    height: 0.9375rem;
+    height: auto;
+    padding: 10px;
+    background: none;
+    color: #26a526;
+    border: 2px solid #26a526;
+    border-radius: .5rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 0.8125rem;
     line-height: 0.9375rem;
-    color: var(--button-fg);
 }
 
 .submit-row a.deletelink:focus,

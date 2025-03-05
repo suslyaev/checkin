@@ -682,8 +682,8 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
 
         buttons_html = f'''
             <div style="display: flex; gap: 5px; justify-content: center; align-items: center;">
-                <button type="button" class="button-confirm" data-url="{confirm_url}" data-id="{obj.pk}" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px;">Подтвердить</button>
-                <button type="button" class="button-cancel" data-url="{cancel_url}" data-id="{obj.pk}" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px;">Отменить</button>
+                <button type="button" class="button-confirm" data-url="{confirm_url}" data-id="{obj.pk}" style="background: none;color: #26a526;border: 2px solid #26a526;padding: 5px 5px;border-radius: 3px;font-size: 12px;">Подтвердить</button>
+                <button type="button" class="button-cancel" data-url="{cancel_url}" data-id="{obj.pk}" style="background: none;border: 2px solid #dc3545;padding: 5px 5px;border-radius: 3px;font-size: 12px;color: #dc3545;">Отменить</button>
             </div>
         '''
         return format_html(buttons_html)
