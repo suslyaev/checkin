@@ -280,10 +280,6 @@ body.popup .submit-row {
 }
 
 .submit-row a.deletelink {
-    margin-left: auto;
-}
-
-.submit-row a.deletelink {
     height: auto;
     padding: 10px;
     background: none;
