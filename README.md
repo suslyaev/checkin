@@ -99,3 +99,28 @@ python manage.py runserver 0.0.0.0:3000
 Перейдите в админ-панель, чтобы управлять проектом:
 ### http://localhost:3000/admin
 Войдите с помощью созданного суперпользователя.
+
+
+## Восстановление бэкапа
+1. Очистить текущую базу данных (DROP всех таблиц):
+
+```
+docker exec -it postgres_db psql -U admin -d main
+```
+
+Внутри psql выполнить:
+```
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO admin;
+GRANT ALL ON SCHEMA public TO public;
+```
+Выйти из psql:
+```
+\q
+```
+
+2. Запустить команду восстановления из бэкапа:
+```
+docker exec -i postgres_db psql -U admin -d main < ~/postgres_data/backups/db_backup_<актуальная дата файла>.sql
+```
