@@ -161,6 +161,9 @@ class CustomUserAdmin(admin.ModelAdmin):
     list_filter = ('groups',)
     readonly_fields = ['date_joined', 'last_login', 'get_group']
 
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
     def get_form(self, request, obj=None, **kwargs):
         if obj:  # Если это редактирование существующего пользователя
             self.form = CustomUserChangeForm
