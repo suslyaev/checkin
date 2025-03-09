@@ -340,6 +340,9 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
         }),
     )
 
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
             'rows': 2,
@@ -453,6 +456,9 @@ class CompanyContactAdmin(BaseAdminPage):
     list_editable = ('name', 'comment')
     search_fields = ['name']
 
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
 # Категория
 @admin.register(CategoryContact)
 class CategoryContactAdmin(BaseAdminPage):
@@ -460,12 +466,18 @@ class CategoryContactAdmin(BaseAdminPage):
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
 
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
 # Статус
 @admin.register(TypeGuestContact)
 class TypeGuestContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'color', 'comment')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
 # Событие
 @admin.register(ModuleInstance)
@@ -496,6 +508,9 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     save_on_top = True
     list_per_page = 25
     view_on_site = False
+
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
     def registrations_count(self, obj):
         return Action.objects.filter(event=obj, action_type='new').count()
