@@ -256,12 +256,12 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list', 'cancel_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest']
-    search_fields = ['last_name', 'first_name', 'middle_name']
+    search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, ]
     show_change_form_export = False
     fieldsets = (
         (None, {
-            'fields': [('last_name', 'first_name', 'middle_name')]
+            'fields': [('last_name', 'first_name', 'middle_name', 'nickname')]
         }),
         (None, {
             'fields': [('company', 'category', 'type_guest')]
