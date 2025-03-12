@@ -149,6 +149,7 @@ class Contact(models.Model):
     last_name = models.CharField(max_length=300, verbose_name='Фамилия')
     first_name = models.CharField(max_length=300, verbose_name='Имя')
     middle_name = models.CharField(max_length=300, blank=True, null=True, verbose_name='Отчество')
+    nickname = models.CharField(max_length=300, blank=True, null=True, verbose_name='Никнейм')
     company = models.ForeignKey('CompanyContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Компания')
     category = models.ForeignKey('CategoryContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Категория')
     type_guest = models.ForeignKey('TypeGuestContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Тип гостя')
