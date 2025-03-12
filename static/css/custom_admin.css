@@ -5,7 +5,7 @@
 /* VARIABLE DEFINITIONS */
 html[data-theme="light"],
 :root {
-    --primary: #59c46d;
+    --primary: #0077ff;
     --secondary: #f8f8f8;
     --accent: #f5dd5d;
     --primary-fg: #000000;
@@ -31,14 +31,14 @@ html[data-theme="light"],
     --message-error-bg: #ffefef;
     --darkened-bg: #f8f8f8;
     --selected-bg: #e4e4e4;
-    --selected-row: #ffc;
+    --selected-row: #cee5ff;
     --button-fg: #fff;
     --button-bg: var(--primary);
     --button-hover-bg: #609ab6;
     --default-button-bg: var(--secondary);
     --default-button-hover-bg: #205067;
     --close-button-bg: #747474;
-    --close-button-hover-bg: #e8ffea;
+    --close-button-hover-bg: #e8ebff;
     --delete-button-bg: #ba2121;
     --delete-button-hover-bg: #f3dcdc;
     --object-tools-fg: var(--button-fg);
@@ -554,8 +554,8 @@ select[multiple] {
     border: none;
     padding: 10px;
     background: none;
-    color: #26a526;
-    border: 2px solid #26a526;
+    color: #0077ff;
+    border: 2px solid #0077ff;
     border-radius: .5rem;
     font-weight: 600;
     cursor: pointer;
@@ -581,8 +581,8 @@ a.button {
     border: none;
     padding: 10px;
     background: none;
-    color: #26a526;
-    border: 2px solid #26a526;
+    color: #0077ff;
+    border: 2px solid #0077ff;
     border-radius: .5rem;
     font-weight: 600;
     cursor: pointer;
@@ -824,8 +824,8 @@ a.deletelink:focus, a.deletelink:hover {
     float: left;
     padding: 10px;
     background: none;
-    color: #26a526;
-    border: 2px solid #26a526;
+    color: #0077ff;
+    border: 2px solid #0077ff;
     border-radius: .5rem;
     font-weight: 600;
     font-size: 0.6875rem;
@@ -1037,8 +1037,8 @@ a.deletelink:focus, a.deletelink:hover {
     font-weight: 400;
     padding: 10px;
     background: none;
-    color: #26a526;
-    border: 2px solid #26a526;
+    color: #0077ff;
+    border: 2px solid #0077ff;
     border-radius: .5rem;
     font-weight: 600;
     font-size: 0.6875rem;
@@ -1225,7 +1225,7 @@ a.deletelink:focus, a.deletelink:hover {
 }
 
 #changelist-filter li.selected a {
-    color: #3cb43c !important;
+    color: #0077ff !important;
 }
 
 #changelist-filter a {
@@ -1271,12 +1271,12 @@ html[data-theme="dark"] #changelist-filter a:hover {
 
 /* Меняем цвет стрелки в фильтрах Django Admin */
 #changelist-filter details > summary::before {
-    color: #2A7D2E !important; /* Зелёный */
+    color: #0077ff !important; /* Зелёный */
 }
 
 /* Для тёмной темы */
 html[data-theme="dark"] #changelist-filter details > summary::before {
-    color: #3CB43C !important; /* Светло-зелёный */
+    color: #0077ff !important; /* Светло-зелёный */
 }
 
 html[data-theme="dark"] .select2-container--admin-autocomplete .select2-results__option--highlighted[aria-selected] {

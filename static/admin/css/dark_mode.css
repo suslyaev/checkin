@@ -1,6 +1,6 @@
 @media (prefers-color-scheme: dark) {
     :root {
-      --primary: #59c46d;
+      --primary: #0077ff;
       --primary-fg: #f7f7f7;
   
       --body-fg: #eeeeee;
@@ -11,7 +11,7 @@
       --breadcrumbs-link-fg: #e0e0e0;
       --breadcrumbs-bg: var(--primary);
   
-      --link-fg: #8e8e8e;
+      --link-fg: #b3b3b3;
       --link-hover-color: #6e6e6e;
       --link-selected-fg: #6f94c6;
   
@@ -19,7 +19,7 @@
       --border-color: #353535;
   
       --error-fg: #e35f5f;
-      --message-success-bg: #006b1b;
+      --message-success-bg: #0077ff;
       --message-warning-bg: #583305;
       --message-error-bg: #570808;
   
@@ -34,7 +34,7 @@
 
 
 html[data-theme="dark"] {
-    --primary: #59c46d;
+    --primary: #0077ff;
     --primary-fg: #f7f7f7;
     --secondary: #000000;
 
@@ -48,13 +48,13 @@ html[data-theme="dark"] {
 
     --link-fg: #f1f1f1;
     --link-hover-color: #575656;
-    --link-selected-fg: #d3d3d3;
+    --link-selected-fg: #f3f3f3;
 
     --hairline-color: #272727;
     --border-color: #353535;
 
     --error-fg: #e35f5f;
-    --message-success-bg: #006b1b;
+    --message-success-bg: #0077ff;
     --message-warning-bg: #583305;
     --message-error-bg: #570808;
 
@@ -63,7 +63,7 @@ html[data-theme="dark"] {
     --selected-row: #2d2d2d;
 
     --close-button-bg: #333333;
-    --close-button-hover-bg: #5a645b;
+    --close-button-hover-bg: #5a5c64;
 }
 
 /* THEME SWITCH */
