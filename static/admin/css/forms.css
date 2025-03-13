@@ -6,6 +6,9 @@
     overflow: hidden;
     padding: 10px;
     font-size: 0.8125rem;
+}
+
+.form-row:not(:last-child) {
     border-bottom: 1px solid var(--hairline-color);
 }
 
@@ -255,10 +258,7 @@ fieldset.monospace textarea {
 /* SUBMIT ROW */
 
 .submit-row {
-    padding: 12px 14px 12px;
     margin: 0 0 20px;
-    background: var(--darkened-bg);
-    border: 1px solid var(--hairline-color);
     border-radius: 4px;
     overflow: hidden;
     display: flex;
@@ -271,7 +271,7 @@ body.popup .submit-row {
 }
 
 .submit-row input {
-    height: 2.1875rem;
+    text-transform: uppercase;
     line-height: 0.9375rem;
 }
 
@@ -279,32 +279,32 @@ body.popup .submit-row {
     margin: 0;
 }
 
-.submit-row input.default {
+.submit-row a.deletelink {
+    height: auto;
+    padding: 10px;
+    background: none;
+    color: var(--delete-button-bg);
+    border: 2px solid var(--delete-button-bg);
+    border-radius: .5rem;
+    font-weight: 600;
+    cursor: pointer;
     text-transform: uppercase;
-}
-
-.submit-row a.deletelink {
-    margin-left: auto;
-}
-
-.submit-row a.deletelink {
-    display: block;
-    background: var(--delete-button-bg);
-    border-radius: 4px;
-    padding: 0.625rem 0.9375rem;
-    height: 0.9375rem;
+    font-size: 0.8125rem;
     line-height: 0.9375rem;
-    color: var(--button-fg);
 }
 
 .submit-row a.closelink {
-    display: inline-block;
-    background: var(--close-button-bg);
-    border-radius: 4px;
-    padding: 10px 15px;
-    height: 0.9375rem;
+    height: auto;
+    padding: 10px;
+    background: none;
+    color: #0077ff;
+    border: 2px solid #0077ff;
+    border-radius: .5rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 0.8125rem;
     line-height: 0.9375rem;
-    color: var(--button-fg);
 }
 
 .submit-row a.deletelink:focus,

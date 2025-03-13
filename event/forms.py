@@ -1,6 +1,7 @@
 from django import forms
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.contrib.auth.models import Group
 from .models import Action, ModuleInstance, CustomUser
-from .models import Action
 
 class ActionForm(forms.ModelForm):
     class Meta:
@@ -31,3 +32,48 @@ class ModuleInstanceForm(forms.ModelForm):
                 custom_user = CustomUser.objects.get(pk=self.request.user.pk)
                 # Устанавливаем initial для поля 'managers'
                 self.fields['managers'].initial = [custom_user]
+
+class CustomUserForm(UserCreationForm):
+    group = forms.ModelChoiceField(queryset=Group.objects.all(), required=True, widget=forms.Select, label="Роль")
+
+    class Meta:
+        model = CustomUser
+        fields = ['phone', 'first_name', 'last_name', 'group']
+
+class CustomUserChangeForm(UserChangeForm):
+    group = forms.ModelChoiceField(queryset=Group.objects.all(), required=True, widget=forms.Select, label="Роль")
+
+    new_password1 = forms.CharField(
+        label="Новый пароль",
+        widget=forms.PasswordInput,
+        required=False  # НЕобязательно
+    )
+    new_password2 = forms.CharField(
+        label="Подтверждение пароля",
+        widget=forms.PasswordInput,
+        required=False  # НЕобязательно
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = ['phone', 'first_name', 'last_name', 'group']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            # Устанавливаем текущую группу как значение по умолчанию
+            self.fields['group'].initial = self.instance.groups.first() if self.instance.groups.exists() else None
+
+    def clean(self):
+        cleaned_data = super().clean()
+        p1 = cleaned_data.get('new_password1')
+        p2 = cleaned_data.get('new_password2')
+
+        # Если оба поля пустые, пропускаем
+        if not p1 and not p2:
+            return cleaned_data
+
+        # Иначе, если заполнили хотя бы одно, проверяем совпадение
+        if p1 != p2:
+            self.add_error('new_password2', "Пароли не совпадают!")
+        return cleaned_data

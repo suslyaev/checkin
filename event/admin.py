@@ -1,10 +1,7 @@
 from django.contrib import admin
-from django.contrib.auth.models import Group
-from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 import event.services as service
 from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, Checkin
-from .forms import ActionForm, CheckinOrCancelForm
-from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm
+from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ImportExportActionModelAdmin
@@ -12,78 +9,80 @@ from .resources import CheckinResource, ActionResource
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
 from django.urls import reverse
-from django import forms
 from django.http import FileResponse
 import os
 from django.forms import Textarea
 from django.db import models
-from django.db.models.functions import Lower
-from django.db.models import Q
-
-from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth import get_user_model
 from django.shortcuts import render
 from django.urls import path
 from django.urls import reverse
+from django.shortcuts import redirect
 
-# В админке можно использовать форму изменения пароля для стандартной модели User
-class CustomUserPasswordChangeForm(PasswordChangeForm):
-    class Meta:
-        model = get_user_model()
-        fields = ['password1', 'password2']
+class CustomAdminSite(admin.AdminSite):
 
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        user.set_password(self.cleaned_data['new_password1'])
-        if commit:
-            user.save()
-        return user
+    def index(self, request, extra_context=None):
+        return redirect(reverse("admin:event_moduleinstance_changelist"))
+
+    # Временно убрал, чтобы в мобильной версии можно было выбирать модели в меню
+    #def get_urls(self):
+    #    from django.urls import path
+
+    #    urls = super().get_urls()
+    #    custom_urls = [
+    #        path("event/", lambda request: redirect(reverse("admin:event_moduleinstance_changelist"))),
+    #    ]
+    #    return custom_urls + urls
+
+    def get_app_list(self, request, app_label=None):
+        """
+        Кастомный порядок моделей в приложении event с разделителями.
+        """
+        app_list = super().get_app_list(request)
+
+        # Ищем в списке приложение event
+        for app in app_list:
+            if app["app_label"] == "event":
+                # Желаемый порядок моделей
+                custom_order = [
+                    "События",
+                    "Contact",
+                    "ModuleInstance",
+                    "Checkin",
+                    "Action",
+                    "Справочники",
+                    "CompanyContact",
+                    "CategoryContact",
+                    "TypeGuestContact",
+                    "SocialNetwork",
+                    "Доступы",
+                    "CustomUser",
+                ]
+
+                # Разбиваем модели на словарь {Имя модели: данные}
+                model_dict = {model["object_name"]: model for model in app["models"]}
+
+                # Создаем новый список моделей в заданном порядке
+                new_models = []
+                for model_name in custom_order:
+                    if model_name == "---":
+                        new_models.append({"name": "---", "admin_url": None})
+                    elif model_name == "События":
+                        new_models.append({"name": "-- События --", "admin_url": None})
+                    elif model_name == "Справочники":
+                        new_models.append({"name": "-- Справочники --", "admin_url": None})
+                    elif model_name == "Доступы":
+                        new_models.append({"name": "-- Доступы --", "admin_url": None})
+                    elif model_name in model_dict:
+                        new_models.append(model_dict[model_name])
+
+                # Обновляем модели приложения
+                app["models"] = new_models
+
+        return app_list
+
+admin.site.__class__ = CustomAdminSite
 
 
-class CustomUserForm(UserCreationForm):
-    group = forms.ModelChoiceField(queryset=Group.objects.all(), required=True, widget=forms.Select, label="Роль")
-
-    class Meta:
-        model = CustomUser
-        fields = ['phone', 'first_name', 'last_name', 'group']
-
-class CustomUserChangeForm(UserChangeForm):
-    group = forms.ModelChoiceField(queryset=Group.objects.all(), required=True, widget=forms.Select, label="Роль")
-
-    new_password1 = forms.CharField(
-        label="Новый пароль",
-        widget=forms.PasswordInput,
-        required=False  # НЕобязательно
-    )
-    new_password2 = forms.CharField(
-        label="Подтверждение пароля",
-        widget=forms.PasswordInput,
-        required=False  # НЕобязательно
-    )
-
-    class Meta:
-        model = CustomUser
-        fields = ['phone', 'first_name', 'last_name', 'group']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance and self.instance.pk:
-            # Устанавливаем текущую группу как значение по умолчанию
-            self.fields['group'].initial = self.instance.groups.first() if self.instance.groups.exists() else None
-
-    def clean(self):
-        cleaned_data = super().clean()
-        p1 = cleaned_data.get('new_password1')
-        p2 = cleaned_data.get('new_password2')
-
-        # Если оба поля пустые, пропускаем
-        if not p1 and not p2:
-            return cleaned_data
-
-        # Иначе, если заполнили хотя бы одно, проверяем совпадение
-        if p1 != p2:
-            self.add_error('new_password2', "Пароли не совпадают!")
-        return cleaned_data
 
 
 @admin.register(CustomUser)
@@ -95,6 +94,9 @@ class CustomUserAdmin(admin.ModelAdmin):
     list_display = ['phone', 'last_name', 'first_name', 'get_group']  # Для отображения в списке
     list_filter = ('groups',)
     readonly_fields = ['date_joined', 'last_login', 'get_group']
+
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
     def get_form(self, request, obj=None, **kwargs):
         if obj:  # Если это редактирование существующего пользователя
@@ -254,12 +256,12 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list', 'cancel_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest']
-    search_fields = ['last_name', 'first_name', 'middle_name']
+    search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, ]
     show_change_form_export = False
     fieldsets = (
         (None, {
-            'fields': [('last_name', 'first_name', 'middle_name')]
+            'fields': [('last_name', 'first_name', 'middle_name', 'nickname')]
         }),
         (None, {
             'fields': [('company', 'category', 'type_guest')]
@@ -274,6 +276,9 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
             'fields': ['registered_events_list', 'checkin_events_list', 'cancel_events_list'],
         }),
     )
+
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
@@ -388,6 +393,9 @@ class CompanyContactAdmin(BaseAdminPage):
     list_editable = ('name', 'comment')
     search_fields = ['name']
 
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
 # Категория
 @admin.register(CategoryContact)
 class CategoryContactAdmin(BaseAdminPage):
@@ -395,12 +403,18 @@ class CategoryContactAdmin(BaseAdminPage):
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
 
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
 # Статус
 @admin.register(TypeGuestContact)
 class TypeGuestContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'color', 'comment')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
 # Событие
 @admin.register(ModuleInstance)
@@ -424,11 +438,16 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     )
     readonly_fields = ['registered_list', 'checkin_list', 'cancel_list', 'registrations_count', 'checkins_count']
     autocomplete_fields = ['managers', 'producers', 'checkers',]
-    list_display = ('name', 'date_start', 'registrations_count', 'checkins_count')
+    list_display = ('name', 'date_start', 'registrations_count', 'checkins_count', 'is_visible')
+    list_editable = ('is_visible',)
+    list_filter = ('is_visible',)
     show_change_form_export = False
     save_on_top = True
     list_per_page = 25
     view_on_site = False
+
+    class Media:
+        js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
     def registrations_count(self, obj):
         return Action.objects.filter(event=obj, action_type='new').count()
@@ -619,7 +638,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
 @admin.register(Checkin)
 class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = CheckinResource
-    search_fields = ['contact__last_name', 'event__name']
+    search_fields = ['contact__last_name', 'contact__nickname', 'event__name']
     list_display = ('contact', 'photo_contact', 'event', 'get_buttons_action',)
     readonly_fields = ('operator', 'get_category_contact', 'get_type_guest_contact')
     autocomplete_fields = ['contact', 'event']
@@ -682,8 +701,8 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
 
         buttons_html = f'''
             <div style="display: flex; gap: 5px; justify-content: center; align-items: center;">
-                <button type="button" class="button-confirm" data-url="{confirm_url}" data-id="{obj.pk}" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px;">Подтвердить</button>
-                <button type="button" class="button-cancel" data-url="{cancel_url}" data-id="{obj.pk}" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px;">Отменить</button>
+                <button type="button" class="button-confirm" data-url="{confirm_url}" data-id="{obj.pk}" style="background: none;color: #26a526;border: 2px solid #26a526;padding: 5px 5px;border-radius: 3px;font-size: 12px;">Подтвердить</button>
+                <button type="button" class="button-cancel" data-url="{cancel_url}" data-id="{obj.pk}" style="background: none;border: 2px solid #dc3545;padding: 5px 5px;border-radius: 3px;font-size: 12px;color: #dc3545;">Отменить</button>
             </div>
         '''
         return format_html(buttons_html)
