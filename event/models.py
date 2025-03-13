@@ -77,7 +77,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return self.phone
 
     class Meta:
-        verbose_name = 'Пользователь'
+        verbose_name = 'Пользователя'
         verbose_name_plural = 'Пользователи'
         ordering = ['last_name', 'first_name']
 
@@ -90,19 +90,19 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 class ManagerUser(CustomUser):
     class Meta:
         proxy = True
-        verbose_name = "Менеджер"
+        verbose_name = "Менеджера"
         verbose_name_plural = "Менеджеры"
 
 class ProducerUser(CustomUser):
     class Meta:
         proxy = True
-        verbose_name = "Продюсер"
+        verbose_name = "Продюсера"
         verbose_name_plural = "Продюсеры"
 
 class CheckerUser(CustomUser):
     class Meta:
         proxy = True
-        verbose_name = "Модератор"
+        verbose_name = "Модератора"
         verbose_name_plural = "Модераторы"
 
 
@@ -121,7 +121,7 @@ class CompanyContact(BaseModelClass):
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
     class Meta:
-        verbose_name = 'Компания'
+        verbose_name = 'Компанию'
         verbose_name_plural = 'Компании'
 
 # Категория
@@ -131,7 +131,7 @@ class CategoryContact(BaseModelClass):
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
     class Meta:
-        verbose_name = 'Категория'
+        verbose_name = 'Категорию'
         verbose_name_plural = 'Категории'
 
 # Тип гостя
@@ -197,7 +197,7 @@ class Contact(models.Model):
             img.save(self.photo.path)
     
     class Meta:
-        verbose_name = 'Человек'
+        verbose_name = 'Человека'
         verbose_name_plural = 'Люди'
         ordering = ['pk']
         constraints = [
@@ -301,7 +301,7 @@ class Checkin(Action):
     
     class Meta:
         proxy = True
-        verbose_name = 'Регистрация'
+        verbose_name = 'Регистрацию'
         verbose_name_plural = 'Регистрации'
         ordering = ['pk']
     
@@ -313,7 +313,7 @@ class SocialNetwork(BaseModelClass):
         return f'{self.name}'
 
     class Meta:
-        verbose_name = 'Социальная сеть'
+        verbose_name = 'Социальную сеть'
         verbose_name_plural = 'Социальные сети'
 
 # Контакт человека
