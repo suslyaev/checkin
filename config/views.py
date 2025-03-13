@@ -66,6 +66,15 @@ def get_user_events(request):
         })
     return JsonResponse(data, safe=False)
 
+@login_required
+def get_admin_info(request):
+    user = request.user.groups.first()
+
+    data = [{
+        "admin": user.name
+    }]
+    return JsonResponse(data, safe=False)
+
 
 @method_decorator(login_required, name='dispatch')
 class ActionView(View):

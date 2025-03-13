@@ -11,6 +11,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('event/', include('event.urls')),
     path('events-list/', views.get_user_events, name='events-list'),
+    path('admin-info/', views.get_admin_info, name='admin-info'),
     path('actions/', views.ActionView.as_view(), name='actions'),
     path('available-contacts/', views.AvailableContactsView.as_view(), name='available_contacts'),
     path('api/contacts/', views.ContactCreateView.as_view(), name='contact_create'),
