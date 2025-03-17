@@ -50,39 +50,50 @@
     {% endcomment %}
 
     <!-- Свои инструкции -->
-    <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); max-width: 800px; margin: 0 auto;">
-        <h2 style="color: #333; text-align: center;">Инструкция по импорту записей</h2>
-        <hr style="border: 1px solid #ddd; margin-bottom: 20px;">
-        
-        <p style="font-size: 16px; color: #555;">Для создания новых записей используйте шаблон:</p>
-        
-        <div style="text-align: center; margin: 20px 0;">
-            <a href="{% url 'admin:checkin_template_create' %}" class="button-confirm" style="background-color: #0077ff; color: white; padding: 12px 25px; font-size: 14px; border-radius: 4px; text-decoration: none;">
-                Скачать шаблон
-            </a>
-        </div>
-        
-        <p style="font-size: 16px; color: #555;">Вы также можете экспортировать несколько записей без столбца <strong>ID</strong> и использовать этот файл как шаблон для импорта.</p>
+    <div style="display: flex; gap: 20px; justify-content: center; align-items: flex-start; padding: 20px; background: transparent; border-radius: 8px; max-width: 1200px; margin: 0 auto;">
     
-        <div style="margin-bottom: 20px;">
-            <h4 style="font-size: 16px; color: #333;">Будут импортированы следующие поля:</h4>
-            <ul style="list-style-type: none; padding-left: 0; color: #555;">
-                <li><strong>Наименование мероприятия</strong> event</li>
-                <li><strong>Фамилия</strong> last_name</li>
-                <li><strong>Имя</strong> first_name</li>
-                <li><strong>Отчество</strong> middle_name</li>
-                <li><strong>Компания</strong> company</li>
-                <li><strong>Категория</strong> category</li>
-                <li><strong>Тип гостя</strong> type_guest</li>
-                <li><strong>Комментарий</strong> comment</li>
-            </ul>
-        </div>
-        
-        <p style="font-size: 16px; color: #555;">Если поле <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-size: 14px;">event</code> оставить пустым, будут обновляться или создаваться только контакты.</p>
-        
-        <hr style="border: 1px solid #ddd; margin-top: 20px;">
-    </div>
-    <br/>
+      <!-- Блок загрузки людей -->
+      <div style="width: 50%; background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #333; text-align: center;">Загрузка людей</h2>
+          <div style="text-align: center; margin: 20px 0;">
+              <a href="{% url 'admin:template_import_cont' %}" class="button-confirm" style="background-color: #0077ff; color: white; padding: 12px 25px; font-size: 14px; border-radius: 4px; text-decoration: none;">
+                  Скачать шаблон
+              </a>
+          </div>
+          <ul style="list-style-type: none; padding-left: 0; color: #555; border-radius: 5px; padding: 15px;">
+              <li><strong>Фамилия</strong> (last_name) обязательное</li>
+              <li><strong>Имя</strong> (first_name) обязательное</li>
+              <li><strong>Отчество</strong> (middle_name) необязательное</li>
+              <li><strong>Ник</strong> (nickname) необязательное</li>
+              <li><strong>Компания</strong> (company) необязательное</li>
+              <li><strong>Категория</strong> (category) необязательное</li>
+              <li><strong>Тип гостя</strong> (type_guest) необязательное</li>
+              <li><strong>Комментарий</strong> (comment) необязательное</li>
+              <li><strong>Название соцсети</strong> (social_network_name) необязательное</li>
+              <li><strong>ID соцсети</strong> (social_network_id) необязательное</li>
+          </ul>
+      </div>
+  
+      <!-- Блок загрузки регистраций -->
+      <div style="width: 50%; background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #333; text-align: center;">Загрузка регистраций</h2>
+          <div style="text-align: center; margin: 20px 0;">
+              <a href="{% url 'admin:template_import_reg' %}" class="button-confirm" style="background-color: #0077ff; color: white; padding: 12px 25px; font-size: 14px; border-radius: 4px; text-decoration: none;">
+                  Скачать шаблон
+              </a>
+          </div>
+          <ul style="list-style-type: none; padding-left: 0; color: #555; border-radius: 5px; padding: 15px;">
+              <li><strong>Мероприятие</strong> (event) обязательное, если не существует - создаст новое</li>
+              <li><strong>Фамилия</strong> (last_name) обязательное</li>
+              <li><strong>Имя</strong> (first_name) обязательное</li>
+              <li><strong>Отчество</strong> (middle_name) необязательное</li>
+              <li><strong>Ник</strong> (nickname) необязательное (можно не указывать ФИО, если указан ник)</li>
+          </ul>
+      </div>
+  </div>
+  
+  <br/>
+  
 
     {% block import_form %}
     <form action="" method="post" enctype="multipart/form-data">

@@ -1,7 +1,5 @@
 import uuid
-
 from django.db import models
-from django.contrib.auth.models import User
 from colorfield.fields import ColorField
 from django.utils import timezone
 from django.core.validators import RegexValidator
@@ -11,6 +9,7 @@ from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
 from PIL import Image
+from django.core.exceptions import ValidationError
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 
@@ -105,8 +104,6 @@ class CheckerUser(CustomUser):
         verbose_name = "Модератора"
         verbose_name_plural = "Модераторы"
 
-
-
 # Базовый класс с параметрами по умолчанию
 class BaseModelClass(models.Model):
     def __str__(self):
@@ -117,7 +114,7 @@ class BaseModelClass(models.Model):
 
 # Компания
 class CompanyContact(BaseModelClass):
-    name = models.CharField(max_length=100, verbose_name='Наименование компании')
+    name = models.CharField(max_length=100, unique=True, verbose_name='Наименование компании')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
     class Meta:
@@ -126,7 +123,7 @@ class CompanyContact(BaseModelClass):
 
 # Категория
 class CategoryContact(BaseModelClass):
-    name = models.CharField(max_length=100, verbose_name='Наименование категории')
+    name = models.CharField(max_length=100, unique=True, verbose_name='Наименование категории')
     color = ColorField(default='#FFFFFF', verbose_name='Цвет категории')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
@@ -136,7 +133,7 @@ class CategoryContact(BaseModelClass):
 
 # Тип гостя
 class TypeGuestContact(BaseModelClass):
-    name = models.CharField(max_length=100, verbose_name='Наименование типа')
+    name = models.CharField(max_length=100, unique=True, verbose_name='Наименование типа')
     color = ColorField(default='#FFFFFF', verbose_name='Цвет типа')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
 
@@ -185,6 +182,10 @@ class Contact(models.Model):
     link_contact.short_description = 'Ссылка на контакт'
 
     def save(self, *args, **kwargs):
+        if self.nickname:  # Проверяем уникальность только если указан ник
+            existing_contact = Contact.objects.filter(nickname=self.nickname).exclude(pk=self.pk).first()
+            if existing_contact:
+                raise ValidationError("Этот никнейм уже используется другим человеком.")
         super().save(*args, **kwargs)
         if self.photo:
             img = Image.open(self.photo.path)
@@ -203,13 +204,14 @@ class Contact(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['last_name', 'first_name', 'middle_name', 'company', 'category'],
-                name='unique_contact'
+                name='unique_contact',
+                violation_error_message="Человек с указанными ФИО, команией и категорией уже существует в системе."
             )
         ]
 
 # Мероприятие
 class ModuleInstance(models.Model):
-    name = models.CharField(max_length=100, verbose_name='Наименование cобытия')
+    name = models.CharField(max_length=100, unique=True, verbose_name='Наименование cобытия')
     address = models.TextField(verbose_name='Адрес проведения', blank=True, null=True)
     date_start = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время начала')
     date_end = models.DateTimeField(null=True, blank=True, verbose_name='Дата и время окончания')
@@ -279,7 +281,7 @@ class Action(models.Model):
 class Checkin(Action):
 
     def __str__(self):
-        return f'Регистрация {self.contact}'
+        return f"{self.contact} -> {self.event}"
     
     def get_category_contact(self):
         if self.contact is not None:
@@ -307,7 +309,7 @@ class Checkin(Action):
     
 # Социальные сети
 class SocialNetwork(BaseModelClass):
-    name = models.CharField(max_length=100, verbose_name='Наименование соцсети')
+    name = models.CharField(max_length=100, unique=True, verbose_name='Наименование соцсети')
     comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
     def __str__(self):
         return f'{self.name}'
@@ -323,7 +325,7 @@ class InfoContact(models.Model):
     external_id = models.CharField(max_length=255, verbose_name='Имя или айди')
 
     def __str__(self):
-        return f'{self.social_network.name} - {self.external_id}'
+        return f"{self.contact} - {self.social_network.name} ({self.external_id})"
 
     class Meta:
         verbose_name = 'Контакт человека'

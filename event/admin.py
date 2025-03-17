@@ -5,7 +5,7 @@ from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm, CustomUs
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ImportExportActionModelAdmin
-from .resources import CheckinResource, ActionResource
+from .resources import ContactResource, CheckinResource, ModuleInstanceResource, ActionResource
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
 from django.urls import reverse
@@ -251,7 +251,8 @@ class InfoContactInline(admin.TabularInline):
 
 # Человек
 @admin.register(Contact)
-class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
+class ContactAdmin(BaseAdminPage, ImportExportActionModelAdmin):
+    resource_class = ContactResource
     list_display = ('get_fio', 'company', 'category', 'photo_preview', 'comment')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list', 'cancel_events_list')
@@ -287,6 +288,17 @@ class ContactAdmin(BaseAdminPage, ExportActionModelAdmin):
             'style': 'width: 400px;'
         })},
     }
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('import/download_template_import_cont/', self.admin_site.admin_view(self.download_template_import_cont), name="template_import_cont"),
+        ]
+        return custom_urls + urls
+
+    def download_template_import_cont(self, request):
+        file_path = os.path.join(os.path.dirname(__file__), "templates", "import_cont.xlsx")
+        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_cont.xlsx")
 
     def registered_events_list(self, obj):
         """
@@ -419,6 +431,7 @@ class TypeGuestContactAdmin(BaseAdminPage):
 # Событие
 @admin.register(ModuleInstance)
 class ModuleInstanceAdmin(ExportActionModelAdmin):
+    resource_class = ModuleInstanceResource
     form = ModuleInstanceForm
     search_fields = ['get_name_event']
     show_change_form_export = False
@@ -654,13 +667,13 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('import/download-template-checkin-create/', self.admin_site.admin_view(self.download_checkin_template_create), name="checkin_template_create"),
+            path('import/download_template_import_reg/', self.admin_site.admin_view(self.download_template_import_reg), name="template_import_reg"),
         ]
         return custom_urls + urls
 
-    def download_checkin_template_create(self, request):
-        file_path = os.path.join(os.path.dirname(__file__), "templates", "checkin_template.xlsx")
-        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="checkin_template.xlsx")
+    def download_template_import_reg(self, request):
+        file_path = os.path.join(os.path.dirname(__file__), "templates", "import_reg.xlsx")
+        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_reg.xlsx")
 
     def get_fields(self, request, obj=None):
         
