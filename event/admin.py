@@ -242,7 +242,7 @@ class SocialNetworkAdmin(BaseAdminPage):
 
 class InfoContactInline(admin.TabularInline):
     model = InfoContact
-    fields = ['contact', 'social_network', 'external_id']
+    fields = ['contact', 'social_network', 'external_id', 'subscribers']
     autocomplete_fields = ['social_network', ]
     readonly_fields = ['contact',]
     extra = 0

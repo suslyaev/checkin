@@ -1,19 +1,20 @@
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
-from import_export.results import RowResult
+from django.db.models import Q
+
 from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, Checkin, CompanyContact, CategoryContact, TypeGuestContact, Action
 
 class ContactResource(resources.ModelResource):
     social_network_name = fields.Field(column_name='Соцсеть')
     social_network_id = fields.Field(column_name='ID соцсети')
+    social_network_subscribers = fields.Field(column_name='Подписчики')
     company = fields.Field(column_name='Компания', attribute='company', widget=ForeignKeyWidget(CompanyContact, 'name'))
     category = fields.Field(column_name='Категория', attribute='category', widget=ForeignKeyWidget(CategoryContact, 'name'))
     type_guest = fields.Field(column_name='Тип гостя', attribute='type_guest', widget=ForeignKeyWidget(TypeGuestContact, 'name'))
-    social_networks_combined = fields.Field(column_name='Соцсети', attribute='social_networks_combined', readonly=True)
     
     class Meta:
         model = Contact
-        fields = ('last_name', 'first_name', 'middle_name', 'nickname', 'company', 'category', 'type_guest', 'social_networks_combined', 'comment')
+        fields = ('last_name', 'first_name', 'middle_name', 'nickname', 'company', 'category', 'type_guest', 'comment')
         import_id_fields = ('last_name', 'first_name', 'middle_name', 'nickname')
         skip_unchanged = True
         use_bulk = True
@@ -25,6 +26,7 @@ class ContactResource(resources.ModelResource):
         nickname = row.get('nickname') or row.get('Ник')
         social_name = row.get('social_network_name') or row.get('Соцсеть')
         social_id = row.get('social_network_id') or row.get('ID соцсети')
+        social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
         company_name = row.get('company') or row.get('Компания')
         category_name = row.get('category') or row.get('Категория')
         type_guest_name = row.get('type_guest') or row.get('Тип гостя')
@@ -55,14 +57,11 @@ class ContactResource(resources.ModelResource):
         if social_name and social_id:
             social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
             info_contact, created = InfoContact.objects.get_or_create(
-                contact=contact, social_network=social_network, defaults={'external_id': social_id})
+                contact=contact, social_network=social_network, defaults={'external_id': social_id, 'subscribers': social_subscribers})
             if not created:
                 info_contact.external_id = social_id
+                info_contact.subscribers = social_subscribers
                 info_contact.save()
-
-    def dehydrate_social_networks_combined(self, obj):
-        social_links = InfoContact.objects.filter(contact=obj).values_list('social_network__name', 'external_id')
-        return ", ".join(f"{name}: {external_id}" for name, external_id in social_links) if social_links else ""
 
 class CheckinResource(resources.ModelResource):
     module_name = fields.Field(column_name='Мероприятие')
@@ -75,9 +74,11 @@ class CheckinResource(resources.ModelResource):
         model = Checkin
         fields = ('module_name', 'last_name', 'first_name', 'middle_name', 'nickname')
         import_id_fields = ()  # Оставляем пустым, чтобы не требовался id
+        skip_unchanged = True
         use_bulk = True
     
     def before_import_row(self, row, **kwargs):
+        request = kwargs.get('user')
         event_name = row.get('event') or row.get('Мероприятие')
         last_name = row.get('last_name') or row.get('Фамилия')
         first_name = row.get('first_name') or row.get('Имя')
@@ -92,20 +93,22 @@ class CheckinResource(resources.ModelResource):
         contact = None
         if nickname:
             contact = Contact.objects.filter(nickname=nickname).first()
+
         if not contact and last_name and first_name:
-            contact = Contact.objects.filter(last_name=last_name, first_name=first_name, middle_name=middle_name).first()
+            contact = Contact.objects.filter(
+                last_name=last_name, 
+                first_name=first_name
+            ).filter(
+                Q(middle_name=middle_name) | Q(middle_name__isnull=True) | Q(middle_name='')
+            ).first()
         
         if not contact:
             raise ValueError(f"Ошибка: Не найден человек по указанным данным: {row}")
-        
-        # Добавляем найденные значения в строку импорта
-        row['module_name'] = event.name
-        row['last_name'] = contact.last_name
-        row['first_name'] = contact.first_name
-        row['middle_name'] = contact.middle_name or ''
-        row['nickname'] = contact.nickname or ''
 
-        Checkin.objects.get_or_create(contact=contact, event=event)
+        checkin, created = Checkin.objects.get_or_create(
+            contact=contact, event=event,
+            defaults={'operator': request}
+        )
     
 class ModuleInstanceResource(resources.ModelResource):
     managers = fields.Field(column_name='managers')
@@ -138,6 +141,12 @@ class ModuleInstanceResource(resources.ModelResource):
     def dehydrate_checkins_count(self, obj):
         """Считает количество чекинов"""
         return Action.objects.filter(event=obj, action_type='checkin', is_last_state=True).count()
+    
+    def dehydrate_is_visible(self, obj):
+        """
+        Преобразует булево значение is_visible в "Да"/"Нет".
+        """
+        return "Да" if obj.is_visible else "Нет"
 
 
 class ActionResource(resources.ModelResource):
@@ -159,10 +168,10 @@ class ActionResource(resources.ModelResource):
     def dehydrate_social_networks(self, obj):
         """
         Формирует строку с соцсетями в формате:
-        "Facebook: 12345, Instagram: 67890"
+        "Facebook: 12345 (444), Instagram: 67890 (888)"
         """
         social_networks = InfoContact.objects.filter(contact=obj.contact)
-        return ', '.join([f"{s.social_network.name}: {s.external_id}" for s in social_networks])
+        return ', '.join([f"{s.social_network.name}: {s.external_id} ({s.subscribers})" for s in social_networks])
     
     def dehydrate_action_type_display(self, obj):
         """

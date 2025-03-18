@@ -296,7 +296,7 @@ class Checkin(Action):
     get_type_guest_contact.short_description = 'Статус'
     
     def photo_contact(self):
-        if self.contact.photo:
+        if self.contact and self.contact.photo:
             return format_html('<img src="{}" style="width: 100px; height: auto; border-radius: 5px;" />', self.contact.photo.url)
         return "Нет фото"
     photo_contact.short_description = 'Фото'
@@ -323,6 +323,7 @@ class InfoContact(models.Model):
     contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, verbose_name='Человек')
     social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть')
     external_id = models.CharField(max_length=255, verbose_name='Имя или айди')
+    subscribers = models.IntegerField(blank=True, null=True, verbose_name='Подписчики')
 
     def __str__(self):
         return f"{self.contact} - {self.social_network.name} ({self.external_id})"
