@@ -206,7 +206,7 @@ class ActionView(View):
 
         return ModuleInstance.objects.filter(
             models.Q(managers=user) |
-            models.Q(checkers=user)|
+            models.Q(checkers=user) |
             models.Q(producers=user)
         ).distinct()
 
@@ -218,6 +218,7 @@ class ActionView(View):
             "contact_obj": {
                 "id": action.contact.id,
                 "fio": action.contact.get_fio(),
+                "nickname": action.contact.nickname,
                 "photo_link": action.contact.photo_link(),
                 "category_obj": {
                     "name": action.contact.category.name if action.contact.category else None,
