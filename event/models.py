@@ -2,21 +2,20 @@ import uuid
 from django.db import models
 from colorfield.fields import ColorField
 from django.utils import timezone
-from django.core.validators import RegexValidator
-
+from django.core.exceptions import ValidationError
 import event.services as service
 from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
 from PIL import Image
-from django.core.exceptions import ValidationError
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 
-phone_regex = RegexValidator(
-    regex=r'^\+7\d{10}$',
-    message='Номер телефона должен быть в формате +7XXXXXXXXXX (11 цифр)'
-)
+
+PHONE_PATTERNS = {
+    "ru": ("+7", 10),
+    "uk": ("+44", 10),
+}
 
 class CustomUserManager(BaseUserManager):
     """
@@ -46,7 +45,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     """
     Кастомная модель пользователя с логином по телефону.
     """
-    phone = models.CharField(max_length=20, unique=True, verbose_name='Телефон', validators=[phone_regex])
+    phone = models.CharField(max_length=20, unique=True, verbose_name='Телефон')
     first_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='Имя')
     last_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='Фамилия')
 
@@ -74,6 +73,20 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         if self.first_name:
             return f"{self.first_name or ''}".strip()
         return self.phone
+    
+    def clean(self):
+        """
+        Проверяет корректность номера перед сохранением.
+        """
+        super().clean()  # Вызываем стандартную валидацию модели
+
+        phone = self.phone.strip()
+        for code, length in PHONE_PATTERNS.values():
+            if phone.startswith(code) and len(phone) == len(code) + length:
+                return  # Валидация прошла
+
+        raise ValidationError(f"Некорректный номер телефона: {phone}. Доступные форматы: " +
+                              ", ".join(f"{code}X...X ({length} цифр)" for code, length in PHONE_PATTERNS.values()))
 
     class Meta:
         verbose_name = 'Пользователя'

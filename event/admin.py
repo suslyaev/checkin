@@ -253,7 +253,7 @@ class InfoContactInline(admin.TabularInline):
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = ContactResource
-    list_display = ('get_fio', 'company', 'category', 'photo_preview', 'comment')
+    list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list', 'cancel_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest']

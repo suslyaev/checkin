@@ -1,4 +1,5 @@
 from import_export import resources, fields
+from django.db import transaction
 from import_export.widgets import ForeignKeyWidget
 from django.db.models import Q
 
@@ -20,48 +21,49 @@ class ContactResource(resources.ModelResource):
         use_bulk = True
     
     def before_import_row(self, row, **kwargs):
-        last_name = row.get('last_name') or row.get('Фамилия')
-        first_name = row.get('first_name') or row.get('Имя')
-        middle_name = row.get('middle_name') or row.get('Отчество')
-        nickname = row.get('nickname') or row.get('Ник')
-        social_name = row.get('social_network_name') or row.get('Соцсеть')
-        social_id = row.get('social_network_id') or row.get('ID соцсети')
-        social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
-        company_name = row.get('company') or row.get('Компания')
-        category_name = row.get('category') or row.get('Категория')
-        type_guest_name = row.get('type_guest') or row.get('Тип гостя')
+        with transaction.atomic():  # Если что-то пойдет не так, изменения не сохранятся
+            last_name = row.get('last_name') or row.get('Фамилия')
+            first_name = row.get('first_name') or row.get('Имя')
+            middle_name = row.get('middle_name') or row.get('Отчество')
+            nickname = row.get('nickname') or row.get('Ник')
+            social_name = row.get('social_network_name') or row.get('Соцсеть')
+            social_id = row.get('social_network_id') or row.get('ID соцсети')
+            social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
+            company_name = row.get('company') or row.get('Компания')
+            category_name = row.get('category') or row.get('Категория')
+            type_guest_name = row.get('type_guest') or row.get('Тип гостя')
 
-        if not last_name and not nickname:
-            raise ValueError(f"Ошибка: Не указана фамилия или никнейм в строке данных: {row}")
-    
+            if not last_name and not nickname:
+                raise ValueError(f"Ошибка: Не указана фамилия или никнейм в строке данных: {row}")
+        
 
-        company = CompanyContact.objects.get_or_create(name=company_name)[0] if company_name else None
-        category = CategoryContact.objects.get_or_create(name=category_name)[0] if category_name else None
-        type_guest = TypeGuestContact.objects.get_or_create(name=type_guest_name)[0] if type_guest_name else None
+            company = CompanyContact.objects.get_or_create(name=company_name)[0] if company_name else None
+            category = CategoryContact.objects.get_or_create(name=category_name)[0] if category_name else None
+            type_guest = TypeGuestContact.objects.get_or_create(name=type_guest_name)[0] if type_guest_name else None
 
-        contact, created = Contact.objects.get_or_create(
-            last_name=last_name or '', 
-            first_name=first_name or '', 
-            middle_name=middle_name or '', 
-            nickname=nickname or '',
-            defaults={'company': company, 'category': category, 'type_guest': type_guest, 'comment': row.get('comment') or row.get('Комментарий') or ''}
-        )
+            contact, created = Contact.objects.get_or_create(
+                last_name=last_name or '', 
+                first_name=first_name or '', 
+                middle_name=middle_name or '', 
+                nickname=nickname or '',
+                defaults={'company': company, 'category': category, 'type_guest': type_guest, 'comment': row.get('comment') or row.get('Комментарий') or ''}
+            )
 
-        if not created:
-            contact.company = company
-            contact.category = category
-            contact.type_guest = type_guest
-            contact.comment = row.get('comment') or row.get('Комментарий') or ''
-            contact.save()
-
-        if social_name and social_id:
-            social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
-            info_contact, created = InfoContact.objects.get_or_create(
-                contact=contact, social_network=social_network, defaults={'external_id': social_id, 'subscribers': social_subscribers})
             if not created:
-                info_contact.external_id = social_id
-                info_contact.subscribers = social_subscribers
-                info_contact.save()
+                contact.company = company
+                contact.category = category
+                contact.type_guest = type_guest
+                contact.comment = row.get('comment') or row.get('Комментарий') or ''
+                contact.save()
+
+            if social_name and social_id:
+                social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
+                info_contact, created = InfoContact.objects.get_or_create(
+                    contact=contact, social_network=social_network, defaults={'external_id': social_id, 'subscribers': social_subscribers})
+                if not created:
+                    info_contact.external_id = social_id
+                    info_contact.subscribers = social_subscribers
+                    info_contact.save()
 
 class CheckinResource(resources.ModelResource):
     module_name = fields.Field(column_name='Мероприятие')
@@ -78,37 +80,38 @@ class CheckinResource(resources.ModelResource):
         use_bulk = True
     
     def before_import_row(self, row, **kwargs):
-        request = kwargs.get('user')
-        event_name = row.get('event') or row.get('Мероприятие')
-        last_name = row.get('last_name') or row.get('Фамилия')
-        first_name = row.get('first_name') or row.get('Имя')
-        middle_name = row.get('middle_name') or row.get('Отчество')
-        nickname = row.get('nickname') or row.get('Никнейм')
-        
-        if not event_name:
-            raise ValueError(f"Ошибка: Не указано мероприятие в строке данных: {row}")
-        
-        event, _ = ModuleInstance.objects.get_or_create(name=event_name)
-        
-        contact = None
-        if nickname:
-            contact = Contact.objects.filter(nickname=nickname).first()
+        with transaction.atomic(): 
+            request = kwargs.get('user')
+            event_name = row.get('event') or row.get('Мероприятие')
+            last_name = row.get('last_name') or row.get('Фамилия')
+            first_name = row.get('first_name') or row.get('Имя')
+            middle_name = row.get('middle_name') or row.get('Отчество')
+            nickname = row.get('nickname') or row.get('Никнейм')
+            
+            if not event_name:
+                raise ValueError(f"Ошибка: Не указано мероприятие в строке данных: {row}")
+            
+            event, _ = ModuleInstance.objects.get_or_create(name=event_name)
+            
+            contact = None
+            if nickname:
+                contact = Contact.objects.filter(nickname=nickname).first()
 
-        if not contact and last_name and first_name:
-            contact = Contact.objects.filter(
-                last_name=last_name, 
-                first_name=first_name
-            ).filter(
-                Q(middle_name=middle_name) | Q(middle_name__isnull=True) | Q(middle_name='')
-            ).first()
-        
-        if not contact:
-            raise ValueError(f"Ошибка: Не найден человек по указанным данным: {row}")
+            if not contact and last_name and first_name:
+                contact = Contact.objects.filter(
+                    last_name=last_name, 
+                    first_name=first_name
+                ).filter(
+                    Q(middle_name=middle_name) | Q(middle_name__isnull=True) | Q(middle_name='')
+                ).first()
+            
+            if not contact:
+                raise ValueError(f"Ошибка: Не найден человек по указанным данным: {row}")
 
-        checkin, created = Checkin.objects.get_or_create(
-            contact=contact, event=event,
-            defaults={'operator': request}
-        )
+            checkin, created = Checkin.objects.get_or_create(
+                contact=contact, event=event,
+                defaults={'operator': request}
+            )
     
 class ModuleInstanceResource(resources.ModelResource):
     managers = fields.Field(column_name='managers')
