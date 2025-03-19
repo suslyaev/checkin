@@ -206,7 +206,8 @@ class ActionView(View):
 
         return ModuleInstance.objects.filter(
             models.Q(managers=user) |
-            models.Q(checkers=user)
+            models.Q(checkers=user)|
+            models.Q(producers=user)
         ).distinct()
 
     def _serialize_action(self, action):
