@@ -731,7 +731,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
             form = CheckinOrCancelForm(request.POST)
             if form.is_valid():
                 action_type = 'checkin'
-                service.update_actions(action_type, queryset)
+                service.update_actions(action_type, queryset, request.user)
                 count = len(queryset)
                 self.message_user(request, "Подтверждено посещение по событию. Количество человек: %d." % (count))
                 return HttpResponseRedirect(request.get_full_path())
@@ -749,7 +749,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
             form = CheckinOrCancelForm(request.POST)
             if form.is_valid():
                 action_type = 'cancel'
-                service.update_actions(action_type, queryset)
+                service.update_actions(action_type, queryset, request.user)
                 count = len(queryset)
                 self.message_user(request, "Отменена регистрация по событию. Количество человек: %d." % (count))
                 return HttpResponseRedirect(request.get_full_path())
@@ -764,6 +764,8 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         qs = super().get_queryset(request)
         if request.user.groups.filter(name='Модератор').exists():
             qs = qs.filter(event__checkers=request.user)
+        if request.user.groups.filter(name='Менеджер').exists():
+            qs = qs.filter(event__managers=request.user)
         return qs.filter(is_last_state=True, action_type='new')
 
     def save_model(self, request, obj, form, change):
@@ -786,6 +788,13 @@ class ActionAdmin(ExportActionModelAdmin):
     list_per_page = 25
     view_on_site = False
     show_change_form_export = False
+
+    # Выборка действий
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.groups.filter(name='Менеджер').exists():
+            qs = qs.filter(event__managers=request.user)
+        return qs
 
     # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
     def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
