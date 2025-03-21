@@ -225,6 +225,10 @@ class ActionView(View):
                     "color": action.contact.category.color if action.contact.category else None,
                     "comment": action.contact.category.comment if action.contact.category else None,
                 },
+                "company_obj": {
+                    "name": action.contact.company.name if action.contact.company else None,
+                    "comment": action.contact.company.comment if action.contact.company else None,
+                },
                 "type_guest_obj": {
                     "name": action.contact.type_guest.name if action.contact.type_guest else None,
                     "color": action.contact.type_guest.color if action.contact.type_guest else None,
