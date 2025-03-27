@@ -41,7 +41,7 @@ class ContactResource(resources.ModelResource):
             category = CategoryContact.objects.get_or_create(name=category_name)[0] if category_name else None
             type_guest = TypeGuestContact.objects.get_or_create(name=type_guest_name)[0] if type_guest_name else None
 
-            contact, created = Contact.objects.get_or_create(
+            contact, created = Contact.objects.update_or_create(
                 last_name=last_name or '', 
                 first_name=first_name or '', 
                 middle_name=middle_name or '', 
