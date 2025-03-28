@@ -75,8 +75,6 @@ class Command(BaseCommand):
                         phone = '+7' + phone[1:]
                     elif phone.startswith('7'):
                         phone = '+' + phone
-                    elif not phone.startswith('+7'):
-                        phone = '+7' + phone
 
                     try:
                         # Проверяем существование пользователя с таким телефоном
@@ -117,8 +115,9 @@ class Command(BaseCommand):
 
                     except CustomUser.DoesNotExist:
                         await message.answer(
-                            "К сожалению, ваш номер телефона не найден в базе. Пожалуйста, обратитесь к администратору."
+                            f"К сожалению, ваш номер телефона не найден в базе. Пожалуйста, обратитесь к администратору и передайте ему свой Telegram id={message.contact.user_id}."
                         )
+                        logger.info(f"User with id {message.contact.user_id} not found phone number in db")
 
                 except Exception as e:
                     logger.exception(e)
