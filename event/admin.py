@@ -4,7 +4,7 @@ from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, Company
 from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
-from import_export.admin import ExportActionModelAdmin, ImportExportActionModelAdmin
+from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
 from .resources import ContactResource, CheckinResource, ModuleInstanceResource, ActionResource
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
@@ -251,7 +251,7 @@ class InfoContactInline(admin.TabularInline):
 
 # Человек
 @admin.register(Contact)
-class ContactAdmin(BaseAdminPage, ImportExportActionModelAdmin):
+class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
     resource_class = ContactResource
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
