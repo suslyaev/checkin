@@ -212,9 +212,9 @@ class Contact(models.Model):
         ordering = ['last_name', 'first_name']
         constraints = [
             models.UniqueConstraint(
-                fields=['last_name', 'first_name', 'middle_name', 'nickname'],
+                fields=['last_name', 'first_name', 'middle_name'],
                 name='unique_contact',
-                violation_error_message="Человек с указанными ФИО и ником уже существует в системе."
+                violation_error_message="Человек с указанными ФИО уже существует в системе."
             )
         ]
 
