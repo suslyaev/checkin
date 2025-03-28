@@ -41,7 +41,7 @@ class ContactResource(resources.ModelResource):
             'company', 'category', 'type_guest', 'comment'
         )
         # Используем уникальные поля для поиска существующего контакта
-        import_id_fields = ('last_name', 'first_name', 'middle_name', 'nickname')
+        import_id_fields = ('last_name', 'first_name', 'middle_name')
         skip_unchanged = True
         use_bulk = False
 
@@ -49,16 +49,20 @@ class ContactResource(resources.ModelResource):
         last_name = row.get('last_name') or row.get('Фамилия')
         first_name = row.get('first_name') or row.get('Имя')
         middle_name = row.get('middle_name') or row.get('Отчество')
-        nickname = row.get('nickname') or row.get('Ник')
         qs = Contact.objects.filter(
             last_name=last_name or '',
             first_name=first_name or '',
-            middle_name=middle_name or '',
-            nickname=nickname or ''
+            middle_name=middle_name or ''
         )
         if qs.exists():
             return qs.first()
         return None
+    
+    def before_import_row(self, row, **kwargs):
+        for key, value in row.items():
+            if isinstance(value, str):
+                row[key] = value.strip()
+        return row
 
     def after_import_row(self, row, row_result, **kwargs):
         # Обработка соцсетей после сохранения контакта
@@ -85,11 +89,10 @@ class CheckinResource(resources.ModelResource):
     last_name = fields.Field(column_name='Фамилия')
     first_name = fields.Field(column_name='Имя')
     middle_name = fields.Field(column_name='Отчество')
-    nickname = fields.Field(column_name='Никнейм')
     
     class Meta:
         model = Checkin
-        fields = ('module_name', 'last_name', 'first_name', 'middle_name', 'nickname')
+        fields = ('module_name', 'last_name', 'first_name', 'middle_name')
         import_id_fields = ()  # id не требуется
         skip_unchanged = True
         use_bulk = False  # обрабатываем строки по одной
@@ -104,7 +107,6 @@ class CheckinResource(resources.ModelResource):
             middle_name = row.get('middle_name') or row.get('Отчество')
             if middle_name:
                 middle_name = middle_name.strip()
-            nickname = (row.get('nickname') or row.get('Никнейм') or "").strip()
             
             if not event_name:
                 raise ValueError(f"Ошибка: Не указано мероприятие в строке данных: {row}")
@@ -118,11 +120,6 @@ class CheckinResource(resources.ModelResource):
                 q &= Q(middle_name__iexact=middle_name)
             else:
                 q &= (Q(middle_name__isnull=True) | Q(middle_name=''))
-            # Аналогично для никнейма
-            if nickname:
-                q &= Q(nickname__iexact=nickname)
-            else:
-                q &= (Q(nickname__isnull=True) | Q(nickname=''))
             
             contact = Contact.objects.filter(q).first()
             if not contact:
