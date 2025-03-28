@@ -5,65 +5,80 @@ from django.db.models import Q
 
 from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, Checkin, CompanyContact, CategoryContact, TypeGuestContact, Action
 
+class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, *args, **kwargs):
+        if not value:
+            return None
+        try:
+            return self.model.objects.get(**{self.field: value})
+        except self.model.DoesNotExist:
+            return self.model.objects.create(**{self.field: value})
+
 class ContactResource(resources.ModelResource):
     social_network_name = fields.Field(column_name='Соцсеть')
     social_network_id = fields.Field(column_name='ID соцсети')
     social_network_subscribers = fields.Field(column_name='Подписчики')
-    company = fields.Field(column_name='Компания', attribute='company', widget=ForeignKeyWidget(CompanyContact, 'name'))
-    category = fields.Field(column_name='Категория', attribute='category', widget=ForeignKeyWidget(CategoryContact, 'name'))
-    type_guest = fields.Field(column_name='Тип гостя', attribute='type_guest', widget=ForeignKeyWidget(TypeGuestContact, 'name'))
-    
+    company = fields.Field(
+        column_name='company',
+        attribute='company',
+        widget=ForeignKeyGetOrCreateWidget(CompanyContact, 'name')
+    )
+    category = fields.Field(
+        column_name='category',
+        attribute='category',
+        widget=ForeignKeyGetOrCreateWidget(CategoryContact, 'name')
+    )
+    type_guest = fields.Field(
+        column_name='type_guest',
+        attribute='type_guest',
+        widget=ForeignKeyGetOrCreateWidget(TypeGuestContact, 'name')
+    )
+
     class Meta:
         model = Contact
-        fields = ('last_name', 'first_name', 'middle_name', 'nickname', 'company', 'category', 'type_guest', 'comment')
+        fields = (
+            'last_name', 'first_name', 'middle_name', 'nickname',
+            'company', 'category', 'type_guest', 'comment'
+        )
+        # Используем уникальные поля для поиска существующего контакта
         import_id_fields = ('last_name', 'first_name', 'middle_name', 'nickname')
         skip_unchanged = True
-        use_bulk = True
-    
-    def before_import_row(self, row, **kwargs):
-        with transaction.atomic():  # Если что-то пойдет не так, изменения не сохранятся
-            last_name = row.get('last_name') or row.get('Фамилия')
-            first_name = row.get('first_name') or row.get('Имя')
-            middle_name = row.get('middle_name') or row.get('Отчество')
-            nickname = row.get('nickname') or row.get('Ник')
-            social_name = row.get('social_network_name') or row.get('Соцсеть')
-            social_id = row.get('social_network_id') or row.get('ID соцсети')
-            social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
-            company_name = row.get('company') or row.get('Компания')
-            category_name = row.get('category') or row.get('Категория')
-            type_guest_name = row.get('type_guest') or row.get('Тип гостя')
+        use_bulk = False
 
-            if not last_name and not nickname:
-                raise ValueError(f"Ошибка: Не указана фамилия или никнейм в строке данных: {row}")
-        
+    def get_instance(self, instance_loader, row):
+        last_name = row.get('last_name') or row.get('Фамилия')
+        first_name = row.get('first_name') or row.get('Имя')
+        middle_name = row.get('middle_name') or row.get('Отчество')
+        nickname = row.get('nickname') or row.get('Ник')
+        qs = Contact.objects.filter(
+            last_name=last_name or '',
+            first_name=first_name or '',
+            middle_name=middle_name or '',
+            nickname=nickname or ''
+        )
+        if qs.exists():
+            return qs.first()
+        return None
 
-            company = CompanyContact.objects.get_or_create(name=company_name)[0] if company_name else None
-            category = CategoryContact.objects.get_or_create(name=category_name)[0] if category_name else None
-            type_guest = TypeGuestContact.objects.get_or_create(name=type_guest_name)[0] if type_guest_name else None
-
-            contact, created = Contact.objects.update_or_create(
-                last_name=last_name or '', 
-                first_name=first_name or '', 
-                middle_name=middle_name or '', 
-                nickname=nickname or '',
-                defaults={'company': company, 'category': category, 'type_guest': type_guest, 'comment': row.get('comment') or row.get('Комментарий') or ''}
-            )
-
-            if not created:
-                contact.company = company
-                contact.category = category
-                contact.type_guest = type_guest
-                contact.comment = row.get('comment') or row.get('Комментарий') or ''
-                contact.save()
-
-            if social_name and social_id:
+    def after_import_row(self, row, row_result, **kwargs):
+        # Обработка соцсетей после сохранения контакта
+        social_name = row.get('social_network_name') or row.get('Соцсеть')
+        social_id = row.get('social_network_id') or row.get('ID соцсети')
+        social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
+        if social_name and social_id:
+            instance = self.get_instance(None, row)
+            if instance:
                 social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
                 info_contact, created = InfoContact.objects.get_or_create(
-                    contact=contact, social_network=social_network, defaults={'external_id': social_id, 'subscribers': social_subscribers})
+                    contact=instance,
+                    social_network=social_network,
+                    defaults={'external_id': social_id, 'subscribers': social_subscribers}
+                )
                 if not created:
                     info_contact.external_id = social_id
                     info_contact.subscribers = social_subscribers
                     info_contact.save()
+        return row_result
 
 class CheckinResource(resources.ModelResource):
     module_name = fields.Field(column_name='Мероприятие')
@@ -75,39 +90,45 @@ class CheckinResource(resources.ModelResource):
     class Meta:
         model = Checkin
         fields = ('module_name', 'last_name', 'first_name', 'middle_name', 'nickname')
-        import_id_fields = ()  # Оставляем пустым, чтобы не требовался id
+        import_id_fields = ()  # id не требуется
         skip_unchanged = True
-        use_bulk = True
+        use_bulk = False  # обрабатываем строки по одной
     
     def before_import_row(self, row, **kwargs):
-        with transaction.atomic(): 
+        with transaction.atomic():
             request = kwargs.get('user')
-            event_name = row.get('event') or row.get('Мероприятие')
-            last_name = row.get('last_name') or row.get('Фамилия')
-            first_name = row.get('first_name') or row.get('Имя')
+            # Нормализация входных данных: убираем пробелы и приводим к стандартному виду
+            event_name = (row.get('event') or row.get('Мероприятие') or "").strip()
+            last_name = (row.get('last_name') or row.get('Фамилия') or "").strip()
+            first_name = (row.get('first_name') or row.get('Имя') or "").strip()
             middle_name = row.get('middle_name') or row.get('Отчество')
-            nickname = row.get('nickname') or row.get('Никнейм')
+            if middle_name:
+                middle_name = middle_name.strip()
+            nickname = (row.get('nickname') or row.get('Никнейм') or "").strip()
             
             if not event_name:
                 raise ValueError(f"Ошибка: Не указано мероприятие в строке данных: {row}")
             
             event, _ = ModuleInstance.objects.get_or_create(name=event_name)
             
-            contact = None
+            # Формируем комплексное условие поиска:
+            q = Q(last_name__iexact=last_name) & Q(first_name__iexact=first_name)
+            # Если отчество задано – требуем совпадения, иначе ищем записи, где отчество не задано
+            if middle_name:
+                q &= Q(middle_name__iexact=middle_name)
+            else:
+                q &= (Q(middle_name__isnull=True) | Q(middle_name=''))
+            # Аналогично для никнейма
             if nickname:
-                contact = Contact.objects.filter(nickname=nickname).first()
-
-            if not contact and last_name and first_name:
-                contact = Contact.objects.filter(
-                    last_name=last_name, 
-                    first_name=first_name
-                ).filter(
-                    Q(middle_name=middle_name) | Q(middle_name__isnull=True) | Q(middle_name='')
-                ).first()
+                q &= Q(nickname__iexact=nickname)
+            else:
+                q &= (Q(nickname__isnull=True) | Q(nickname=''))
             
+            contact = Contact.objects.filter(q).first()
             if not contact:
                 raise ValueError(f"Ошибка: Не найден человек по указанным данным: {row}")
-
+            
+            # Создаем или получаем запись Checkin
             checkin, created = Checkin.objects.get_or_create(
                 contact=contact, event=event,
                 defaults={'operator': request}

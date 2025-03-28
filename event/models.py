@@ -195,10 +195,6 @@ class Contact(models.Model):
     link_contact.short_description = 'Ссылка на контакт'
 
     def save(self, *args, **kwargs):
-#        if self.nickname:  # Проверяем уникальность только если указан ник
- #           existing_contact = Contact.objects.filter(nickname=self.nickname).exclude(pk=self.pk).first()
-  #          if existing_contact:
-   #             raise ValidationError("Этот никнейм уже используется другим человеком.")
         super().save(*args, **kwargs)
         if self.photo:
             img = Image.open(self.photo.path)
@@ -213,12 +209,12 @@ class Contact(models.Model):
     class Meta:
         verbose_name = 'Человека'
         verbose_name_plural = 'Люди'
-        ordering = ['pk']
+        ordering = ['last_name', 'first_name']
         constraints = [
             models.UniqueConstraint(
-                fields=['last_name', 'first_name', 'middle_name', 'company', 'category'],
+                fields=['last_name', 'first_name', 'middle_name', 'nickname'],
                 name='unique_contact',
-                violation_error_message="Человек с указанными ФИО, команией и категорией уже существует в системе."
+                violation_error_message="Человек с указанными ФИО и ником уже существует в системе."
             )
         ]
 
