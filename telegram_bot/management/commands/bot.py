@@ -62,6 +62,7 @@ class Command(BaseCommand):
                     await message.answer(
                         "У вас нет доступа.\n\nОтправьте свой контакт, чтобы я проверил есть ли вы в базе.",
                         reply_markup=builder_contact.as_markup(resize_keyboard=True))
+                    logger.info(f"User {message.from_user.first_name} id={message.from_user.id} doesn't have access")
 
             except Exception as e:
                 logger.exception(e)
@@ -70,6 +71,7 @@ class Command(BaseCommand):
             async def contact_handler(message: Message, state: FSMContext) -> None:
                 try:
                     # Форматируем номер телефона в нужный формат (+7XXXXXXXXXX)
+                    logger.info(f"User {message.from_user.first_name} id={message.from_user.id} with contact {message.contact.phone_number}")
                     phone = str(message.contact.phone_number)
                     if phone.startswith('8'):
                         phone = '+7' + phone[1:]
@@ -115,9 +117,9 @@ class Command(BaseCommand):
 
                     except CustomUser.DoesNotExist:
                         await message.answer(
-                            f"К сожалению, ваш номер телефона не найден в базе. Пожалуйста, обратитесь к администратору и передайте ему свой Telegram id={message.contact.user_id}."
+                            f"К сожалению, ваш номер телефона не найден в базе. Пожалуйста, обратитесь к администратору и передайте ему свой Telegram id={message.from_user.id}."
                         )
-                        logger.info(f"User with id {message.contact.user_id} not found phone number in db")
+                        logger.info(f"User with id {message.from_user.id} not found phone number in db")
 
                 except Exception as e:
                     logger.exception(e)
