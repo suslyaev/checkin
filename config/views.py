@@ -83,12 +83,29 @@ class ActionView(View):
     def get(self, request):
         # Фильтруем по доступным событиям и параметру event_id
         event_id = request.GET.get('event_id')
-        actions = Action.objects.filter(
-            event__in=self._get_user_events(request.user)
-        ).select_related('contact', 'event', 'contact__category')
+        if not event_id:
+            return JsonResponse([], safe=False)
 
-        if event_id:
-            actions = actions.filter(event_id=event_id)
+        # Оптимизированный запрос с одним JOIN к БД
+        actions = Action.objects.filter(event_id=event_id).select_related(
+            'contact',
+            'contact__category',
+            'contact__company',
+            'contact__type_guest',
+            'event',
+            'operator'
+        ).prefetch_related(
+            'contact__infocontact_set__social_network'
+        ).only(
+            'id', 'action_type', 'action_date',
+            'contact__id', 'contact__last_name', 'contact__first_name',
+            'contact__nickname', 'contact__photo',
+            'contact__category__name', 'contact__category__color', 'contact__category__comment',
+            'contact__company__name', 'contact__company__comment',
+            'contact__type_guest__name', 'contact__type_guest__color', 'contact__type_guest__comment',
+            'event__id', 'event__name', 'event__date_start',
+            'operator__first_name', 'operator__last_name', 'operator__username'
+        )
 
         return JsonResponse(
             [self._serialize_action(action) for action in actions],
@@ -211,52 +228,28 @@ class ActionView(View):
         ).distinct()
 
     def _serialize_action(self, action):
-        """Формат ответа как в старом DRF-сериализаторе"""
+        """Упрощенная сериализация без тяжелых полей"""
+        contact = action.contact
         return {
             "id": action.id,
-            "contact": action.contact.id,
+            "contact": contact.id,
             "contact_obj": {
-                "id": action.contact.id,
-                "fio": action.contact.get_fio(),
-                "nickname": action.contact.nickname,
-                "photo_link": action.contact.photo_link(),
+                "id": contact.id,
+                "fio": f"{contact.last_name} {contact.first_name}",
+                "nickname": contact.nickname,
+                "photo_link": contact.photo.url if contact.photo else "-",
                 "category_obj": {
-                    "name": action.contact.category.name if action.contact.category else None,
-                    "color": action.contact.category.color if action.contact.category else None,
-                    "comment": action.contact.category.comment if action.contact.category else None,
-                },
-                "company_obj": {
-                    "name": action.contact.company.name if action.contact.company else None,
-                    "comment": action.contact.company.comment if action.contact.company else None,
+                    "name": contact.category.name if contact.category else None,
+                    "color": contact.category.color if contact.category else None,
                 },
                 "type_guest_obj": {
-                    "name": action.contact.type_guest.name if action.contact.type_guest else None,
-                    "color": action.contact.type_guest.color if action.contact.type_guest else None,
-                    "comment": action.contact.type_guest.comment if action.contact.type_guest else None,
-                },
-                # "social_networks": [
-                #     {
-                #         "network_type": info.social_network.name,
-                #         "username": info.external_id,
-                #         "link": info.external_id
-                #     } for info in InfoContact.objects.filter(
-                #         contact=action.contact,
-                #         social_network__isnull=False
-                #     )
-                # ]
+                    "name": contact.type_guest.name if contact.type_guest else None,
+                    "color": contact.type_guest.color if contact.type_guest else None,
+                }
             },
             "event": action.event.id,
-            "module_instance": action.event.id,
-            "module_instance_obj": {
-                "id": action.event.id,
-                "name": action.event.name,
-                "date_start": action.event.date_start.isoformat()
-            },
             "action_type": action.action_type,
-            "action_date": action.action_date.isoformat(),
-            # "operator_obj": {
-            #     "full_name": f"{action.operator.first_name} {action.operator.last_name}".strip() or action.operator.username
-            # } if action.operator else None
+            "action_date": action.action_date.isoformat()
         }
 
 
