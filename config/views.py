@@ -234,16 +234,16 @@ class ActionView(View):
                     "color": action.contact.type_guest.color if action.contact.type_guest else None,
                     "comment": action.contact.type_guest.comment if action.contact.type_guest else None,
                 },
-                "social_networks": [
-                    {
-                        "network_type": info.social_network.name,
-                        "username": info.external_id,
-                        "link": info.external_id
-                    } for info in InfoContact.objects.filter(
-                        contact=action.contact,
-                        social_network__isnull=False
-                    )
-                ]
+                # "social_networks": [
+                #     {
+                #         "network_type": info.social_network.name,
+                #         "username": info.external_id,
+                #         "link": info.external_id
+                #     } for info in InfoContact.objects.filter(
+                #         contact=action.contact,
+                #         social_network__isnull=False
+                #     )
+                # ]
             },
             "event": action.event.id,
             "module_instance": action.event.id,
