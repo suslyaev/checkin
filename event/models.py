@@ -54,7 +54,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     auth_token = models.UUIDField(blank=True, null=True, unique=True)
-    token_expires = models.DateTimeField(blank=True, null=True)
 
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
 
@@ -65,8 +64,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def generate_auth_token(self):
         self.auth_token = uuid.uuid4()
-        self.token_expires = timezone.now() + timezone.timedelta(minutes=2)
-        self.save(update_fields=['auth_token', 'token_expires'])
+        self.save(update_fields=['auth_token'])
         return self.auth_token
     
     def get_short_name(self):
@@ -254,9 +252,9 @@ class ModuleInstance(models.Model):
 
 # Действие
 class Action(models.Model):
-    contact = models.ForeignKey('Contact', on_delete=models.CASCADE, null=True, verbose_name='Контакт')
-    event = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, blank=True, verbose_name='Мероприятие')
-    action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),  verbose_name='Тип действия', default='new')
+    contact = models.ForeignKey('Contact', on_delete=models.CASCADE, null=True, verbose_name='Контакт', db_index=True)
+    event = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, blank=True, verbose_name='Мероприятие', db_index=True)
+    action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),  verbose_name='Тип действия', default='new', db_index=True)
     action_date = models.DateTimeField(null=True, blank=True, auto_now=True, verbose_name='Дата и время действия')
     operator = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Кто зарегистрировал')
     is_last_state = models.BooleanField(default=True, verbose_name='Текущее состояние')
@@ -329,8 +327,8 @@ class SocialNetwork(BaseModelClass):
 
 # Контакт человека
 class InfoContact(models.Model):
-    contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, verbose_name='Человек')
-    social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть')
+    contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, verbose_name='Человек', db_index=True)
+    social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть', db_index=True)
     external_id = models.CharField(max_length=255, verbose_name='Имя или айди')
     subscribers = models.IntegerField(blank=True, null=True, verbose_name='Подписчики')
 
