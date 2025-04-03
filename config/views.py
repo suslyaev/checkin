@@ -221,18 +221,18 @@ class ActionView(View):
                 "nickname": action.contact.nickname,
                 "photo_link": action.contact.photo_link(),
                 "category_obj": {
-                    "name": action.contact.category.name,
-                    "color": action.contact.category.color,
-                    "comment": action.contact.category.comment,
+                    "name": action.contact.category.name if action.contact.category else None,
+                    "color": action.contact.category.color if action.contact.category else None,
+                    "comment": action.contact.category.comment if action.contact.category else None,
                 },
                 "company_obj": {
-                    "name": action.contact.company.name,
-                    "comment": action.contact.company.comment,
+                    "name": action.contact.company.name if action.contact.company else None,
+                    "comment": action.contact.company.comment if action.contact.company else None,
                 },
                 "type_guest_obj": {
-                    "name": action.contact.type_guest.name,
-                    "color": action.contact.type_guest.color,
-                    "comment": action.contact.type_guest.comment,
+                    "name": action.contact.type_guest.name if action.contact.type_guest else None,
+                    "color": action.contact.type_guest.color if action.contact.type_guest else None,
+                    "comment": action.contact.type_guest.comment if action.contact.type_guest else None,
                 },
                 # "social_networks": [
                 #     {
