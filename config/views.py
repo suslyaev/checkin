@@ -254,9 +254,9 @@ class ActionView(View):
             },
             "action_type": action.action_type,
             "action_date": action.action_date.isoformat(),
-            "operator_obj": {
-                "full_name": f"{action.operator.first_name} {action.operator.last_name}".strip() or action.operator.username
-            } if action.operator else None
+            # "operator_obj": {
+            #     "full_name": f"{action.operator.first_name} {action.operator.last_name}".strip() or action.operator.username
+            # } if action.operator else None
         }
 
 
