@@ -86,7 +86,6 @@ class ActionView(View):
         if not event_id:
             return JsonResponse([], safe=False)
 
-        # Оптимизированный запрос с одним JOIN к БД
         actions = Action.objects.filter(event_id=event_id).select_related(
             'contact',
             'contact__category',
@@ -96,16 +95,7 @@ class ActionView(View):
             'operator'
         ).prefetch_related(
             'contact__infocontact_set__social_network'
-        ).only(
-            'id', 'action_type', 'action_date',
-            'contact__id', 'contact__last_name', 'contact__first_name',
-            'contact__nickname', 'contact__photo',
-            'contact__category__name', 'contact__category__color', 'contact__category__comment',
-            'contact__company__name', 'contact__company__comment',
-            'contact__type_guest__name', 'contact__type_guest__color', 'contact__type_guest__comment',
-            'event__id', 'event__name', 'event__date_start',
-            'operator__first_name', 'operator__last_name', 'operator__username'
-        )
+        ).order_by('contact__last_name', 'contact__first_name')
 
         return JsonResponse(
             [self._serialize_action(action) for action in actions],
@@ -228,29 +218,69 @@ class ActionView(View):
         ).distinct()
 
     def _serialize_action(self, action):
-        """Упрощенная сериализация без тяжелых полей"""
+        """Полная сериализация со всеми полями, но с оптимизациями"""
         contact = action.contact
-        return {
+        event = action.event
+
+        # Основная структура данных
+        data = {
             "id": action.id,
             "contact": contact.id,
             "contact_obj": {
                 "id": contact.id,
-                "fio": f"{contact.last_name} {contact.first_name}",
+                "fio": f"{contact.last_name} {contact.first_name}",  # Оптимизация: замена get_fio()
                 "nickname": contact.nickname,
                 "photo_link": contact.photo.url if contact.photo else "-",
-                "category_obj": {
-                    "name": contact.category.name if contact.category else None,
-                    "color": contact.category.color if contact.category else None,
-                },
-                "type_guest_obj": {
-                    "name": contact.type_guest.name if contact.type_guest else None,
-                    "color": contact.type_guest.color if contact.type_guest else None,
-                }
+                "category_obj": self._serialize_category(contact.category),
+                "company_obj": self._serialize_company(contact.company),
+                "type_guest_obj": self._serialize_type_guest(contact.type_guest),
+                "social_networks": self._serialize_social_networks(contact)
             },
-            "event": action.event.id,
+            "event": event.id,
+            "module_instance": event.id,
+            "module_instance_obj": {
+                "id": event.id,
+                "name": event.name,
+                "date_start": event.date_start.isoformat()
+            },
             "action_type": action.action_type,
-            "action_date": action.action_date.isoformat()
+            "action_date": action.action_date.isoformat(),
+            "operator_obj": self._serialize_operator(action.operator)
         }
+
+        return data
+
+    def _serialize_category(self, category):
+        return {
+            "name": category.name if category else None,
+            "color": category.color if category else None,
+            "comment": category.comment if category else None
+        } if category else None
+
+    def _serialize_company(self, company):
+        return {
+            "name": company.name if company else None,
+            "comment": company.comment if company else None
+        } if company else None
+
+    def _serialize_type_guest(self, type_guest):
+        return {
+            "name": type_guest.name if type_guest else None,
+            "color": type_guest.color if type_guest else None,
+            "comment": type_guest.comment if type_guest else None
+        } if type_guest else None
+
+    def _serialize_social_networks(self, contact):
+        return [{
+            "network_type": info.social_network.name,
+            "username": info.external_id,
+            "link": info.external_id
+        } for info in contact.infocontact_set.all() if info.social_network]
+
+    def _serialize_operator(self, operator):
+        return {
+            "full_name": f"{operator.first_name} {operator.last_name}".strip() or operator.username
+        } if operator else None
 
 
 def custom_logout(request):
