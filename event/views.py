@@ -67,7 +67,6 @@ def checkin_detail(request, pk):
     })
 
 
-
 def confirm_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         checkin = get_object_or_404(Checkin, pk=pk)
@@ -76,7 +75,7 @@ def confirm_checkin(request, pk):
             contact=checkin.contact,
             event=checkin.event,
             action_type=action_type_confirm,
-            operator = request.user,
+            operator=request.user,
             is_last_state=True
         )
         return JsonResponse({'status': 'success', 'message': 'Подтверждено'})
@@ -90,7 +89,7 @@ def cancel_checkin(request, pk):
             contact=checkin.contact,
             event=checkin.event,
             action_type=action_type_cancel,
-            operator = request.user,
+            operator=request.user,
             is_last_state=True
         )
         return JsonResponse({'status': 'success', 'message': 'Отменено'})
@@ -103,14 +102,11 @@ def telegram_admin_auth(request):
 
     try:
         user = CustomUser.objects.get(auth_token=token)
-        if user.token_expires < timezone.now():
-            return redirect('/')
 
         # Авторизуем пользователя
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         user.auth_token = None
-        user.token_expires = None
-        user.save(update_fields=['auth_token', 'token_expires'])
+        user.save(update_fields=['auth_token'])
         return redirect('/')
 
     except CustomUser.DoesNotExist:
