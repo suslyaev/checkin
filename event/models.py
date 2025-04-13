@@ -3,7 +3,6 @@ from django.db import models
 from colorfield.fields import ColorField
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-import event.services as service
 from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
@@ -254,42 +253,21 @@ class ModuleInstance(models.Model):
 class Action(models.Model):
     contact = models.ForeignKey('Contact', on_delete=models.CASCADE, null=True, verbose_name='Контакт', db_index=True)
     event = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, blank=True, verbose_name='Мероприятие', db_index=True)
-    action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин'), ('cancel', 'Отмена')),  verbose_name='Тип действия', default='new', db_index=True)
-    action_date = models.DateTimeField(null=True, blank=True, auto_now=True, verbose_name='Дата и время действия')
-    operator = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Кто зарегистрировал')
-    is_last_state = models.BooleanField(default=True, verbose_name='Текущее состояние')
+    action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин')),  verbose_name='Тип действия', default='new', db_index=True)
+    create_date = models.DateTimeField(auto_now_add=True, null=True, blank=True, verbose_name='Дата создания записи')
+    update_date = models.DateTimeField(auto_now=True, null=True, blank=True, verbose_name='Дата изменения записи')
+    create_user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='create_user', verbose_name='Кто создал')
+    update_user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='update_user', verbose_name='Кто обновил')
 
     def __str__(self):
-        return service.get_name_action(self.action_type, self.contact, self.event, self.action_date)
+        return f"{self.contact} -> {self.event} ({self.action_type})"
     
-    def clean(self):
-        if self.id is None:
-            check_action = service.check_create_action(self)
-            if check_action['error']:
-                raise forms.ValidationError(check_action['error_message'])
-        if self.contact is None or self.event is None:
-            raise forms.ValidationError('Заполните обязательные поля')
-    
-    def save(self, force_insert=False, force_update=False, *args, **kwargs):
-        if self.contact is None or self.event is None:
-            raise forms.ValidationError('Заполните обязательные поля')
-        check_action = service.check_create_action(self)
-        if check_action['error']:
-            raise forms.ValidationError(check_action['error_message'])
-        else:
-            service.do_after_add_action(self)
-            super().save(*args, **kwargs)
+    def photo_contact(self):
+        if self.contact and self.contact.photo:
+            return format_html('<img src="{}" style="width: 100px; height: auto; border-radius: 5px;" />', self.contact.photo.url)
+        return "Нет фото"
+    photo_contact.short_description = 'Фото'
 
-    class Meta:
-        verbose_name = 'Действие'
-        verbose_name_plural = 'Все действия'
-
-# Прокси модель для чекина на события
-class Checkin(Action):
-
-    def __str__(self):
-        return f"{self.contact} -> {self.event}"
-    
     def get_category_contact(self):
         if self.contact is not None:
             return self.contact.category
@@ -302,18 +280,17 @@ class Checkin(Action):
         return None
     get_type_guest_contact.short_description = 'Статус'
     
-    def photo_contact(self):
-        if self.contact and self.contact.photo:
-            return format_html('<img src="{}" style="width: 100px; height: auto; border-radius: 5px;" />', self.contact.photo.url)
-        return "Нет фото"
-    photo_contact.short_description = 'Фото'
-    
     class Meta:
-        proxy = True
-        verbose_name = 'Регистрацию'
-        verbose_name_plural = 'Регистрации'
-        ordering = ['pk']
-    
+        verbose_name = 'Действие'
+        verbose_name_plural = 'Все действия'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['contact', 'event'],
+                name='unique_reg_contact_to_event',
+                violation_error_message="Человек уже зарегистрирован на данное мероприятие."
+            )
+        ]
+
 # Социальные сети
 class SocialNetwork(BaseModelClass):
     name = models.CharField(max_length=100, unique=True, verbose_name='Наименование соцсети')

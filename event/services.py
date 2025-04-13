@@ -3,9 +3,9 @@ def get_params_visible_buttons_save(request, obj):
     button_save = obj is None
     return {
         'show_save_and_continue': False if request.user.is_superuser == True else False,
-        'show_save': button_save if request.user.is_superuser or request.user.is_staff == True else False,
+        'show_save': button_save or request.user.is_superuser == True if request.user.is_superuser or request.user.is_staff == True else False,
         'show_save_and_add_another': False if request.user.is_superuser == True else False,
-        'show_delete': False if request.user.is_superuser == True else False
+        'show_delete': True if request.user.is_superuser == True else False
     }
 
 # Получение имени действия
@@ -93,12 +93,7 @@ def do_after_add_action(action):
                 action_open.save(force_update=True)
 
 # Чекин или отмена регистрации
-def update_actions(obj, queryset):
-    from event.models import Action
-    for checkin in queryset:
-        new_action = Action(
-            contact=checkin.contact,
-            event=checkin.event,
-            action_type=obj
-        )
-        new_action.save()
+def update_actions(action_type, queryset):
+    for action_rec in queryset:
+        action_rec.action_type = action_type
+        action_rec.save()

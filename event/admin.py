@@ -1,11 +1,11 @@
 from django.contrib import admin
 import event.services as service
-from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, Checkin
-from .forms import ActionForm, CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
+from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action
+from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
-from .resources import ContactResource, CheckinResource, ModuleInstanceResource, ActionResource
+from .resources import ContactResource, ModuleInstanceResource, ActionResource, ActionResourceRead
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
 from django.urls import reverse
@@ -23,16 +23,6 @@ class CustomAdminSite(admin.AdminSite):
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
 
-    # Временно убрал, чтобы в мобильной версии можно было выбирать модели в меню
-    #def get_urls(self):
-    #    from django.urls import path
-
-    #    urls = super().get_urls()
-    #    custom_urls = [
-    #        path("event/", lambda request: redirect(reverse("admin:event_moduleinstance_changelist"))),
-    #    ]
-    #    return custom_urls + urls
-
     def get_app_list(self, request, app_label=None):
         """
         Кастомный порядок моделей в приложении event с разделителями.
@@ -47,7 +37,6 @@ class CustomAdminSite(admin.AdminSite):
                     "События",
                     "Contact",
                     "ModuleInstance",
-                    "Checkin",
                     "Action",
                     "Справочники",
                     "CompanyContact",
@@ -255,7 +244,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
     resource_class = ContactResource
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
-    readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list', 'cancel_events_list')
+    readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest']
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, ]
@@ -274,7 +263,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
             'fields': [('comment',)]
         }),
         ('Участие в мероприятиях', {
-            'fields': ['registered_events_list', 'checkin_events_list', 'cancel_events_list'],
+            'fields': ['registered_events_list', 'checkin_events_list'],
         }),
     )
 
@@ -302,13 +291,12 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
 
     def registered_events_list(self, obj):
         """
-        Список мероприятий, где contact=obj, action_type='new', is_last_state=True
+        Список мероприятий, где contact=obj, action_type__in=['new', 'checkin']
         """
         from .models import Action  # или импорт вверху файла
         actions = Action.objects.filter(
             contact=obj,
-            action_type='new',
-            is_last_state=True
+            action_type__in=['new', 'checkin']
         ).select_related('event')
 
         if not actions.exists():
@@ -321,7 +309,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
                 event_name = a.event.name or f"Мероприятие #{a.event.pk}"
 
                 # Форматируем дату действия
-                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
 
                 link = f"""
                 <a href="{event_url}" 
@@ -336,13 +324,12 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
 
     def checkin_events_list(self, obj):
         """
-        Список мероприятий, где contact=obj, action_type='checkin', is_last_state=True
+        Список мероприятий, где contact=obj, action_type='checkin'
         """
         from .models import Action
         actions = Action.objects.filter(
             contact=obj,
-            action_type='checkin',
-            is_last_state=True
+            action_type='checkin'
         ).select_related('event')
 
         if not actions.exists():
@@ -354,7 +341,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
                 event_url = reverse('admin:event_moduleinstance_change', args=[a.event.pk])
                 event_name = a.event.name or f"Мероприятие #{a.event.pk}"
 
-                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
                 link = f"""
                 <a href="{event_url}"
                    onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
@@ -365,38 +352,6 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
         html.append('</ul>')
         return format_html(''.join(html))
     checkin_events_list.short_description = "Чекины"
-
-    def cancel_events_list(self, obj):
-        """
-        Список мероприятий, где contact=obj, action_type='cancel', is_last_state=True
-        """
-        from .models import Action
-        actions = Action.objects.filter(
-            contact=obj,
-            action_type='cancel',
-            is_last_state=True
-        ).select_related('event')
-
-        if not actions.exists():
-            return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
-
-        html = ['<ul>']
-        for a in actions:
-            if a.event:
-                event_url = reverse('admin:event_moduleinstance_change', args=[a.event.pk])
-                event_name = a.event.name or f"Мероприятие #{a.event.pk}"
-
-                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
-                link = f"""
-                <a href="{event_url}"
-                   onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-                   {event_name}
-                </a>
-                """
-                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
-        html.append('</ul>')
-        return format_html(''.join(html))
-    cancel_events_list.short_description = "Отмены"
 
 # Компания
 @admin.register(CompanyContact)
@@ -446,11 +401,11 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             'fields': [('managers', 'producers', 'checkers')]
         }),
         ('Участники', {
-            'fields': [('registrations_count', 'checkins_count'),'registered_list', 'checkin_list', 'cancel_list'],
+            'fields': [('registrations_count', 'checkins_count'),'registered_list', 'checkin_list'],
         }),
     )
-    readonly_fields = ['registered_list', 'checkin_list', 'cancel_list', 'registrations_count', 'checkins_count']
-    autocomplete_fields = ['managers', 'producers', 'checkers',]
+    readonly_fields = ['registered_list', 'checkin_list', 'registrations_count', 'checkins_count']
+    autocomplete_fields = ['managers', 'producers', 'checkers']
     list_display = ('name', 'date_start', 'registrations_count', 'checkins_count', 'is_visible')
     list_editable = ('is_visible',)
     list_filter = ('is_visible',)
@@ -463,17 +418,16 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
     def registrations_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='new').count()
+        return Action.objects.filter(event=obj, action_type__in=['new', 'checkin']).count()
     registrations_count.short_description = 'Регистрации'
 
     def checkins_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='checkin', is_last_state=True).count()
+        return Action.objects.filter(event=obj, action_type='checkin').count()
     checkins_count.short_description = 'Чекины'
 
     def registered_list(self, obj):
         actions = Action.objects.filter(
-            is_last_state=True,
-            action_type='new',
+            action_type__in=['new', 'checkin'],
             event=obj
         ).select_related('contact')
 
@@ -487,7 +441,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
                 contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
 
                 # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
-                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
 
                 # Ссылка с popup-открытием
                 link = f"""
@@ -510,7 +464,6 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         Список чекинившихся (action_type='checkin')
         """
         actions = Action.objects.filter(
-            is_last_state=True,
             action_type='checkin',
             event=obj
         ).select_related('contact')
@@ -523,7 +476,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             if a.contact:
                 contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
                 contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
-                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
+                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
 
                 link = f"""
                 <a href="{contact_url}"
@@ -537,39 +490,6 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         return format_html(''.join(html))
 
     checkin_list.short_description = "Чекины"
-
-    def cancel_list(self, obj):
-        """
-        Список отменивших регистрацию (action_type='cancel')
-        """
-        actions = Action.objects.filter(
-            is_last_state=True,
-            action_type='cancel',
-            event=obj
-        ).select_related('contact')
-
-        if not actions:
-            return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
-
-        html = ['<ul>']
-        for a in actions:
-            if a.contact:
-                contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
-                contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
-                action_date_str = a.action_date.strftime('%Y-%m-%d %H:%M') if a.action_date else ''
-
-                link = f"""
-                <a href="{contact_url}"
-                onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-                {contact_name}
-                </a>
-                """
-                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
-        html.append('</ul>')
-
-        return format_html(''.join(html))
-
-    cancel_list.short_description = "Отмены"
 
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
@@ -646,17 +566,19 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         # Иначе возвращаем стандартную проверку
         return super().has_change_permission(request, obj=obj)
 
+class ContactActionFilter(AutocompleteFilter):
+    title = 'Человек'
+    field_name = 'contact'
 
-# Чекин
-@admin.register(Checkin)
-class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
-    resource_class = CheckinResource
-    search_fields = ['contact__last_name', 'contact__nickname', 'event__name']
-    list_display = ('contact', 'photo_contact', 'event', 'get_buttons_action',)
-    readonly_fields = ('operator', 'get_category_contact', 'get_type_guest_contact')
+# Действие
+@admin.register(Action)
+class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
+    resource_class = ActionResource
+    #resource_class = ActionResource
+    list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
+    list_filter = (ModuleInstanceFilter, ContactActionFilter, 'action_type', 'event__date_start')
     autocomplete_fields = ['contact', 'event']
-    list_filter = (ModuleInstanceFilter, 'contact__category',
-        'contact__type_guest',)
+    readonly_fields = ('action_type', 'create_date', 'update_date', 'create_user', 'update_user')
     list_per_page = 25
     view_on_site = False
     show_change_form_export = False
@@ -664,19 +586,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     class Media:
         js = ('js/checkin_list.js',)
 
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('import/download_template_import_reg/', self.admin_site.admin_view(self.download_template_import_reg), name="template_import_reg"),
-        ]
-        return custom_urls + urls
-
-    def download_template_import_reg(self, request):
-        file_path = os.path.join(os.path.dirname(__file__), "templates", "import_reg.xlsx")
-        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_reg.xlsx")
-
     def get_fields(self, request, obj=None):
-        
         if obj:  # Редактирование записи
             return [
                 ('action_type',),
@@ -684,7 +594,8 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
                 ('contact',),
                 ('photo_contact',),
                 ('get_buttons_action',),
-                ('operator',),
+                ('create_date', 'create_user'),
+                ('update_date',  'update_user'),
             ]
         else:  # Создание новой записи
             return [
@@ -694,33 +605,46 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     
     def get_readonly_fields(self, request, obj=None):
         if obj:  # Редактирование записи
-            return ['contact', 'action_type', 'action_date', 'is_last_state', 'event', 'get_buttons_action', 'photo_contact', 'operator']
+            if request.user.is_superuser == True: # Если суперадмин
+                return ['create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
+            else:
+                return ['action_type', 'contact', 'event', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
         else:  # Создание новой записи
-            return [ 'action_type', 'get_buttons_action']
-
-    # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
-    def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
-        context.update(service.get_params_visible_buttons_save(request, obj))
-        return super().render_change_form(request, context, add, change, form_url, obj)
-
+            return [ 'action_type', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
+    
     actions = ['checkin_actions', 'cancel_actions']
 
     def get_buttons_action(self, obj):
         if not obj or obj.pk is None:
             return format_html('<span>Действия недоступны для новой записи</span>')
 
-        confirm_url = reverse('checkin_confirm', args=[obj.pk])
-        cancel_url = reverse('checkin_cancel', args=[obj.pk])
+        if obj.action_type == 'new':
+            button_url = reverse('checkin_confirm', args=[obj.pk])
+            current_status = 'Зарегистрирован'
+            button_class = 'button-confirm'
+            button_color = '#26a526'
+            button_text = 'Подтвердить'
+        else:
+            button_url = reverse('checkin_cancel', args=[obj.pk])
+            current_status = 'Посетил'
+            button_class = 'button-cancel'
+            button_color = '#dc3545'
+            button_text = 'Отменить'
 
         buttons_html = f'''
-            <div style="display: flex; gap: 5px; justify-content: center; align-items: center;">
-                <button type="button" class="button-confirm" data-url="{confirm_url}" data-id="{obj.pk}" style="background: none;color: #26a526;border: 2px solid #26a526;padding: 5px 5px;border-radius: 3px;font-size: 12px;">Подтвердить</button>
-                <button type="button" class="button-cancel" data-url="{cancel_url}" data-id="{obj.pk}" style="background: none;border: 2px solid #dc3545;padding: 5px 5px;border-radius: 3px;font-size: 12px;color: #dc3545;">Отменить</button>
+            <div style="display: flex; gap: 20px; align-items: center; min-width: 240px;">
+                <div style="width: 120px; text-align: center; white-space: nowrap;">
+                    {current_status}
+                </div>
+                <button type="button" class="{button_class}" data-url="{button_url}" data-id="{obj.pk}" style="width: 120px; background: none;color: {button_color};border: 2px solid {button_color};padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+                    {button_text}
+                </button>
             </div>
         '''
+
         return format_html(buttons_html)
 
-    get_buttons_action.short_description = 'Действия'
+    get_buttons_action.short_description = 'Статус'
 
 
     @admin.action(description='Чекин')
@@ -731,7 +655,7 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
             form = CheckinOrCancelForm(request.POST)
             if form.is_valid():
                 action_type = 'checkin'
-                service.update_actions(action_type, queryset, request.user)
+                service.update_actions(action_type, queryset)
                 count = len(queryset)
                 self.message_user(request, "Подтверждено посещение по событию. Количество человек: %d." % (count))
                 return HttpResponseRedirect(request.get_full_path())
@@ -748,8 +672,8 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         if 'apply' in request.POST:
             form = CheckinOrCancelForm(request.POST)
             if form.is_valid():
-                action_type = 'cancel'
-                service.update_actions(action_type, queryset, request.user)
+                action_type = 'new'
+                service.update_actions(action_type, queryset)
                 count = len(queryset)
                 self.message_user(request, "Отменена регистрация по событию. Количество человек: %d." % (count))
                 return HttpResponseRedirect(request.get_full_path())
@@ -759,39 +683,17 @@ class CheckinAdmin(BaseAdminPage, ImportExportActionModelAdmin):
 
         return render(request, 'event/update_actions.html', {'action_def': 'cancel_actions','message_title': message_title, 'items': queryset,'form': form, 'title':u'Отмена регистрации'})
 
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.create_user = request.user
+        obj.update_user = request.user
+        super().save_model(request, obj, form, change)
+    
     # Выборка регистраций
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.groups.filter(name='Модератор').exists():
             qs = qs.filter(event__checkers=request.user)
-        if request.user.groups.filter(name='Менеджер').exists():
-            qs = qs.filter(event__managers=request.user)
-        return qs.filter(is_last_state=True, action_type='new')
-
-    def save_model(self, request, obj, form, change):
-        obj.operator = request.user
-        super().save_model(request, obj, form, change)
-
-class ContactActionFilter(AutocompleteFilter):
-    title = 'Человек'
-    field_name = 'contact'
-
-# Действие
-@admin.register(Action)
-class ActionAdmin(ExportActionModelAdmin):
-    form = ActionForm
-    resource_class = ActionResource
-    list_display = ('contact', 'action_type', 'event', 'action_date', 'operator')
-    list_filter = (ModuleInstanceFilter, ContactActionFilter, 'action_type', 'event__date_start', 'is_last_state')
-    autocomplete_fields = ['contact', 'event']
-    readonly_fields = ('contact', 'action_type', 'event', 'action_date', 'is_last_state', 'operator')
-    list_per_page = 25
-    view_on_site = False
-    show_change_form_export = False
-
-    # Выборка действий
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
         if request.user.groups.filter(name='Менеджер').exists():
             qs = qs.filter(event__managers=request.user)
         return qs

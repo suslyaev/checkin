@@ -84,14 +84,14 @@ class ContactResource(resources.ModelResource):
                     info_contact.save()
         return row_result
 
-class CheckinResource(resources.ModelResource):
+class ActionResource(resources.ModelResource):
     module_name = fields.Field(column_name='Мероприятие')
     last_name = fields.Field(column_name='Фамилия')
     first_name = fields.Field(column_name='Имя')
     middle_name = fields.Field(column_name='Отчество')
     
     class Meta:
-        model = Checkin
+        model = Action
         fields = ('module_name', 'last_name', 'first_name', 'middle_name')
         import_id_fields = ()  # id не требуется
         skip_unchanged = True
@@ -125,8 +125,8 @@ class CheckinResource(resources.ModelResource):
             if not contact:
                 raise ValueError(f"Ошибка: Не найден человек по указанным данным: {row}")
             
-            # Создаем или получаем запись Checkin
-            checkin, created = Checkin.objects.get_or_create(
+            # Создаем или получаем запись Action
+            checkin, created = Action.objects.get_or_create(
                 contact=contact, event=event,
                 defaults={'operator': request}
             )
@@ -170,7 +170,7 @@ class ModuleInstanceResource(resources.ModelResource):
         return "Да" if obj.is_visible else "Нет"
 
 
-class ActionResource(resources.ModelResource):
+class ActionResourceRead(resources.ModelResource):
     social_networks = fields.Field(column_name='social_networks')
     action_type_display = fields.Field(column_name='action_type_display')
     is_last_state_display = fields.Field(column_name='is_last_state_display')
