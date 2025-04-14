@@ -71,9 +71,6 @@ class CustomAdminSite(admin.AdminSite):
 
 admin.site.__class__ = CustomAdminSite
 
-
-
-
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
     app_label = 'event'
@@ -613,6 +610,17 @@ class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
             return [ 'action_type', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
     
     actions = ['checkin_actions', 'cancel_actions']
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('import/download_template_import_reg/', self.admin_site.admin_view(self.download_template_import_reg), name="template_import_reg"),
+        ]
+        return custom_urls + urls
+
+    def download_template_import_reg(self, request):
+        file_path = os.path.join(os.path.dirname(__file__), "templates", "import_reg.xlsx")
+        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_reg.xlsx")
 
     def get_buttons_action(self, obj):
         if not obj or obj.pk is None:
