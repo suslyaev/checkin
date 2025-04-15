@@ -119,6 +119,7 @@ class ActionView(View):
                 )
 
             action.action_type = action_type
+            action.update_user = request.user
             action.save()
 
             return JsonResponse(
