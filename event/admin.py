@@ -492,10 +492,10 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         html = f"""
             <ul>
                 {items_html}
-                <div id="more-registrations" style="display:none">
+                <div id="more-checkins" style="display:none">
                     {hidden_html}
                 </div>
-            <button type="button" class="button-cancel" onclick="document.getElementById('more-registrations').style.display='block'; this.style.display='none'" style="width: 120px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+            <button type="button" class="button-cancel" onclick="document.getElementById('more-checkins').style.display='block'; this.style.display='none'" style="width: 120px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
                     Показать все ({total})
             </button>
             </ul>
