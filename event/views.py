@@ -69,26 +69,18 @@ def checkin_detail(request, pk):
 def confirm_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         checkin = get_object_or_404(Action, pk=pk)
-        action_type_confirm = 'checkin'  # ID типа действия для подтверждения
-        Action.objects.create(
-            contact=checkin.contact,
-            event=checkin.event,
-            action_type=action_type_confirm,
-            operator=request.user
-        )
+        action_type = 'checkin'  # ID типа действия для подтверждения
+        checkin.action_type = action_type
+        checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Подтверждено'})
 
 
 def cancel_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         checkin = get_object_or_404(Action, pk=pk)
-        action_type_cancel = 'cancel'  # ID типа действия для отмены
-        Action.objects.create(
-            contact=checkin.contact,
-            event=checkin.event,
-            action_type=action_type_cancel,
-            operator=request.user
-        )
+        action_type = 'new'  # ID типа действия для отмены
+        checkin.action_type = action_type
+        checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Отменено'})
 
 
