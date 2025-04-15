@@ -1,4 +1,7 @@
 from django.urls import reverse
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
+
 # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
 def get_params_visible_buttons_save(request, obj):
     button_save = obj is None
@@ -9,21 +12,57 @@ def get_params_visible_buttons_save(request, obj):
         'show_delete': True if request.user.is_superuser == True else False
     }
 
-def get_contact_link(a):
-    contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
-    contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
+def get_link_list_for_event(actions, type, id):
+    if not actions:
+        return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
+    
+    total = actions.count()
+
+    # Отображаем первые 10
+    items_html = ''.join(
+        get_object_link(a, type)
+        for a in actions[:10]
+    )
+
+    # Остальные — в скрытом блоке
+    hidden_html = ''.join(
+        get_object_link(a, type)
+        for a in actions[10:]
+    )
+
+    html = f"""
+        <ul>
+            {items_html}
+            <div id="{id}" style="display:none">
+                {hidden_html}
+            </div>
+    """
+    if total>10:
+        html = html + f"""
+            <button type="button" class="button-cancel" onclick="document.getElementById('{id}').style.display='block'; this.style.display='none'" style="width: 200px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+                    Показать все ({total})
+            </button>
+            </ul>
+        """
+    return mark_safe(html)
+
+def get_object_link(a, type):
+    obj_url = reverse(f'admin:event_{type}_change', args=[a.event.pk])
+    if type == 'moduleinstance':
+        obj_name = a.event.name or f"{type} #{a.event.pk}"
+    elif type == 'contact':
+        obj_name = a.contact.get_fio() or f"{type} #{a.contact.pk}"
 
     # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
     action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
 
     # Ссылка с popup-открытием
     link = f"""
-    <a href="{contact_url}" 
-    onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-    {contact_name}
+    <a href="{obj_url}" 
+        onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
+        {obj_name}
     </a>
     """
-
     # Добавляем дату после имени, например, в круглых скобках
     return f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>'
 

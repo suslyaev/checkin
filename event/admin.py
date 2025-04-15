@@ -297,27 +297,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
             action_type__in=['new', 'checkin']
         ).select_related('event')
 
-        if not actions.exists():
-            return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
-
-        html = ['<ul>']
-        for a in actions:
-            if a.event:
-                event_url = reverse('admin:event_moduleinstance_change', args=[a.event.pk])
-                event_name = a.event.name or f"Мероприятие #{a.event.pk}"
-
-                # Форматируем дату действия
-                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
-
-                link = f"""
-                <a href="{event_url}" 
-                   onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-                   {event_name}
-                </a>
-                """
-                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
-        html.append('</ul>')
-        return format_html(''.join(html))
+        return service.get_link_list_for_event(actions, 'moduleinstance', 'more-registrations')
     registered_events_list.short_description = "Регистрации"
 
     def checkin_events_list(self, obj):
@@ -330,25 +310,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
             action_type='checkin'
         ).select_related('event')
 
-        if not actions.exists():
-            return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
-
-        html = ['<ul>']
-        for a in actions:
-            if a.event:
-                event_url = reverse('admin:event_moduleinstance_change', args=[a.event.pk])
-                event_name = a.event.name or f"Мероприятие #{a.event.pk}"
-
-                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
-                link = f"""
-                <a href="{event_url}"
-                   onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-                   {event_name}
-                </a>
-                """
-                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
-        html.append('</ul>')
-        return format_html(''.join(html))
+        return service.get_link_list_for_event(actions, 'moduleinstance', 'more-checkins')
     checkin_events_list.short_description = "Чекины"
 
 # Компания
@@ -432,35 +394,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             event=obj
         ).select_related('contact')
 
-        if not actions:
-            return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
-        
-        total = actions.count()
-
-        # Отображаем первые 10
-        items_html = ''.join(
-            service.get_contact_link(a)
-            for a in actions[:10]
-        )
-
-        # Остальные — в скрытом блоке
-        hidden_html = ''.join(
-            service.get_contact_link(a)
-            for a in actions[10:]
-        )
-
-        html = f"""
-            <ul>
-                {items_html}
-                <div id="more-registrations" style="display:none">
-                    {hidden_html}
-                </div>
-            <button type="button" class="button-cancel" onclick="document.getElementById('more-registrations').style.display='block'; this.style.display='none'" style="width: 120px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
-                    Показать все ({total})
-            </button>
-            </ul>
-        """
-        return mark_safe(html)
+        return service.get_link_list_for_event(actions, 'contact', 'more-registrations')
     registered_list.short_description = "Регистрации"
 
     def checkin_list(self, obj):
@@ -471,37 +405,7 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             action_type='checkin',
             event=obj
         ).select_related('contact')
-
-        if not actions:
-            return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
-
-        total = actions.count()
-
-        # Отображаем первые 10
-        items_html = ''.join(
-            service.get_contact_link(a)
-            for a in actions[:10]
-        )
-
-        # Остальные — в скрытом блоке
-        hidden_html = ''.join(
-            service.get_contact_link(a)
-            for a in actions[10:]
-        )
-
-        html = f"""
-            <ul>
-                {items_html}
-                <div id="more-checkins" style="display:none">
-                    {hidden_html}
-                </div>
-            <button type="button" class="button-cancel" onclick="document.getElementById('more-checkins').style.display='block'; this.style.display='none'" style="width: 120px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
-                    Показать все ({total})
-            </button>
-            </ul>
-        """
-        return mark_safe(html)
-
+        return service.get_link_list_for_event(actions, 'contact', 'more-checkins')
     checkin_list.short_description = "Чекины"
 
     formfield_overrides = {
