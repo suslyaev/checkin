@@ -71,6 +71,7 @@ def confirm_checkin(request, pk):
         checkin = get_object_or_404(Action, pk=pk)
         action_type = 'checkin'  # ID типа действия для подтверждения
         checkin.action_type = action_type
+        checkin.update_user = request.user
         checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Подтверждено'})
 
@@ -80,6 +81,7 @@ def cancel_checkin(request, pk):
         checkin = get_object_or_404(Action, pk=pk)
         action_type = 'new'  # ID типа действия для отмены
         checkin.action_type = action_type
+        checkin.update_user = request.user
         checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Отменено'})
 

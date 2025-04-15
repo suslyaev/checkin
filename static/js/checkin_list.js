@@ -6,7 +6,6 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch(url, { method: "GET", headers: { "X-Requested-With": "XMLHttpRequest" } })
             .then(response => {
                 if (response.ok) {
-                    //element.parentElement.innerHTML = `<span style="color: #007bff; font-weight: bold;">${statusText}</span>`;
                     element.textContent = statusText;
                     element.style.color = 'gray';
                     element.style.borderColor = 'gray';
