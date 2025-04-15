@@ -1,3 +1,4 @@
+from django.urls import reverse
 # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
 def get_params_visible_buttons_save(request, obj):
     button_save = obj is None
@@ -7,6 +8,24 @@ def get_params_visible_buttons_save(request, obj):
         'show_save_and_add_another': False if request.user.is_superuser == True else False,
         'show_delete': True if request.user.is_superuser == True else False
     }
+
+def get_contact_link(a):
+    contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
+    contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
+
+    # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
+    action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
+
+    # Ссылка с popup-открытием
+    link = f"""
+    <a href="{contact_url}" 
+    onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
+    {contact_name}
+    </a>
+    """
+
+    # Добавляем дату после имени, например, в круглых скобках
+    return f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>'
 
 # Получение имени действия
 def get_name_action(action_type, contact, event, action_date):

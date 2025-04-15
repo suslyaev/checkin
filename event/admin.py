@@ -8,6 +8,7 @@ from import_export.admin import ExportActionModelAdmin, ExportActionMixin, Impor
 from .resources import ContactResource, ModuleInstanceResource, ActionResource, ActionResourceRead
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.http import FileResponse
 import os
@@ -423,6 +424,9 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     checkins_count.short_description = 'Чекины'
 
     def registered_list(self, obj):
+        """
+        Список зарегистрированных (action_type__in=['new', 'checkin'])
+        """
         actions = Action.objects.filter(
             action_type__in=['new', 'checkin'],
             event=obj
@@ -430,30 +434,33 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
 
         if not actions:
             return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
+        
+        total = actions.count()
 
-        html = ['<ul>']
-        for a in actions:
-            if a.contact:
-                contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
-                contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
+        # Отображаем первые 10
+        items_html = ''.join(
+            service.get_contact_link(a)
+            for a in actions[:10]
+        )
 
-                # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
-                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
+        # Остальные — в скрытом блоке
+        hidden_html = ''.join(
+            service.get_contact_link(a)
+            for a in actions[10:]
+        )
 
-                # Ссылка с popup-открытием
-                link = f"""
-                <a href="{contact_url}" 
-                onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-                {contact_name}
-                </a>
-                """
-
-                # Добавляем дату после имени, например, в круглых скобках
-                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
-        html.append('</ul>')
-
-        return format_html(''.join(html))
-
+        html = f"""
+            <ul>
+                {items_html}
+                <div id="more-registrations" style="display:none">
+                    {hidden_html}
+                </div>
+            <button type="button" class="button-cancel" onclick="document.getElementById('more-registrations').style.display='block'; this.style.display='none'" style="width: 120px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+                    Показать все ({total})
+            </button>
+            </ul>
+        """
+        return mark_safe(html)
     registered_list.short_description = "Регистрации"
 
     def checkin_list(self, obj):
@@ -468,23 +475,32 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         if not actions:
             return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
 
-        html = ['<ul>']
-        for a in actions:
-            if a.contact:
-                contact_url = reverse('admin:event_contact_change', args=[a.contact.pk])
-                contact_name = a.contact.get_fio() or f"Контакт #{a.contact.pk}"
-                action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
+        total = actions.count()
 
-                link = f"""
-                <a href="{contact_url}"
-                onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-                {contact_name}
-                </a>
-                """
-                html.append(f'<li>{link} <span style="color: #888;">({action_date_str})</span></li>')
-        html.append('</ul>')
+        # Отображаем первые 10
+        items_html = ''.join(
+            service.get_contact_link(a)
+            for a in actions[:10]
+        )
 
-        return format_html(''.join(html))
+        # Остальные — в скрытом блоке
+        hidden_html = ''.join(
+            service.get_contact_link(a)
+            for a in actions[10:]
+        )
+
+        html = f"""
+            <ul>
+                {items_html}
+                <div id="more-registrations" style="display:none">
+                    {hidden_html}
+                </div>
+            <button type="button" class="button-cancel" onclick="document.getElementById('more-registrations').style.display='block'; this.style.display='none'" style="width: 120px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+                    Показать все ({total})
+            </button>
+            </ul>
+        """
+        return mark_safe(html)
 
     checkin_list.short_description = "Чекины"
 
