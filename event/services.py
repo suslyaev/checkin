@@ -1,6 +1,7 @@
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.utils import timezone
 
 # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
 def get_params_visible_buttons_save(request, obj):
@@ -55,8 +56,7 @@ def get_object_link(a, type):
         obj_name = a.contact.get_fio() or f"{type} #{a.contact.pk}"
 
     # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
-    action_date_str = a.update_date.strftime('%Y-%m-%d %H:%M') if a.update_date else ''
-
+    action_date_str = timezone.localtime(a.update_date).strftime('%Y-%m-%d %H:%M') if a.update_date else ''
     # Ссылка с popup-открытием
     link = f"""
     <a href="{obj_url}" 
