@@ -47,10 +47,11 @@ def get_link_list_for_event(actions, type, id):
     return mark_safe(html)
 
 def get_object_link(a, type):
-    obj_url = reverse(f'admin:event_{type}_change', args=[a.event.pk])
     if type == 'moduleinstance':
+        obj_url = reverse(f'admin:event_{type}_change', args=[a.event.pk])
         obj_name = a.event.name or f"{type} #{a.event.pk}"
     elif type == 'contact':
+        obj_url = reverse(f'admin:event_{type}_change', args=[a.contact.pk])
         obj_name = a.contact.get_fio() or f"{type} #{a.contact.pk}"
 
     # Форматируем дату, например, в формате "YYYY-MM-DD HH:MM"
