@@ -35,3 +35,4 @@ mediafiles/
 # Environment variables
 .env
 
+staticfiles/

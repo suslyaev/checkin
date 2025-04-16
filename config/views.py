@@ -3,7 +3,7 @@ import json
 from django.contrib.auth.decorators import login_required
 from django.db import models
 from django.http import JsonResponse
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth import login, authenticate
 from django.db.models import Q
@@ -66,6 +66,7 @@ def get_user_events(request):
         })
     return JsonResponse(data, safe=False)
 
+
 @login_required
 def get_admin_info(request):
     user = request.user.groups.first()
@@ -92,7 +93,8 @@ class ActionView(View):
             'contact__company',
             'contact__type_guest',
             'event',
-            'operator'
+            'create_user',
+            'update_user'
         ).prefetch_related(
             'contact__infocontact_set__social_network'
         ).order_by('contact__last_name', 'contact__first_name')
@@ -105,93 +107,19 @@ class ActionView(View):
     def post(self, request):
         try:
             data = json.loads(request.body)
-            contact_id = data.get('contact')
-            event_id = data.get('event')
+            action_id = data.get('action_id')
             action_type = data.get('action_type')
-
-            if not all([contact_id, event_id]):
-                return JsonResponse(
-                    {"error": "Не указан контакт или событие"},
-                    status=400
-                )
+            action = get_object_or_404(Action, pk=action_id)
 
             # Проверка доступа к событию
-            if not self._get_user_events(request.user).filter(id=event_id).exists():
+            if not self._get_user_events(request.user).filter(id=action.event.id).exists():
                 return JsonResponse(
                     {"error": "Нет прав для работы с этим мероприятием"},
                     status=403
                 )
 
-            if action_type == 'checkin':
-                # Проверяем существующий чекин
-                existing_action = Action.objects.filter(
-                    contact_id=contact_id,
-                    event_id=event_id,
-                    action_type='checkin'
-                ).first()
-
-                if existing_action:
-                    return JsonResponse(
-                        {"error": "Гость уже зарегистрирован"},
-                        status=400
-                    )
-
-                # Создаем новый чекин
-                action = Action(
-                    contact_id=contact_id,
-                    event_id=event_id,
-                    action_type='checkin',
-                    operator=request.user
-                )
-
-            elif action_type == 'new':
-                # Создаем новую запись с типом 'new'
-                action = Action(
-                    contact_id=contact_id,
-                    event_id=event_id,
-                    action_type='new',
-                    operator=request.user
-                )
-
-            elif action_type == 'cancel':
-                # Находим и удаляем существующий чекин
-                existing_checkin = Action.objects.filter(
-                    contact_id=contact_id,
-                    event_id=event_id,
-                    action_type='checkin'
-                ).first()
-
-                if existing_checkin:
-                    existing_checkin.delete()
-
-                # Создаем новую запись с типом 'new'
-                action = Action(
-                    contact_id=contact_id,
-                    event_id=event_id,
-                    action_type='new',
-                    operator=request.user
-                )
-
-            elif action_type == 'delete':
-                # Находим и удаляем существующий чекин
-                existing_checkin = Action.objects.filter(
-                    contact_id=contact_id,
-                    event_id=event_id,
-                    action_type='new'
-                ).first()
-
-                if existing_checkin:
-                    existing_checkin.delete()
-                else:
-                    existing_checkin = Action.objects.filter(
-                        contact_id=contact_id,
-                        event_id=event_id,
-                        action_type='checkin'
-                    ).first()
-                    if existing_checkin:
-                        existing_checkin.delete()
-
-            action.full_clean()
+            action.action_type = action_type
+            action.update_user = request.user
             action.save()
 
             return JsonResponse(
@@ -228,7 +156,7 @@ class ActionView(View):
             "contact": contact.id,
             "contact_obj": {
                 "id": contact.id,
-                "fio": f"{contact.last_name} {contact.first_name}",  # Оптимизация: замена get_fio()
+                "fio": f"{contact.last_name} {contact.first_name}",
                 "nickname": contact.nickname,
                 "photo_link": contact.photo.url if contact.photo else "-",
                 "category_obj": self._serialize_category(contact.category),
@@ -244,8 +172,9 @@ class ActionView(View):
                 "date_start": event.date_start.isoformat()
             },
             "action_type": action.action_type,
-            "action_date": action.action_date.isoformat(),
-            "operator_obj": self._serialize_operator(action.operator)
+            "action_date": action.update_date.isoformat(),
+            "create_user": self._serialize_operator(action.update_user),
+            "update_user": self._serialize_operator(action.update_user)
         }
 
         return data
@@ -279,7 +208,7 @@ class ActionView(View):
 
     def _serialize_operator(self, operator):
         return {
-            "full_name": f"{operator.first_name} {operator.last_name}".strip() or operator.username
+            "full_name": f"{operator.first_name} {operator.last_name}".strip() or operator.phone
         } if operator else None
 
 

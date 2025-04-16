@@ -1,13 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.contrib.auth.models import Group
-from .models import Action, ModuleInstance, CustomUser
-
-class ActionForm(forms.ModelForm):
-    class Meta:
-        model = Action
-        fields = ('contact', 'event', 'action_type',)
-
+from .models import ModuleInstance, CustomUser
 
 class CheckinOrCancelForm(forms.Form):
     _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)

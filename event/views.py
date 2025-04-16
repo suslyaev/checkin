@@ -2,7 +2,7 @@ from django.contrib.auth import login
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import Checkin, Action, CustomUser, ModuleInstance
+from .models import Action, CustomUser, ModuleInstance
 from django.http import JsonResponse
 
 from django.shortcuts import render
@@ -17,8 +17,7 @@ def checkin_list(request, pk):
     inst = get_object_or_404(ModuleInstance, pk=pk)
 
     # Фильтруем checkin: is_last_state=True, action_type='new', event=inst
-    qs = Checkin.objects.filter(
-        is_last_state=True,
+    qs = Action.objects.filter(
         action_type='new',
         event=inst
     )
@@ -55,7 +54,7 @@ def checkin_detail(request, pk):
     Содержит информацию о мероприятии, человеке, 
     и кнопки "Подтвердить"/"Отменить".
     """
-    checkin = get_object_or_404(Checkin, pk=pk)
+    checkin = get_object_or_404(Action, pk=pk)
 
     # Доп. проверка: если "Модератор", убедиться, что checkin.event.checkers содержит user
     if request.user.groups.filter(name='Модератор').exists():
@@ -69,29 +68,21 @@ def checkin_detail(request, pk):
 
 def confirm_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        checkin = get_object_or_404(Checkin, pk=pk)
-        action_type_confirm = 'checkin'  # ID типа действия для подтверждения
-        Action.objects.create(
-            contact=checkin.contact,
-            event=checkin.event,
-            action_type=action_type_confirm,
-            operator=request.user,
-            is_last_state=True
-        )
+        checkin = get_object_or_404(Action, pk=pk)
+        action_type = 'checkin'  # ID типа действия для подтверждения
+        checkin.action_type = action_type
+        checkin.update_user = request.user
+        checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Подтверждено'})
 
 
 def cancel_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        checkin = get_object_or_404(Checkin, pk=pk)
-        action_type_cancel = 'cancel'  # ID типа действия для отмены
-        Action.objects.create(
-            contact=checkin.contact,
-            event=checkin.event,
-            action_type=action_type_cancel,
-            operator=request.user,
-            is_last_state=True
-        )
+        checkin = get_object_or_404(Action, pk=pk)
+        action_type = 'new'  # ID типа действия для отмены
+        checkin.action_type = action_type
+        checkin.update_user = request.user
+        checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Отменено'})
 
 

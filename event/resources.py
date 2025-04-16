@@ -3,7 +3,7 @@ from django.db import transaction
 from import_export.widgets import ForeignKeyWidget
 from django.db.models import Q
 
-from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, Checkin, CompanyContact, CategoryContact, TypeGuestContact, Action
+from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action
 
 class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
     def clean(self, value, row=None, *args, **kwargs):
@@ -84,14 +84,14 @@ class ContactResource(resources.ModelResource):
                     info_contact.save()
         return row_result
 
-class CheckinResource(resources.ModelResource):
+class ActionResource(resources.ModelResource):
     module_name = fields.Field(column_name='Мероприятие')
     last_name = fields.Field(column_name='Фамилия')
     first_name = fields.Field(column_name='Имя')
     middle_name = fields.Field(column_name='Отчество')
     
     class Meta:
-        model = Checkin
+        model = Action
         fields = ('module_name', 'last_name', 'first_name', 'middle_name')
         import_id_fields = ()  # id не требуется
         skip_unchanged = True
@@ -125,10 +125,10 @@ class CheckinResource(resources.ModelResource):
             if not contact:
                 raise ValueError(f"Ошибка: Не найден человек по указанным данным: {row}")
             
-            # Создаем или получаем запись Checkin
-            checkin, created = Checkin.objects.get_or_create(
+            # Создаем или получаем запись Action
+            checkin, created = Action.objects.get_or_create(
                 contact=contact, event=event,
-                defaults={'operator': request}
+                defaults={'create_user': request}
             )
     
 class ModuleInstanceResource(resources.ModelResource):
@@ -157,11 +157,11 @@ class ModuleInstanceResource(resources.ModelResource):
 
     def dehydrate_registrations_count(self, obj):
         """Считает количество регистраций"""
-        return Action.objects.filter(event=obj, action_type='new').count()
+        return Action.objects.filter(event=obj, action_type__in=['new', 'checkin']).count()
 
     def dehydrate_checkins_count(self, obj):
         """Считает количество чекинов"""
-        return Action.objects.filter(event=obj, action_type='checkin', is_last_state=True).count()
+        return Action.objects.filter(event=obj, action_type='checkin').count()
     
     def dehydrate_is_visible(self, obj):
         """
@@ -170,21 +170,18 @@ class ModuleInstanceResource(resources.ModelResource):
         return "Да" if obj.is_visible else "Нет"
 
 
-class ActionResource(resources.ModelResource):
+class ActionResourceRead(resources.ModelResource):
     social_networks = fields.Field(column_name='social_networks')
     action_type_display = fields.Field(column_name='action_type_display')
-    is_last_state_display = fields.Field(column_name='is_last_state_display')
     
     class Meta:
         model = Action
         fields = ('id', 'event__name', 'contact__last_name', 'contact__first_name', 'contact__middle_name',
                   'contact__nickname', 'contact__company__name', 'contact__category__name', 'contact__type_guest__name',
-                  'action_type_display', 'action_date', 'operator__last_name', 'operator__first_name', 'is_last_state_display',
-                  'social_networks')
+                  'action_type_display', 'update_date', 'create_user__last_name', 'create_user__first_name', 'social_networks')
         export_order = ('id', 'event__name', 'contact__last_name', 'contact__first_name', 'contact__middle_name',
                         'contact__nickname', 'contact__company__name', 'contact__category__name', 'contact__type_guest__name',
-                        'action_type_display', 'action_date', 'operator__last_name', 'operator__first_name', 'is_last_state_display',
-                        'social_networks')
+                        'action_type_display', 'update_date', 'update_user__last_name', 'update_user__first_name', 'social_networks')
 
     def dehydrate_social_networks(self, obj):
         """
@@ -203,9 +200,3 @@ class ActionResource(resources.ModelResource):
             'checkin': 'Чекин'
         }
         return action_types.get(obj.action_type, obj.action_type)
-
-    def dehydrate_is_last_state_display(self, obj):
-        """
-        Преобразует булево значение is_last_state в "Да"/"Нет".
-        """
-        return "Да" if obj.is_last_state else "Нет"
