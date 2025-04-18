@@ -5,8 +5,9 @@ from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, Cust
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
-from .resources import ContactResource, ModuleInstanceResource, ActionResource, ActionResourceRead
+from .resources import ContactResource, ModuleInstanceResource, ActionResource
 from admin_auto_filters.filters import AutocompleteFilter
+from django.db.models import Count
 from django.utils.html import format_html
 from django.urls import reverse
 from django.http import FileResponse
@@ -319,12 +320,16 @@ class CompanyContactAdmin(BaseAdminPage):
     list_editable = ('name', 'comment')
     search_fields = ['name']
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(contact_count=Count('contact'))
+
     def contacts_count_link(self, obj):
         count = obj.contact_set.count()
         url = reverse('admin:event_contact_changelist') + f'?company__pk__exact={obj.pk}'
         return format_html('<a href="{}" target="_blank">{}</a>', url, count)
     contacts_count_link.short_description = 'Контактов'
-    contacts_count_link.admin_order_field = 'contact__count'
+    contacts_count_link.admin_order_field = 'contact_count'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
@@ -336,12 +341,16 @@ class CategoryContactAdmin(BaseAdminPage):
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(contact_count=Count('contact'))
+
     def contacts_count_link(self, obj):
         count = obj.contact_set.count()
         url = reverse('admin:event_contact_changelist') + f'?category__pk__exact={obj.pk}'
         return format_html('<a href="{}" target="_blank">{}</a>', url, count)
     contacts_count_link.short_description = 'Контактов'
-    contacts_count_link.admin_order_field = 'contact__count'
+    contacts_count_link.admin_order_field = 'contact_count'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
@@ -353,12 +362,16 @@ class TypeGuestContactAdmin(BaseAdminPage):
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(contact_count=Count('contact'))
+
     def contacts_count_link(self, obj):
         count = obj.contact_set.count()
         url = reverse('admin:event_contact_changelist') + f'?type_guest__pk__exact={obj.pk}'
         return format_html('<a href="{}" target="_blank">{}</a>', url, count)
     contacts_count_link.short_description = 'Контактов'
-    contacts_count_link.admin_order_field = 'contact__count'
+    contacts_count_link.admin_order_field = 'contact_count'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
