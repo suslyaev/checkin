@@ -8,7 +8,6 @@ from import_export.admin import ExportActionModelAdmin, ExportActionMixin, Impor
 from .resources import ContactResource, ModuleInstanceResource, ActionResource, ActionResourceRead
 from admin_auto_filters.filters import AutocompleteFilter
 from django.utils.html import format_html
-from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.http import FileResponse
 import os
@@ -316,9 +315,16 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
 # Компания
 @admin.register(CompanyContact)
 class CompanyContactAdmin(BaseAdminPage):
-    list_display = ('id', 'name', 'comment')
+    list_display = ('id', 'name', 'comment', 'contacts_count_link')
     list_editable = ('name', 'comment')
     search_fields = ['name']
+
+    def contacts_count_link(self, obj):
+        count = obj.contact_set.count()
+        url = reverse('admin:event_contact_changelist') + f'?company__pk__exact={obj.pk}'
+        return format_html('<a href="{}" target="_blank">{}</a>', url, count)
+    contacts_count_link.short_description = 'Контактов'
+    contacts_count_link.admin_order_field = 'contact__count'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
@@ -326,9 +332,14 @@ class CompanyContactAdmin(BaseAdminPage):
 # Категория
 @admin.register(CategoryContact)
 class CategoryContactAdmin(BaseAdminPage):
-    list_display = ('id', 'name', 'color', 'comment')
+    list_display = ('id', 'name', 'color', 'comment', 'contacts_count_link')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+
+    def contacts_count_link(self, obj):
+        count = obj.contact_set.count()
+        url = reverse('admin:event_contact_changelist') + f'?category__pk__exact={obj.pk}'
+        return format_html('<a href="{}" target="_blank">{}</a>', url, count)
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
@@ -336,9 +347,14 @@ class CategoryContactAdmin(BaseAdminPage):
 # Статус
 @admin.register(TypeGuestContact)
 class TypeGuestContactAdmin(BaseAdminPage):
-    list_display = ('id', 'name', 'color', 'comment')
+    list_display = ('id', 'name', 'color', 'comment', 'contacts_count_link')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+
+    def contacts_count_link(self, obj):
+        count = obj.contact_set.count()
+        url = reverse('admin:event_contact_changelist') + f'?type_guest__pk__exact={obj.pk}'
+        return format_html('<a href="{}" target="_blank">{}</a>', url, count)
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
