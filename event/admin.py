@@ -340,6 +340,8 @@ class CategoryContactAdmin(BaseAdminPage):
         count = obj.contact_set.count()
         url = reverse('admin:event_contact_changelist') + f'?category__pk__exact={obj.pk}'
         return format_html('<a href="{}" target="_blank">{}</a>', url, count)
+    contacts_count_link.short_description = 'Контактов'
+    contacts_count_link.admin_order_field = 'contact__count'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
@@ -355,6 +357,8 @@ class TypeGuestContactAdmin(BaseAdminPage):
         count = obj.contact_set.count()
         url = reverse('admin:event_contact_changelist') + f'?type_guest__pk__exact={obj.pk}'
         return format_html('<a href="{}" target="_blank">{}</a>', url, count)
+    contacts_count_link.short_description = 'Контактов'
+    contacts_count_link.admin_order_field = 'contact__count'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
