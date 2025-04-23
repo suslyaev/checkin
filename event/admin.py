@@ -212,13 +212,9 @@ class TypeGuestContactFilter(AutocompleteFilter):
     title = 'Тип гостя'
     field_name = 'type_guest'
 
-class CategoryContactCheckinFilter(AutocompleteFilter):
-    title = 'Категория человека'
-    field_name = 'get_category_contact'
-
-class TypeGuestContactCheckinFilter(AutocompleteFilter):
-    title = 'Тип гостя'
-    field_name = 'contact'
+class ProducerContactFilter(AutocompleteFilter):
+    title = 'Продюсер'
+    field_name = 'producer'
 
 # Социальная сеть
 @admin.register(SocialNetwork)
@@ -241,9 +237,9 @@ class InfoContactInline(admin.TabularInline):
 class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
     resource_class = ContactResource
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
-    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
+    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
-    autocomplete_fields = ['company', 'category', 'type_guest']
+    autocomplete_fields = ['company', 'category', 'type_guest', 'producer']
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, ]
     show_change_form_export = False
@@ -252,7 +248,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
             'fields': [('last_name', 'first_name', 'middle_name', 'nickname')]
         }),
         (None, {
-            'fields': [('company', 'category', 'type_guest')]
+            'fields': [('company', 'category', 'type_guest'), ('producer',)]
         }),
         ('Фото', {
             'fields': ['photo', 'photo_preview'],

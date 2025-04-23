@@ -160,6 +160,7 @@ class Contact(models.Model):
     company = models.ForeignKey('CompanyContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Компания')
     category = models.ForeignKey('CategoryContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Категория')
     type_guest = models.ForeignKey('TypeGuestContact', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Тип гостя')
+    producer = models.ForeignKey('CustomUser', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Продюсер')
     comment = models.TextField(verbose_name='Комментарий', blank=True, null=True)
     photo = models.ImageField(upload_to='contacts/photos/', blank=True, null=True, verbose_name='Фото сотрудника')
 
