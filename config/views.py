@@ -109,18 +109,50 @@ class ActionView(View):
             data = json.loads(request.body)
             action_id = data.get('action_id')
             action_type = data.get('action_type')
-            action = get_object_or_404(Action, pk=action_id)
 
-            # Проверка доступа к событию
-            if not self._get_user_events(request.user).filter(id=action.event.id).exists():
-                return JsonResponse(
-                    {"error": "Нет прав для работы с этим мероприятием"},
-                    status=403
+            # Если передан action_id, обновляем существующее действие
+            if action_id:
+                action = get_object_or_404(Action, pk=action_id)
+
+                # Проверка доступа к событию
+                if not self._get_user_events(request.user).filter(id=action.event.id).exists():
+                    return JsonResponse(
+                        {"error": "Нет прав для работы с этим мероприятием"},
+                        status=403
+                    )
+
+                action.action_type = action_type
+                action.update_user = request.user
+                action.save()
+
+            # Иначе создаем новое действие
+            else:
+                contact_id = data.get('contact')
+                event_id = data.get('event')
+
+                if not contact_id or not event_id:
+                    return JsonResponse(
+                        {"error": "Необходимо указать контакт и событие"},
+                        status=400
+                    )
+
+                # Проверка доступа к событию
+                if not self._get_user_events(request.user).filter(id=event_id).exists():
+                    return JsonResponse(
+                        {"error": "Нет прав для работы с этим мероприятием"},
+                        status=403
+                    )
+
+                contact = get_object_or_404(Contact, pk=contact_id)
+                event = get_object_or_404(ModuleInstance, pk=event_id)
+
+                action = Action.objects.create(
+                    contact=contact,
+                    event=event,
+                    action_type=action_type,
+                    update_user=request.user,
+                    create_user=request.user
                 )
-
-            action.action_type = action_type
-            action.update_user = request.user
-            action.save()
 
             return JsonResponse(
                 self._serialize_action(action),
@@ -162,7 +194,8 @@ class ActionView(View):
                 "category_obj": self._serialize_category(contact.category),
                 "company_obj": self._serialize_company(contact.company),
                 "type_guest_obj": self._serialize_type_guest(contact.type_guest),
-                "social_networks": self._serialize_social_networks(contact)
+                "social_networks": self._serialize_social_networks(contact),
+                "producer": f"{contact.producer.last_name} {contact.producer.first_name}" if contact.producer else None,
             },
             "event": event.id,
             "module_instance": event.id,
@@ -239,6 +272,7 @@ class AvailableContactsView(View):
             'id': contact.id,
             'fio': contact.get_fio(),
             'photo_link': contact.photo_link(),
+            "nickname": contact.nickname,
         } for contact in available_contacts]
 
         return JsonResponse(contacts_data, safe=False)
