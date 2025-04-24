@@ -1,11 +1,11 @@
 import uuid
 from django.db import models
 from colorfield.fields import ColorField
-from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
 from PIL import Image
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
@@ -15,6 +15,14 @@ PHONE_PATTERNS = {
     "ru": ("+7", 10),
     "uk": ("+44", 10),
 }
+
+STATUS_MODEL = (
+    ('announced', 'Заявлен'),
+    ('invited', 'Приглашён'),
+    ('registered', 'Зарегистрирован'),
+    ('cancelled', 'Отменён'),
+    ('visited', 'Зачекинен')
+)
 
 class CustomUserManager(BaseUserManager):
     """
@@ -254,14 +262,21 @@ class ModuleInstance(models.Model):
 class Action(models.Model):
     contact = models.ForeignKey('Contact', on_delete=models.CASCADE, null=True, verbose_name='Контакт', db_index=True)
     event = models.ForeignKey('ModuleInstance', on_delete=models.CASCADE, null=True, blank=True, verbose_name='Мероприятие', db_index=True)
-    action_type = models.CharField(max_length=100, choices=(('new', 'Регистрация'), ('checkin', 'Чекин')),  verbose_name='Тип действия', default='new', db_index=True)
+    action_type = models.CharField(
+        max_length=100,
+        choices=STATUS_MODEL,
+        verbose_name='Тип действия',
+        default='announced',
+        db_index=True
+    )
+    comment = models.TextField(verbose_name='Комментарий', blank=True, null=True)
     create_date = models.DateTimeField(auto_now_add=True, null=True, blank=True, verbose_name='Дата создания записи')
     update_date = models.DateTimeField(auto_now=True, null=True, blank=True, verbose_name='Дата изменения записи')
     create_user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='create_user', verbose_name='Кто создал')
     update_user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='update_user', verbose_name='Кто обновил')
 
     def __str__(self):
-        return f"{self.contact} -> {self.event} ({self.action_type})"
+        return f"{self.contact} -> {self.event} ({dict(STATUS_MODEL).get(self.action_type, self.action_type or '—')})"
     
     def photo_contact(self):
         if self.contact and self.contact.photo:
@@ -280,6 +295,9 @@ class Action(models.Model):
             return self.contact.type_guest
         return None
     get_type_guest_contact.short_description = 'Статус'
+
+    def get_action_type_display(self):
+        return dict(STATUS_MODEL).get(self.action_type, self.action_type or '—')
     
     class Meta:
         verbose_name = 'Действие'
@@ -291,6 +309,51 @@ class Action(models.Model):
                 violation_error_message="Человек уже зарегистрирован на данное мероприятие."
             )
         ]
+
+@receiver(pre_save, sender=Action)
+def log_action_status_change(sender, instance, **kwargs):
+    if not instance.pk:
+        # Новая запись, не логируем
+        return
+
+    try:
+        old_instance = Action.objects.get(pk=instance.pk)
+    except Action.DoesNotExist:
+        return
+
+    if old_instance.action_type != instance.action_type:
+        ActionLog.objects.create(
+            action=instance,
+            old_status=old_instance.action_type,
+            new_status=instance.action_type,
+            create_user=instance.update_user
+        )
+
+# Аудит действий
+class ActionLog(models.Model):
+    action = models.ForeignKey('Action', on_delete=models.CASCADE, verbose_name='Действие')
+    old_status = models.CharField(
+        max_length=100,
+        choices=STATUS_MODEL,
+        verbose_name='Предыдущий статус'
+    )
+    new_status = models.CharField(
+        max_length=100,
+        choices=STATUS_MODEL,
+        verbose_name='Новый статус'
+    )
+    create_date = models.DateTimeField(auto_now_add=True, null=True, blank=True, verbose_name='Дата создания записи')
+    create_user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Кто создал')
+
+    def get_old_status_display(self):
+        return dict(STATUS_MODEL).get(self.old_status, self.old_status or '—')
+
+    def get_new_status_display(self):
+        return dict(STATUS_MODEL).get(self.new_status, self.new_status or '—')
+
+    class Meta:
+        verbose_name = 'Запись аудита'
+        verbose_name_plural = 'Аудит действий'
 
 # Социальные сети
 class SocialNetwork(BaseModelClass):
