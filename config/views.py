@@ -52,7 +52,7 @@ def get_user_events(request):
         # Подсчитываем количество уникальных гостей для события
         guests_count = Action.objects.filter(
             event=event,
-            action_type__in=['new', 'checkin']  # Учитываем только действия регистрации и чекина
+            action_type__in=['registered', 'checkin']  # Учитываем только действия регистрации и чекина
         ).values('contact').distinct().count()  # Считаем уникальных гостей
 
         data.append({
@@ -259,7 +259,7 @@ class AvailableContactsView(View):
         # Получаем всех гостей, которые уже есть в мероприятии
         existing_guests = Action.objects.filter(
             event_id=event_id,
-            action_type__in=['new', 'checkin']
+            action_type__in=['registered', 'checkin']
         ).values_list('contact_id', flat=True)
 
         # Получаем всех доступных гостей, которых нет в мероприятии
@@ -311,21 +311,20 @@ class ContactCreateView(View):
             contact = Contact.objects.create(
                 last_name=data['last_name'],
                 first_name=data['first_name'],
-                middle_name=data.get('middle_name'),
-                company_id=data.get('company'),
-                category_id=data.get('category'),
-                type_guest_id=data.get('type_guest'),
-                comment=data.get('comment')
+                middle_name=data['middle_name'],
+                company_id=data['company'],
+                category_id=data['category'],
+                type_guest_id=data['type_guest'],
+                comment=data['comment']
             )
 
             # Создаем действие для события
-            action = None
-            if data.get('event'):
-                action = Action.objects.create(
+            if data['event']:
+                Action.objects.create(
                     contact=contact,
                     event_id=data['event'],
-                    action_type='new',
-                    operator=request.user
+                    action_type='registered',
+                    create_user=request.user
                 )
 
             # Получаем социальные сети
