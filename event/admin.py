@@ -286,29 +286,28 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
 
     def registered_events_list(self, obj):
         """
-        Список мероприятий, где contact=obj, action_type__in=['new', 'checkin']
+        Список мероприятий, где contact=obj
         """
         from .models import Action  # или импорт вверху файла
         actions = Action.objects.filter(
-            contact=obj,
-            action_type__in=['new', 'checkin']
+            contact=obj
         ).select_related('event')
 
         return service.get_link_list_for_event(actions, 'moduleinstance', 'more-registrations')
-    registered_events_list.short_description = "Регистрации"
+    registered_events_list.short_description = "Заявлено"
 
     def checkin_events_list(self, obj):
         """
-        Список мероприятий, где contact=obj, action_type='checkin'
+        Список мероприятий, где contact=obj, action_type='visited'
         """
         from .models import Action
         actions = Action.objects.filter(
             contact=obj,
-            action_type='checkin'
+            action_type='visited'
         ).select_related('event')
 
         return service.get_link_list_for_event(actions, 'moduleinstance', 'more-checkins')
-    checkin_events_list.short_description = "Чекины"
+    checkin_events_list.short_description = "Посещено"
 
 # Компания
 @admin.register(CompanyContact)
@@ -391,12 +390,12 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             'fields': [('managers', 'producers', 'checkers')]
         }),
         ('Участники', {
-            'fields': [('registrations_count', 'checkins_count'),'registered_list', 'checkin_list'],
+            'fields': [('announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count'), 'checkin_list'],
         }),
     )
-    readonly_fields = ['registered_list', 'checkin_list', 'registrations_count', 'checkins_count']
+    readonly_fields = ['checkin_list', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count']
     autocomplete_fields = ['managers', 'producers', 'checkers']
-    list_display = ('name', 'date_start', 'registrations_count', 'checkins_count', 'is_visible')
+    list_display = ('name', 'date_start', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count', 'is_visible')
     list_editable = ('is_visible',)
     list_filter = ('is_visible',)
     show_change_form_export = False
@@ -407,36 +406,36 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
-    def registrations_count(self, obj):
-        return Action.objects.filter(event=obj, action_type__in=['new', 'checkin']).count()
-    registrations_count.short_description = 'Регистрации'
+    def announced_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='announced').count()
+    announced_count.short_description = 'Заявлено'
+
+    def invited_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='invited').count()
+    invited_count.short_description = 'Приглашено'
+
+    def cancelled_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='cancelled').count()
+    cancelled_count.short_description = 'Отклонено'
+
+    def registered_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='registered').count()
+    registered_count.short_description = 'Согласовано'
 
     def checkins_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='checkin').count()
-    checkins_count.short_description = 'Чекины'
-
-    def registered_list(self, obj):
-        """
-        Список зарегистрированных (action_type__in=['new', 'checkin'])
-        """
-        actions = Action.objects.filter(
-            action_type__in=['new', 'checkin'],
-            event=obj
-        ).select_related('contact')
-
-        return service.get_link_list_for_event(actions, 'contact', 'more-registrations')
-    registered_list.short_description = "Регистрации"
+        return Action.objects.filter(event=obj, action_type='visited').count()
+    checkins_count.short_description = 'Посещено'
 
     def checkin_list(self, obj):
         """
-        Список чекинившихся (action_type='checkin')
+        Список чекинившихся (action_type='visited')
         """
         actions = Action.objects.filter(
-            action_type='checkin',
+            action_type='visited',
             event=obj
         ).select_related('contact')
         return service.get_link_list_for_event(actions, 'contact', 'more-checkins')
-    checkin_list.short_description = "Чекины"
+    checkin_list.short_description = "Посещено"
 
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
