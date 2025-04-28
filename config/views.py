@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.core.paginator import Paginator
 
 from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, \
     TypeGuestContact
@@ -253,29 +254,41 @@ def custom_logout(request):
 class AvailableContactsView(View):
     def get(self, request):
         event_id = request.GET.get('event_id')
+        search = request.GET.get('search', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 30))
+
         if not event_id:
             return JsonResponse({"error": "Не указан ID события"}, status=400)
 
-        # Получаем всех гостей, которые уже есть в мероприятии
         existing_guests = Action.objects.filter(
             event_id=event_id,
             action_type__in=['registered', 'checkin']
         ).values_list('contact_id', flat=True)
 
-        # Получаем всех доступных гостей, которых нет в мероприятии
-        available_contacts = Contact.objects.exclude(
-            id__in=existing_guests
-        )
+        qs = Contact.objects.exclude(id__in=existing_guests)
+        if search:
+            qs = qs.filter(
+                Q(last_name__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(nickname__icontains=search)
+            )
 
-        # Сериализуем данные
+        paginator = Paginator(qs, page_size)
+        page_obj = paginator.get_page(page)
+
         contacts_data = [{
             'id': contact.id,
             'fio': contact.get_fio(),
             'photo_link': contact.photo_link(),
             "nickname": contact.nickname,
-        } for contact in available_contacts]
+        } for contact in page_obj.object_list]
 
-        return JsonResponse(contacts_data, safe=False)
+        return JsonResponse({
+            "results": contacts_data,
+            "has_next": page_obj.has_next(),
+            "page": page,
+        }, safe=False)
 
 
 class DirectoryView(View):
