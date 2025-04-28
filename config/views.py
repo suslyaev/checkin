@@ -256,7 +256,7 @@ class AvailableContactsView(View):
         event_id = request.GET.get('event_id')
         search = request.GET.get('search', '')
         page = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('page_size', 30))
+        page_size = int(request.GET.get('page_size', 70))
 
         if not event_id:
             return JsonResponse({"error": "Не указан ID события"}, status=400)
