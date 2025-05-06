@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const buttonsConfirm = document.querySelectorAll(".button-confirm");
-    const buttonsCancel = document.querySelectorAll(".button-cancel");
+    const buttonsInvited = document.querySelectorAll(".button-invited");
+    const buttonsRegistered = document.querySelectorAll(".button-registered");
+    const buttonsCancelled = document.querySelectorAll(".button-cancelled");
+    const buttonsVisited = document.querySelectorAll(".button-visited");
+    const buttonsCancelCheckin = document.querySelectorAll(".button-cancel-checkin");
 
     function sendAction(url, element, statusText) {
         fetch(url, { method: "GET", headers: { "X-Requested-With": "XMLHttpRequest" } })
@@ -20,17 +23,34 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
-    buttonsConfirm.forEach(button => {
+    buttonsInvited.forEach(button => {
         button.addEventListener("click", function () {
             const url = this.dataset.url;
-            sendAction(url, this, "Подтверждено");
+            sendAction(url, this, "Приглашён");
         });
     });
-
-    buttonsCancel.forEach(button => {
+    buttonsRegistered.forEach(button => {
         button.addEventListener("click", function () {
             const url = this.dataset.url;
-            sendAction(url, this, "Отменено");
+            sendAction(url, this, "Подтвердил");
+        });
+    });
+    buttonsCancelled.forEach(button => {
+        button.addEventListener("click", function () {
+            const url = this.dataset.url;
+            sendAction(url, this, "Отклонил");
+        });
+    });
+    buttonsVisited.forEach(button => {
+        button.addEventListener("click", function () {
+            const url = this.dataset.url;
+            sendAction(url, this, "Зачекинен");
+        });
+    });
+    buttonsCancelCheckin.forEach(button => {
+        button.addEventListener("click", function () {
+            const url = this.dataset.url;
+            sendAction(url, this, "Чекин отменен");
         });
     });
 });

@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.contrib.auth import logout
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.core.paginator import Paginator
 
 from event.models import ModuleInstance, Action, Contact, SocialNetwork, InfoContact, CompanyContact, CategoryContact, \
     TypeGuestContact
@@ -52,7 +53,7 @@ def get_user_events(request):
         # Подсчитываем количество уникальных гостей для события
         guests_count = Action.objects.filter(
             event=event,
-            action_type__in=['new', 'checkin']  # Учитываем только действия регистрации и чекина
+            action_type__in=['registered', 'checkin']  # Учитываем только действия регистрации и чекина
         ).values('contact').distinct().count()  # Считаем уникальных гостей
 
         data.append({
@@ -109,18 +110,50 @@ class ActionView(View):
             data = json.loads(request.body)
             action_id = data.get('action_id')
             action_type = data.get('action_type')
-            action = get_object_or_404(Action, pk=action_id)
 
-            # Проверка доступа к событию
-            if not self._get_user_events(request.user).filter(id=action.event.id).exists():
-                return JsonResponse(
-                    {"error": "Нет прав для работы с этим мероприятием"},
-                    status=403
+            # Если передан action_id, обновляем существующее действие
+            if action_id:
+                action = get_object_or_404(Action, pk=action_id)
+
+                # Проверка доступа к событию
+                if not self._get_user_events(request.user).filter(id=action.event.id).exists():
+                    return JsonResponse(
+                        {"error": "Нет прав для работы с этим мероприятием"},
+                        status=403
+                    )
+
+                action.action_type = action_type
+                action.update_user = request.user
+                action.save()
+
+            # Иначе создаем новое действие
+            else:
+                contact_id = data.get('contact')
+                event_id = data.get('event')
+
+                if not contact_id or not event_id:
+                    return JsonResponse(
+                        {"error": "Необходимо указать контакт и событие"},
+                        status=400
+                    )
+
+                # Проверка доступа к событию
+                if not self._get_user_events(request.user).filter(id=event_id).exists():
+                    return JsonResponse(
+                        {"error": "Нет прав для работы с этим мероприятием"},
+                        status=403
+                    )
+
+                contact = get_object_or_404(Contact, pk=contact_id)
+                event = get_object_or_404(ModuleInstance, pk=event_id)
+
+                action = Action.objects.create(
+                    contact=contact,
+                    event=event,
+                    action_type=action_type,
+                    update_user=request.user,
+                    create_user=request.user
                 )
-
-            action.action_type = action_type
-            action.update_user = request.user
-            action.save()
 
             return JsonResponse(
                 self._serialize_action(action),
@@ -162,7 +195,8 @@ class ActionView(View):
                 "category_obj": self._serialize_category(contact.category),
                 "company_obj": self._serialize_company(contact.company),
                 "type_guest_obj": self._serialize_type_guest(contact.type_guest),
-                "social_networks": self._serialize_social_networks(contact)
+                "social_networks": self._serialize_social_networks(contact),
+                "producer": f"{contact.producer.last_name} {contact.producer.first_name}" if contact.producer else None,
             },
             "event": event.id,
             "module_instance": event.id,
@@ -220,28 +254,41 @@ def custom_logout(request):
 class AvailableContactsView(View):
     def get(self, request):
         event_id = request.GET.get('event_id')
+        search = request.GET.get('search', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 100))
+
         if not event_id:
             return JsonResponse({"error": "Не указан ID события"}, status=400)
 
-        # Получаем всех гостей, которые уже есть в мероприятии
         existing_guests = Action.objects.filter(
             event_id=event_id,
-            action_type__in=['new', 'checkin']
+            action_type__in=['registered', 'checkin']
         ).values_list('contact_id', flat=True)
 
-        # Получаем всех доступных гостей, которых нет в мероприятии
-        available_contacts = Contact.objects.exclude(
-            id__in=existing_guests
-        )
+        qs = Contact.objects.exclude(id__in=existing_guests)
+        if search:
+            qs = qs.filter(
+                Q(last_name__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(nickname__icontains=search)
+            )
 
-        # Сериализуем данные
+        paginator = Paginator(qs, page_size)
+        page_obj = paginator.get_page(page)
+
         contacts_data = [{
             'id': contact.id,
             'fio': contact.get_fio(),
             'photo_link': contact.photo_link(),
-        } for contact in available_contacts]
+            "nickname": contact.nickname,
+        } for contact in page_obj.object_list]
 
-        return JsonResponse(contacts_data, safe=False)
+        return JsonResponse({
+            "results": contacts_data,
+            "has_next": page_obj.has_next(),
+            "page": page,
+        }, safe=False)
 
 
 class DirectoryView(View):
@@ -277,21 +324,20 @@ class ContactCreateView(View):
             contact = Contact.objects.create(
                 last_name=data['last_name'],
                 first_name=data['first_name'],
-                middle_name=data.get('middle_name'),
-                company_id=data.get('company'),
-                category_id=data.get('category'),
-                type_guest_id=data.get('type_guest'),
-                comment=data.get('comment')
+                middle_name=data['middle_name'],
+                company_id=data['company'],
+                category_id=data['category'],
+                type_guest_id=data['type_guest'],
+                comment=data['comment']
             )
 
             # Создаем действие для события
-            action = None
-            if data.get('event'):
-                action = Action.objects.create(
+            if data['event']:
+                Action.objects.create(
                     contact=contact,
                     event_id=data['event'],
-                    action_type='new',
-                    operator=request.user
+                    action_type='registered',
+                    create_user=request.user
                 )
 
             # Получаем социальные сети

@@ -65,11 +65,12 @@ def checkin_detail(request, pk):
         'checkin': checkin,
     })
 
+### Представления для приложения ###
 
 def confirm_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         checkin = get_object_or_404(Action, pk=pk)
-        action_type = 'checkin'  # ID типа действия для подтверждения
+        action_type = 'visited'
         checkin.action_type = action_type
         checkin.update_user = request.user
         checkin.save()
@@ -79,11 +80,53 @@ def confirm_checkin(request, pk):
 def cancel_checkin(request, pk):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         checkin = get_object_or_404(Action, pk=pk)
-        action_type = 'new'  # ID типа действия для отмены
+        action_type = 'registered'
         checkin.action_type = action_type
         checkin.update_user = request.user
         checkin.save()
         return JsonResponse({'status': 'success', 'message': 'Отменено'})
+
+### Представления для портала ###
+
+# Приглашение
+def action_invited(request, pk):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        checkin = get_object_or_404(Action, pk=pk)
+        action_type = 'invited'
+        checkin.action_type = action_type
+        checkin.update_user = request.user
+        checkin.save()
+        return JsonResponse({'status': 'success', 'message': 'Приглашён'})
+
+# Отмена
+def action_cancelled(request, pk):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        checkin = get_object_or_404(Action, pk=pk)
+        action_type = 'cancelled'
+        checkin.action_type = action_type
+        checkin.update_user = request.user
+        checkin.save()
+        return JsonResponse({'status': 'success', 'message': 'Отменён'})
+
+# Регистрация
+def action_registered(request, pk):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        checkin = get_object_or_404(Action, pk=pk)
+        action_type = 'registered'
+        checkin.action_type = action_type
+        checkin.update_user = request.user
+        checkin.save()
+        return JsonResponse({'status': 'success', 'message': 'Зарегистрирован'})
+
+# Чекин
+def action_visited(request, pk):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        checkin = get_object_or_404(Action, pk=pk)
+        action_type = 'visited'
+        checkin.action_type = action_type
+        checkin.update_user = request.user
+        checkin.save()
+        return JsonResponse({'status': 'success', 'message': 'Отмечен'})
 
 
 def telegram_admin_auth(request):

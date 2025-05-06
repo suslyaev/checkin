@@ -1,6 +1,6 @@
 from django.contrib import admin
 import event.services as service
-from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action
+from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, ActionLog
 from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
@@ -8,10 +8,11 @@ from import_export.admin import ExportActionModelAdmin, ExportActionMixin, Impor
 from .resources import ContactResource, ModuleInstanceResource, ActionResource
 from admin_auto_filters.filters import AutocompleteFilter
 from django.db.models import Count
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.urls import reverse
 from django.http import FileResponse
 import os
+from django.utils import timezone
 from django.forms import Textarea
 from django.db import models
 from django.shortcuts import render
@@ -212,13 +213,9 @@ class TypeGuestContactFilter(AutocompleteFilter):
     title = 'Тип гостя'
     field_name = 'type_guest'
 
-class CategoryContactCheckinFilter(AutocompleteFilter):
-    title = 'Категория человека'
-    field_name = 'get_category_contact'
-
-class TypeGuestContactCheckinFilter(AutocompleteFilter):
-    title = 'Тип гостя'
-    field_name = 'contact'
+class ProducerContactFilter(AutocompleteFilter):
+    title = 'Продюсер'
+    field_name = 'producer'
 
 # Социальная сеть
 @admin.register(SocialNetwork)
@@ -241,9 +238,9 @@ class InfoContactInline(admin.TabularInline):
 class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
     resource_class = ContactResource
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
-    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter)
+    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
-    autocomplete_fields = ['company', 'category', 'type_guest']
+    autocomplete_fields = ['company', 'category', 'type_guest', 'producer']
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, ]
     show_change_form_export = False
@@ -252,7 +249,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
             'fields': [('last_name', 'first_name', 'middle_name', 'nickname')]
         }),
         (None, {
-            'fields': [('company', 'category', 'type_guest')]
+            'fields': [('company', 'category', 'type_guest'), ('producer',)]
         }),
         ('Фото', {
             'fields': ['photo', 'photo_preview'],
@@ -289,29 +286,28 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
 
     def registered_events_list(self, obj):
         """
-        Список мероприятий, где contact=obj, action_type__in=['new', 'checkin']
+        Список мероприятий, где contact=obj
         """
         from .models import Action  # или импорт вверху файла
         actions = Action.objects.filter(
-            contact=obj,
-            action_type__in=['new', 'checkin']
+            contact=obj
         ).select_related('event')
 
         return service.get_link_list_for_event(actions, 'moduleinstance', 'more-registrations')
-    registered_events_list.short_description = "Регистрации"
+    registered_events_list.short_description = "Заявлено"
 
     def checkin_events_list(self, obj):
         """
-        Список мероприятий, где contact=obj, action_type='checkin'
+        Список мероприятий, где contact=obj, action_type='visited'
         """
         from .models import Action
         actions = Action.objects.filter(
             contact=obj,
-            action_type='checkin'
+            action_type='visited'
         ).select_related('event')
 
         return service.get_link_list_for_event(actions, 'moduleinstance', 'more-checkins')
-    checkin_events_list.short_description = "Чекины"
+    checkin_events_list.short_description = "Посещено"
 
 # Компания
 @admin.register(CompanyContact)
@@ -394,12 +390,12 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             'fields': [('managers', 'producers', 'checkers')]
         }),
         ('Участники', {
-            'fields': [('registrations_count', 'checkins_count'),'registered_list', 'checkin_list'],
+            'fields': [('announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count'), 'checkin_list'],
         }),
     )
-    readonly_fields = ['registered_list', 'checkin_list', 'registrations_count', 'checkins_count']
+    readonly_fields = ['checkin_list', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count']
     autocomplete_fields = ['managers', 'producers', 'checkers']
-    list_display = ('name', 'date_start', 'registrations_count', 'checkins_count', 'is_visible')
+    list_display = ('name', 'date_start', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count', 'is_visible')
     list_editable = ('is_visible',)
     list_filter = ('is_visible',)
     show_change_form_export = False
@@ -410,36 +406,36 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
-    def registrations_count(self, obj):
-        return Action.objects.filter(event=obj, action_type__in=['new', 'checkin']).count()
-    registrations_count.short_description = 'Регистрации'
+    def announced_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='announced').count()
+    announced_count.short_description = 'Заявлено'
+
+    def invited_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='invited').count()
+    invited_count.short_description = 'Приглашено'
+
+    def cancelled_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='cancelled').count()
+    cancelled_count.short_description = 'Отклонено'
+
+    def registered_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='registered').count()
+    registered_count.short_description = 'Согласовано'
 
     def checkins_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='checkin').count()
-    checkins_count.short_description = 'Чекины'
-
-    def registered_list(self, obj):
-        """
-        Список зарегистрированных (action_type__in=['new', 'checkin'])
-        """
-        actions = Action.objects.filter(
-            action_type__in=['new', 'checkin'],
-            event=obj
-        ).select_related('contact')
-
-        return service.get_link_list_for_event(actions, 'contact', 'more-registrations')
-    registered_list.short_description = "Регистрации"
+        return Action.objects.filter(event=obj, action_type='visited').count()
+    checkins_count.short_description = 'Посещено'
 
     def checkin_list(self, obj):
         """
-        Список чекинившихся (action_type='checkin')
+        Список чекинившихся (action_type='visited')
         """
         actions = Action.objects.filter(
-            action_type='checkin',
+            action_type='visited',
             event=obj
         ).select_related('contact')
         return service.get_link_list_for_event(actions, 'contact', 'more-checkins')
-    checkin_list.short_description = "Чекины"
+    checkin_list.short_description = "Посещено"
 
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
@@ -524,11 +520,11 @@ class ContactActionFilter(AutocompleteFilter):
 @admin.register(Action)
 class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     resource_class = ActionResource
-    #resource_class = ActionResource
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
     list_filter = (ModuleInstanceFilter, ContactActionFilter, 'action_type', 'event__date_start')
+    search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
     autocomplete_fields = ['contact', 'event']
-    readonly_fields = ('action_type', 'create_date', 'update_date', 'create_user', 'update_user')
+    readonly_fields = ('action_type', 'create_date', 'update_date', 'create_user', 'update_user', 'audit_log_table')
     list_per_page = 25
     view_on_site = False
     show_change_form_export = False
@@ -539,30 +535,30 @@ class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
     def get_fields(self, request, obj=None):
         if obj:  # Редактирование записи
             return [
-                ('action_type',),
                 ('event',),
                 ('contact',),
                 ('photo_contact',),
                 ('get_buttons_action',),
+                ('comment',),
                 ('create_date', 'create_user'),
                 ('update_date',  'update_user'),
+                ('audit_log_table',)
             ]
         else:  # Создание новой записи
             return [
                 ('contact',),
                 ('event',),
+                ('comment',),
             ]
     
     def get_readonly_fields(self, request, obj=None):
         if obj:  # Редактирование записи
             if request.user.is_superuser == True: # Если суперадмин
-                return ['create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
+                return ['create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action', 'audit_log_table']
             else:
-                return ['action_type', 'contact', 'event', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
+                return ['action_type', 'contact', 'event', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action', 'audit_log_table']
         else:  # Создание новой записи
-            return [ 'action_type', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action']
-    
-    actions = ['checkin_actions', 'cancel_actions']
+            return [ 'action_type', 'create_date', 'create_user', 'update_date',  'update_user', 'photo_contact', 'get_buttons_action', 'audit_log_table']
 
     def get_urls(self):
         urls = super().get_urls()
@@ -579,43 +575,137 @@ class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         if not obj or obj.pk is None:
             return format_html('<span>Действия недоступны для новой записи</span>')
 
-        if obj.action_type == 'new':
-            button_url = reverse('checkin_confirm', args=[obj.pk])
-            current_status = 'Зарегистрирован'
-            button_class = 'button-confirm'
-            button_color = '#26a526'
-            button_text = 'Подтвердить'
-        else:
-            button_url = reverse('checkin_cancel', args=[obj.pk])
-            current_status = 'Посетил'
-            button_class = 'button-cancel'
-            button_color = '#dc3545'
-            button_text = 'Отменить'
+        buttons = []
+        if obj.action_type == 'announced':
+            buttons.append({
+                'button_url': reverse('action_invited', args=[obj.pk]),
+                'current_status': 'Заявлен',
+                'button_class': 'button-invited',
+                'button_color': '#007bff',
+                'button_text': 'Пригласить'
+            })
+        elif obj.action_type == 'invited':
+            buttons.append({
+                'button_url': reverse('action_registered', args=[obj.pk]),
+                'current_status': 'Приглашён',
+                'button_class': 'button-registered',
+                'button_color': '#28a745',
+                'button_text': 'Подтвердил'
+            })
+            buttons.append({
+                'button_url': reverse('action_cancelled', args=[obj.pk]),
+                'current_status': 'Приглашён',
+                'button_class': 'button-cancelled',
+                'button_color': '#dc3545',
+                'button_text': 'Отклонил'
+            })
+        elif obj.action_type == 'registered':
+            buttons.append({
+                'button_url': reverse('action_visited', args=[obj.pk]),
+                'current_status': 'Зарегистрирован',
+                'button_class': 'button-visited',
+                'button_color': '#6610f2',
+                'button_text': 'Чекин'
+            })
+        elif obj.action_type == 'visited':
+            buttons.append({
+                'button_url': reverse('action_registered', args=[obj.pk]),
+                'current_status': 'Отмечен',
+                'button_class': 'button-cancel-checkin',
+                'button_color': '#dc3545',
+                'button_text': 'Отменить чекин'
+            })
+        elif obj.action_type == 'cancelled':
+            buttons.append({
+                'button_url': reverse('action_invited', args=[obj.pk]),
+                'current_status': 'Отменён',
+                'button_class': 'button-invited',
+                'button_color': '#28a745',
+                'button_text': 'Пригласить'
+            })
 
         buttons_html = f'''
             <div style="display: flex; gap: 20px; align-items: center; min-width: 240px;">
                 <div style="width: 120px; text-align: center; white-space: nowrap;">
-                    {current_status}
+                    {obj.get_action_type_display()}
                 </div>
-                <button type="button" class="{button_class}" data-url="{button_url}" data-id="{obj.pk}" style="width: 120px; background: none;color: {button_color};border: 2px solid {button_color};padding: 5px 5px;border-radius: 3px;font-size: 12px;">
-                    {button_text}
-                </button>
-            </div>
         '''
+        for button in buttons: buttons_html = buttons_html + f'''
+                <button type="button" class="{button['button_class']}" data-url="{button['button_url']}" data-id="{obj.pk}" style="width: 120px; background: none;color: {button['button_color']};border: 2px solid {button['button_color']};padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+                    {button['button_text']}
+                </button>
+        '''
+            
+        buttons_html = buttons_html + '</div>'
 
         return format_html(buttons_html)
 
     get_buttons_action.short_description = 'Статус'
 
+    actions = ['invited_actions', 'registered_actions', 'cancelled_actions', 'visited_actions']
 
-    @admin.action(description='Чекин')
-    def checkin_actions(self, request, queryset):
+    @admin.action(description='В статус Приглашён')
+    def invited_actions(self, request, queryset):
+        message_title = 'Ниже указаны люди, которых надо отметить как приглашённых:'
+        form = None
+        if 'apply' in request.POST:
+            form = CheckinOrCancelForm(request.POST)
+            if form.is_valid():
+                action_type = 'invited'
+                service.update_actions(action_type, queryset)
+                count = len(queryset)
+                self.message_user(request, "Приглашены на событие. Количество человек: %d." % (count))
+                return HttpResponseRedirect(request.get_full_path())
+
+        if not form:
+            form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
+
+        return render(request, 'event/update_actions.html', {'action_def': 'invited_actions', 'message_title': message_title, 'items': queryset,'form': form, 'title':u'Приглашение на событие'})
+    
+    @admin.action(description='В статус Зарегистрирован')
+    def registered_actions(self, request, queryset):
+        message_title = 'Ниже указаны люди, которых надо отметить как согласившихся на посещение события:'
+        form = None
+        if 'apply' in request.POST:
+            form = CheckinOrCancelForm(request.POST)
+            if form.is_valid():
+                action_type = 'registered'
+                service.update_actions(action_type, queryset)
+                count = len(queryset)
+                self.message_user(request, "Согласовали посещение события. Количество человек: %d." % (count))
+                return HttpResponseRedirect(request.get_full_path())
+
+        if not form:
+            form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
+
+        return render(request, 'event/update_actions.html', {'action_def': 'registered_actions', 'message_title': message_title, 'items': queryset,'form': form, 'title':u'Регистрация на событие'})
+
+    @admin.action(description='В статус Отменён')
+    def cancelled_actions(self, request, queryset):
+        message_title = 'Ниже указаны люди, которых надо отметить как отказавшихся от посещения события:'
+        form = None
+        if 'apply' in request.POST:
+            form = CheckinOrCancelForm(request.POST)
+            if form.is_valid():
+                action_type = 'cancelled'
+                service.update_actions(action_type, queryset)
+                count = len(queryset)
+                self.message_user(request, "Отклонили приглашение на событие. Количество человек: %d." % (count))
+                return HttpResponseRedirect(request.get_full_path())
+
+        if not form:
+            form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
+
+        return render(request, 'event/update_actions.html', {'action_def': 'cancelled_actions', 'message_title': message_title, 'items': queryset,'form': form, 'title':u'Отклонили приглашение на событие'})
+
+    @admin.action(description='В статус Зачекинен')
+    def visited_actions(self, request, queryset):
         message_title = 'Ниже указаны регистрации на событие, которые будут подтверждены:'
         form = None
         if 'apply' in request.POST:
             form = CheckinOrCancelForm(request.POST)
             if form.is_valid():
-                action_type = 'checkin'
+                action_type = 'visited'
                 service.update_actions(action_type, queryset)
                 count = len(queryset)
                 self.message_user(request, "Подтверждено посещение по событию. Количество человек: %d." % (count))
@@ -624,25 +714,49 @@ class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
         if not form:
             form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
 
-        return render(request, 'event/update_actions.html', {'action_def': 'checkin_actions', 'message_title': message_title, 'items': queryset,'form': form, 'title':u'Подтверждение посещения'})
-    
-    @admin.action(description='Отмена')
-    def cancel_actions(self, request, queryset):
-        message_title = 'Ниже указаны регистрации на событие, которые будут отменены:'
-        form = None
-        if 'apply' in request.POST:
-            form = CheckinOrCancelForm(request.POST)
-            if form.is_valid():
-                action_type = 'new'
-                service.update_actions(action_type, queryset)
-                count = len(queryset)
-                self.message_user(request, "Отменена регистрация по событию. Количество человек: %d." % (count))
-                return HttpResponseRedirect(request.get_full_path())
+        return render(request, 'event/update_actions.html', {'action_def': 'visited_actions', 'message_title': message_title, 'items': queryset,'form': form, 'title':u'Подтверждение посещения'})
 
-        if not form:
-            form = CheckinOrCancelForm(initial={'_selected_action': request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)})
+    def audit_log_table(self, obj):
+        logs = obj.actionlog_set.order_by('-create_date')
+        if not logs.exists():
+            return "Нет записей истории."
 
-        return render(request, 'event/update_actions.html', {'action_def': 'cancel_actions','message_title': message_title, 'items': queryset,'form': form, 'title':u'Отмена регистрации'})
+        table_header = """
+        <table style="border-collapse: collapse; width: 100%; min-width: 600px;">
+            <thead>
+                <tr>
+                    <th style="border: 1px solid #ccc; padding: 5px;">Дата</th>
+                    <th style="border: 1px solid #ccc; padding: 5px;">Пользователь</th>
+                    <th style="border: 1px solid #ccc; padding: 5px;">Было</th>
+                    <th style="border: 1px solid #ccc; padding: 5px;">Стало</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+
+        table_rows = format_html_join(
+            '\n',
+            '<tr>'
+            '<td style="border: 1px solid #ccc; padding: 5px;">{}</td>'
+            '<td style="border: 1px solid #ccc; padding: 5px;">{}</td>'
+            '<td style="border: 1px solid #ccc; padding: 5px;">{}</td>'
+            '<td style="border: 1px solid #ccc; padding: 5px;">{}</td>'
+            '</tr>',
+            ((timezone.localtime(log.create_date).strftime("%d.%m.%Y %H:%M"), log.create_user or "—", log.get_old_status_display(), log.get_new_status_display()) for log in logs)
+        )
+
+        table_footer = "</tbody></table>"
+        return format_html(table_header + table_rows + table_footer)
+
+    audit_log_table.short_description = "История изменений"
+
+    formfield_overrides = {
+        models.TextField: {'widget': Textarea(attrs={
+            'rows': 2,
+            'cols': 60,
+            'style': 'width: 400px;'
+        })},
+    }
 
     def save_model(self, request, obj, form, change):
         if not change:
