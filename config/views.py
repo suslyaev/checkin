@@ -53,7 +53,7 @@ def get_user_events(request):
         # Подсчитываем количество уникальных гостей для события
         guests_count = Action.objects.filter(
             event=event,
-            action_type__in=['registered', 'checkin']  # Учитываем только действия регистрации и чекина
+            action_type__in=['registered', 'visited']  # Учитываем только действия регистрации и чекина
         ).values('contact').distinct().count()  # Считаем уникальных гостей
 
         data.append({
@@ -263,7 +263,7 @@ class AvailableContactsView(View):
 
         existing_guests = Action.objects.filter(
             event_id=event_id,
-            action_type__in=['registered', 'checkin']
+            action_type__in=['registered', 'visited']
         ).values_list('contact_id', flat=True)
 
         qs = Contact.objects.exclude(id__in=existing_guests)
