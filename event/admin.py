@@ -518,8 +518,8 @@ class ContactActionFilter(AutocompleteFilter):
 
 # Действие
 @admin.register(Action)
-class ActionAdmin(BaseAdminPage, ImportExportActionModelAdmin):
-    resource_class = ActionResource
+class ActionAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
+    #resource_class = ActionResource
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
     list_filter = (ModuleInstanceFilter, ContactActionFilter, 'action_type', 'event__date_start')
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
