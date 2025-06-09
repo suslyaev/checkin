@@ -88,7 +88,10 @@ class ActionView(View):
         if not event_id:
             return JsonResponse([], safe=False)
 
-        actions = Action.objects.filter(event_id=event_id).select_related(
+        actions = Action.objects.filter(
+            event_id=event_id,
+            action_type__in=['registered', 'visited']
+        ).select_related(
             'contact',
             'contact__category',
             'contact__company',
