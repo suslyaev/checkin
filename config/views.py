@@ -59,9 +59,9 @@ def get_user_events(request):
         data.append({
             "id": event.id,
             "name": event.name,
-            "address": event.address,
-            "date_start": event.date_start,
-            "date_end": event.date_end,
+            "address": event.address if event.address else None,
+            "date_start": event.date_start if event.date_start else None,
+            "date_end": event.date_end if event.date_end else None,
             "is_visible": event.is_visible,
             'guests_count': guests_count
         })
