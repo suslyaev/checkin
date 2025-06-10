@@ -42,11 +42,11 @@ def get_user_events(request):
     # Получаем события в зависимости от роли пользователя
     if user.is_superuser or user.groups.filter(name='Администратор').exists():
         # Суперпользователь или Администратор видят все события
-        events = ModuleInstance.objects.filter().all()
+        events = ModuleInstance.objects.filter(is_visible=True).all()
     else:
         # Остальные пользователи видят только свои события
         events = ModuleInstance.objects.filter(
-            Q(managers=user) | Q(checkers=user) | Q(producers=user)).distinct()
+            Q(managers=user) | Q(checkers=user) | Q(producers=user), is_visible=True).distinct()
 
     data = []
     for event in events:
@@ -62,7 +62,6 @@ def get_user_events(request):
             "address": event.address if event.address else None,
             "date_start": event.date_start if event.date_start else None,
             "date_end": event.date_end if event.date_end else None,
-            "is_visible": event.is_visible,
             'guests_count': guests_count
         })
     return JsonResponse(data, safe=False)
