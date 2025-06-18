@@ -3,7 +3,7 @@ from django.db import transaction
 from import_export.widgets import ForeignKeyWidget
 from django.db.models import Q
 
-from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action
+from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser
 
 
 class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
@@ -15,10 +15,20 @@ class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
         except self.model.DoesNotExist:
             return self.model.objects.create(**{self.field: value})
 
+class ProducerWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, *args, **kwargs):
+        if not value:
+            return None
+        try:
+            return CustomUser.objects.get(last_name=value)
+        except CustomUser.DoesNotExist:
+            return None
+
 class ContactImport(resources.ModelResource):
     social_network_name = fields.Field(column_name='Соцсеть')
     social_network_id = fields.Field(column_name='ID соцсети')
-    social_network_subscribers = fields.Field(column_name='Подписчики')
+    subscribers = fields.Field(column_name='Подписчики')
+
     company = fields.Field(
         column_name='company',
         attribute='company',
@@ -34,34 +44,50 @@ class ContactImport(resources.ModelResource):
         attribute='type_guest',
         widget=ForeignKeyGetOrCreateWidget(TypeGuestContact, 'name')
     )
+    producer = fields.Field(
+        column_name='producer',
+        attribute='producer',
+        widget=ProducerWidget(CustomUser, 'last_name')
+    )
 
     class Meta:
         model = Contact
         fields = (
             'last_name', 'first_name', 'middle_name', 'nickname',
-            'company', 'category', 'type_guest', 'comment'
+            'company', 'category', 'type_guest', 'producer', 'comment'
         )
-        # Используем уникальные поля для поиска существующего контакта
         import_id_fields = ('last_name', 'first_name', 'middle_name')
         skip_unchanged = True
-        use_bulk = False
 
     def get_instance(self, instance_loader, row):
-        last_name = row.get('last_name')
-        first_name = row.get('first_name')
+        last_name = row.get('last_name', '').strip()
+        first_name = row.get('first_name', '').strip()
+        middle_name = row.get('middle_name')
+        
+        # Преобразуем middle_name в None если это пустая строка или None
+        if not middle_name or middle_name == 'None' or middle_name.strip() == '':
+            middle_name = None
 
         if not last_name or not first_name:
             return None
 
-        # Ищем контакт только по фамилии и имени
-        qs = Contact.objects.filter(
-            last_name=last_name,
-            first_name=first_name
-        )
-        
-        if qs.exists():
-            return qs.first()
-        return None
+        # Ищем контакт с учетом отчества
+        try:
+            if middle_name:
+                return Contact.objects.get(
+                    last_name=last_name,
+                    first_name=first_name,
+                    middle_name=middle_name
+                )
+            else:
+                return Contact.objects.filter(
+                    last_name=last_name,
+                    first_name=first_name
+                ).filter(
+                    Q(middle_name__isnull=True) | Q(middle_name='')
+                ).first()
+        except Contact.DoesNotExist:
+            return None
     
     def before_import_row(self, row, **kwargs):
         for key, value in row.items():
@@ -73,7 +99,7 @@ class ContactImport(resources.ModelResource):
         # Обработка соцсетей после сохранения контакта
         social_name = row.get('social_network_name') or row.get('Соцсеть')
         social_id = row.get('social_network_id') or row.get('ID соцсети')
-        social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
+        social_subscribers = row.get('subscribers') or row.get('Подписчики')
         if social_name and social_id:
             instance = self.get_instance(None, row)
             if instance:
