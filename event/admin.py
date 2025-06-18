@@ -199,9 +199,13 @@ class BaseAdminPage(admin.ModelAdmin):
     view_on_site = False
 
 # Фильтр с автозаполнением для event
-class ModuleInstanceFilter(AutocompleteFilter):
-    title = 'Мероприятие'  # Название фильтра
-    field_name = 'event'  # Поле модели, по которому будет фильтрация
+class ModuleInstanceFilter(AutocompleteFilterMultiple):
+    title = 'Мероприятие'
+    field_name = 'event'
+
+class ContactFilter(AutocompleteFilterMultiple):
+    title = 'Человек'
+    field_name = 'contact'
 
 class CompanyContactFilter(AutocompleteFilterMultiple):
     title = 'Компания'
@@ -215,7 +219,7 @@ class TypeGuestContactFilter(AutocompleteFilterMultiple):
     title = 'Тип гостя'
     field_name = 'type_guest'
 
-class ProducerContactFilter(AutocompleteFilter):
+class ProducerContactFilter(AutocompleteFilterMultiple):
     title = 'Продюсер'
     field_name = 'producer'
 
@@ -557,15 +561,11 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
         # Иначе возвращаем стандартную проверку
         return super().has_change_permission(request, obj=obj)
 
-class ContactActionFilter(AutocompleteFilter):
-    title = 'Человек'
-    field_name = 'contact'
-
 # Действие
 @admin.register(Action)
 class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
-    list_filter = (ModuleInstanceFilter, ContactActionFilter, ProducerActionFilter, 'action_type', 'event__date_start')
+    list_filter = (ModuleInstanceFilter, ContactFilter, ProducerActionFilter, 'action_type', 'event__date_start')
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
     autocomplete_fields = ['contact', 'event']
     readonly_fields = ('action_type', 'create_date', 'update_date', 'create_user', 'update_user', 'audit_log_table')
