@@ -12,6 +12,7 @@ class Command(BaseCommand):
                             'change_action',
                             'delete_action',
                             'view_action',
+                            'view_actionlog',
                             'add_categorycontact',
                             'change_categorycontact',
                             'delete_categorycontact',

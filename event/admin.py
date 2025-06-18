@@ -5,8 +5,8 @@ from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, Cust
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
-from .resources import ContactResource, ModuleInstanceResource, ActionResource
-from admin_auto_filters.filters import AutocompleteFilter
+from .resources import ContactImport, EventExport
+from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
 from django.db.models import Count
 from django.utils.html import format_html, format_html_join
 from django.urls import reverse
@@ -19,6 +19,8 @@ from django.shortcuts import render
 from django.urls import path
 from django.urls import reverse
 from django.shortcuts import redirect
+from admin_auto_filters.filters import AutocompleteFilterMultiple
+
 
 class CustomAdminSite(admin.AdminSite):
 
@@ -201,21 +203,26 @@ class ModuleInstanceFilter(AutocompleteFilter):
     title = 'Мероприятие'  # Название фильтра
     field_name = 'event'  # Поле модели, по которому будет фильтрация
 
-class CompanyContactFilter(AutocompleteFilter):
+class CompanyContactFilter(AutocompleteFilterMultiple):
     title = 'Компания'
     field_name = 'company'
 
-class CategoryContactFilter(AutocompleteFilter):
+class CategoryContactFilter(AutocompleteFilterMultiple):
     title = 'Категория'
     field_name = 'category'
 
-class TypeGuestContactFilter(AutocompleteFilter):
+class TypeGuestContactFilter(AutocompleteFilterMultiple):
     title = 'Тип гостя'
     field_name = 'type_guest'
 
 class ProducerContactFilter(AutocompleteFilter):
     title = 'Продюсер'
     field_name = 'producer'
+
+ProducerActionFilter = AutocompleteFilterFactory(
+    'Продюсер',
+    'contact__producer'
+)
 
 # Социальная сеть
 @admin.register(SocialNetwork)
@@ -235,8 +242,7 @@ class InfoContactInline(admin.TabularInline):
 
 # Человек
 @admin.register(Contact)
-class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
-    resource_class = ContactResource
+class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
@@ -244,6 +250,7 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, ]
     show_change_form_export = False
+    list_max_show_all = 10000
     fieldsets = (
         (None, {
             'fields': [('last_name', 'first_name', 'middle_name', 'nickname')]
@@ -272,6 +279,14 @@ class ContactAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
             'style': 'width: 400px;'
         })},
     }
+
+    def get_import_resource_class(self):
+        from .resources import ContactImport
+        return ContactImport
+
+    def get_export_resource_class(self):
+        from .resources import ContactExport
+        return ContactExport
 
     def get_urls(self):
         urls = super().get_urls()
@@ -374,9 +389,9 @@ class TypeGuestContactAdmin(BaseAdminPage):
 
 # Событие
 @admin.register(ModuleInstance)
-class ModuleInstanceAdmin(ExportActionModelAdmin):
-    resource_class = ModuleInstanceResource
+class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
     form = ModuleInstanceForm
+    resource_class = EventExport
     search_fields = ['get_name_event']
     show_change_form_export = False
     fieldsets = (
@@ -390,21 +405,37 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
             'fields': [('managers', 'producers', 'checkers')]
         }),
         ('Участники', {
-            'fields': [('announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count'), 'checkin_list'],
+            'fields': [('announced_count', 'invited_count', 'registered_count', 'checkins_count', 'cancelled_count'),
+                       ('add_person_button',),
+                       ('announced_list', 'invited_list',),
+                       ('registered_list', 'visited_list',),
+                       ('cancelled_list',)],
         }),
     )
-    readonly_fields = ['checkin_list', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count']
+    readonly_fields = ['announced_list', 'invited_list', 'cancelled_list', 'registered_list', 'visited_list', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count', 'add_person_button']
     autocomplete_fields = ['managers', 'producers', 'checkers']
     list_display = ('name', 'date_start', 'announced_count', 'invited_count', 'cancelled_count', 'registered_count', 'checkins_count', 'is_visible')
     list_editable = ('is_visible',)
-    list_filter = ('is_visible',)
+    list_filter = ('is_visible', 'date_start')
     show_change_form_export = False
     save_on_top = True
     list_per_page = 25
     view_on_site = False
+    list_max_show_all = 10000
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+    
+    def add_person_button(self, obj):
+        if not obj.pk:
+            return "-"
+        url = reverse('admin:event_action_add') + f'?event={obj.pk}&_popup=1'
+        return format_html(
+            '<a href="{url}" onclick="return showAddAnotherPopup(this);" '
+            'class="button" style="width: 200px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">Добавить человека</a>',
+            url=url
+        )
+    add_person_button.short_description = " "
 
     def announced_count(self, obj):
         return Action.objects.filter(event=obj, action_type='announced').count()
@@ -414,10 +445,6 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         return Action.objects.filter(event=obj, action_type='invited').count()
     invited_count.short_description = 'Приглашено'
 
-    def cancelled_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='cancelled').count()
-    cancelled_count.short_description = 'Отклонено'
-
     def registered_count(self, obj):
         return Action.objects.filter(event=obj, action_type='registered').count()
     registered_count.short_description = 'Согласовано'
@@ -426,16 +453,34 @@ class ModuleInstanceAdmin(ExportActionModelAdmin):
         return Action.objects.filter(event=obj, action_type='visited').count()
     checkins_count.short_description = 'Посещено'
 
-    def checkin_list(self, obj):
-        """
-        Список чекинившихся (action_type='visited')
-        """
-        actions = Action.objects.filter(
-            action_type='visited',
-            event=obj
-        ).select_related('contact')
-        return service.get_link_list_for_event(actions, 'contact', 'more-checkins')
-    checkin_list.short_description = "Посещено"
+    def cancelled_count(self, obj):
+        return Action.objects.filter(event=obj, action_type='cancelled').count()
+    cancelled_count.short_description = 'Отклонено'
+
+    def announced_list(self, obj): # Список заявленных (action_type='announced')
+        actions = Action.objects.filter(action_type='announced', event=obj).select_related('contact')
+        return service.get_link_list_for_event(actions, 'contact', 'more-announced')
+    announced_list.short_description = "Список заявленных"
+
+    def invited_list(self, obj): # Список приглашенных (action_type='invited')
+        actions = Action.objects.filter(action_type='invited', event=obj).select_related('contact')
+        return service.get_link_list_for_event(actions, 'contact', 'more-invited')
+    invited_list.short_description = "Список приглашенных"
+
+    def registered_list(self, obj): # Список подтвержденных (action_type='registered')
+        actions = Action.objects.filter(action_type='registered', event=obj).select_related('contact')
+        return service.get_link_list_for_event(actions, 'contact', 'more-registered')
+    registered_list.short_description = "Список подтвержденных"
+
+    def visited_list(self, obj): # Список посетивших (action_type='visited')
+        actions = Action.objects.filter(action_type='visited', event=obj).select_related('contact')
+        return service.get_link_list_for_event(actions, 'contact', 'more-visited')
+    visited_list.short_description = "Список посетивших"
+
+    def cancelled_list(self, obj): # Список отмененных (action_type='cancelled')
+        actions = Action.objects.filter(action_type='cancelled', event=obj).select_related('contact')
+        return service.get_link_list_for_event(actions, 'contact', 'more-cancelled')
+    cancelled_list.short_description = "Список отмененных"
 
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={
@@ -518,19 +563,27 @@ class ContactActionFilter(AutocompleteFilter):
 
 # Действие
 @admin.register(Action)
-class ActionAdmin(BaseAdminPage, ExportActionMixin, ImportExportModelAdmin):
-    #resource_class = ActionResource
+class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
-    list_filter = (ModuleInstanceFilter, ContactActionFilter, 'action_type', 'event__date_start')
+    list_filter = (ModuleInstanceFilter, ContactActionFilter, ProducerActionFilter, 'action_type', 'event__date_start')
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
     autocomplete_fields = ['contact', 'event']
     readonly_fields = ('action_type', 'create_date', 'update_date', 'create_user', 'update_user', 'audit_log_table')
     list_per_page = 25
     view_on_site = False
     show_change_form_export = False
+    list_max_show_all = 10000
 
     class Media:
         js = ('js/checkin_list.js',)
+    
+    def get_import_resource_class(self):
+        from .resources import ActionImport
+        return ActionImport
+
+    def get_export_resource_class(self):
+        from .resources import ActionExport
+        return ActionExport
 
     def get_fields(self, request, obj=None):
         if obj:  # Редактирование записи
