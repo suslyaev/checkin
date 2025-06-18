@@ -47,14 +47,18 @@ class ContactImport(resources.ModelResource):
         use_bulk = False
 
     def get_instance(self, instance_loader, row):
-        last_name = row.get('last_name') or row.get('Фамилия')
-        first_name = row.get('first_name') or row.get('Имя')
-        middle_name = row.get('middle_name') or row.get('Отчество')
+        last_name = row.get('last_name')
+        first_name = row.get('first_name')
+
+        if not last_name or not first_name:
+            return None
+
+        # Ищем контакт только по фамилии и имени
         qs = Contact.objects.filter(
-            last_name=last_name or '',
-            first_name=first_name or '',
-            middle_name=middle_name or ''
+            last_name=last_name,
+            first_name=first_name
         )
+        
         if qs.exists():
             return qs.first()
         return None
