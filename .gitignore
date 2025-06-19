@@ -36,3 +36,4 @@ mediafiles/
 .env
 
 staticfiles/
+modules/
