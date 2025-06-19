@@ -334,6 +334,7 @@ class CompanyContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'comment', 'contacts_count_link')
     list_editable = ('name', 'comment')
     search_fields = ['name']
+    ordering = ['name']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -355,6 +356,7 @@ class CategoryContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'color', 'comment', 'contacts_count_link')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+    ordering = ['name']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -376,6 +378,7 @@ class TypeGuestContactAdmin(BaseAdminPage):
     list_display = ('id', 'name', 'color', 'comment', 'contacts_count_link')
     list_editable = ('name', 'color', 'comment')
     search_fields = ['name']
+    ordering = ['name']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -436,10 +439,10 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
         url = reverse('admin:event_action_add') + f'?event={obj.pk}&_popup=1'
         return format_html(
             '<a href="{url}" onclick="return showAddAnotherPopup(this);" '
-            'class="button" style="width: 200px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">Добавить человека</a>',
+            'class="button" style="width: 200px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">Добавить</a>',
             url=url
         )
-    add_person_button.short_description = " "
+    add_person_button.short_description = "Добавить человека на мероприятие"
 
     def announced_count(self, obj):
         return Action.objects.filter(event=obj, action_type='announced').count()

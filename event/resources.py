@@ -293,11 +293,17 @@ class ActionExport(resources.ModelResource):
     
     def dehydrate_create_user(self, obj):
         """Формирует список менеджеров в формате Фамилия Имя или телефон"""
-        return f"{obj.create_user.last_name} {obj.create_user.first_name}"
+        if obj.create_user and obj.create_user.last_name and obj.create_user.first_name:
+            return f"{obj.create_user.last_name} {obj.create_user.first_name}"
+        else:
+            return "-"
     
     def dehydrate_update_user(self, obj):
         """Формирует список менеджеров в формате Фамилия Имя или телефон"""
-        return f"{obj.update_user.last_name} {obj.update_user.first_name}"
+        if obj.update_user and obj.update_user.last_name and obj.update_user.first_name:
+            return f"{obj.update_user.last_name} {obj.update_user.first_name}"
+        else:
+                return "-"
 
     def dehydrate_social_networks(self, obj):
         """
