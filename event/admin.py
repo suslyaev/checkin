@@ -247,7 +247,8 @@ class InfoContactInline(admin.TabularInline):
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
-    list_display = ('get_fio', 'company', 'category', 'type_guest', 'photo_preview')
+    list_display = ('get_fio', 'company', 'category', 'type_guest', 'producer', 'photo_preview')
+    list_editable = ('company', 'category', 'type_guest', 'producer')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest', 'producer']
