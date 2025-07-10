@@ -3,7 +3,8 @@ from django.db import transaction
 from import_export.widgets import ForeignKeyWidget
 from django.db.models import Q
 
-from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action
+from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser
+
 
 class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
     def clean(self, value, row=None, *args, **kwargs):
@@ -14,10 +15,20 @@ class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
         except self.model.DoesNotExist:
             return self.model.objects.create(**{self.field: value})
 
-class ContactResource(resources.ModelResource):
+class ProducerWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, *args, **kwargs):
+        if not value:
+            return None
+        try:
+            return CustomUser.objects.get(last_name=value)
+        except CustomUser.DoesNotExist:
+            return None
+
+class ContactImport(resources.ModelResource):
     social_network_name = fields.Field(column_name='Соцсеть')
     social_network_id = fields.Field(column_name='ID соцсети')
-    social_network_subscribers = fields.Field(column_name='Подписчики')
+    subscribers = fields.Field(column_name='Подписчики')
+
     company = fields.Field(
         column_name='company',
         attribute='company',
@@ -33,30 +44,50 @@ class ContactResource(resources.ModelResource):
         attribute='type_guest',
         widget=ForeignKeyGetOrCreateWidget(TypeGuestContact, 'name')
     )
+    producer = fields.Field(
+        column_name='producer',
+        attribute='producer',
+        widget=ProducerWidget(CustomUser, 'last_name')
+    )
 
     class Meta:
         model = Contact
         fields = (
             'last_name', 'first_name', 'middle_name', 'nickname',
-            'company', 'category', 'type_guest', 'comment'
+            'company', 'category', 'type_guest', 'producer', 'comment'
         )
-        # Используем уникальные поля для поиска существующего контакта
         import_id_fields = ('last_name', 'first_name', 'middle_name')
         skip_unchanged = True
-        use_bulk = False
 
     def get_instance(self, instance_loader, row):
-        last_name = row.get('last_name') or row.get('Фамилия')
-        first_name = row.get('first_name') or row.get('Имя')
-        middle_name = row.get('middle_name') or row.get('Отчество')
-        qs = Contact.objects.filter(
-            last_name=last_name or '',
-            first_name=first_name or '',
-            middle_name=middle_name or ''
-        )
-        if qs.exists():
-            return qs.first()
-        return None
+        last_name = row.get('last_name', '').strip()
+        first_name = row.get('first_name', '').strip()
+        middle_name = row.get('middle_name')
+        
+        # Преобразуем middle_name в None если это пустая строка или None
+        if not middle_name or middle_name == 'None' or middle_name.strip() == '':
+            middle_name = None
+
+        if not last_name or not first_name:
+            return None
+
+        # Ищем контакт с учетом отчества
+        try:
+            if middle_name:
+                return Contact.objects.get(
+                    last_name=last_name,
+                    first_name=first_name,
+                    middle_name=middle_name
+                )
+            else:
+                return Contact.objects.filter(
+                    last_name=last_name,
+                    first_name=first_name
+                ).filter(
+                    Q(middle_name__isnull=True) | Q(middle_name='')
+                ).first()
+        except Contact.DoesNotExist:
+            return None
     
     def before_import_row(self, row, **kwargs):
         for key, value in row.items():
@@ -68,7 +99,7 @@ class ContactResource(resources.ModelResource):
         # Обработка соцсетей после сохранения контакта
         social_name = row.get('social_network_name') or row.get('Соцсеть')
         social_id = row.get('social_network_id') or row.get('ID соцсети')
-        social_subscribers = row.get('social_network_subscribers') or row.get('Подписчики')
+        social_subscribers = row.get('subscribers') or row.get('Подписчики')
         if social_name and social_id:
             instance = self.get_instance(None, row)
             if instance:
@@ -84,7 +115,104 @@ class ContactResource(resources.ModelResource):
                     info_contact.save()
         return row_result
 
-class ActionResource(resources.ModelResource):
+class ContactExport(resources.ModelResource):
+    id = fields.Field(attribute='id', column_name='ID')
+    last_name = fields.Field(attribute='last_name', column_name='Фамилия')
+    first_name = fields.Field(attribute='first_name', column_name='Имя')
+    middle_name = fields.Field(attribute='middle_name', column_name='Отчество')
+    nickname = fields.Field(attribute='nickname', column_name='Ник')
+    company__name = fields.Field(attribute='company__name', column_name='Компания')
+    category__name = fields.Field(attribute='category__name', column_name='Категория')
+    type_guest__name = fields.Field(attribute='type_guest__name', column_name='Тип гостя')
+    producer__last_name = fields.Field(attribute='producer__last_name', column_name='Фамилия продюсера')
+    producer__first_name = fields.Field(attribute='producer__first_name', column_name='Имя продюсера')
+    comment = fields.Field(attribute='comment', column_name='Комментарий')
+    social_networks = fields.Field(attribute='social_networks', column_name='Соцсети')
+
+    class Meta:
+        model = Contact
+        fields = ('id', 'last_name', 'first_name', 'middle_name',
+                    'nickname', 'company__name', 'category__name', 'type_guest__name',
+                    'producer__last_name', 'producer__first_name', 'comment',
+                    'social_networks')
+
+    def dehydrate_social_networks(self, obj):
+        """
+        Формирует строку с соцсетями для выгрузки в формате:
+        VK (151627)
+        https://vk.com/...
+
+        Instagram (105400)
+        https://www.instagram.com/...
+
+        И т.д.
+        """
+        social_networks = InfoContact.objects.filter(contact=obj)
+        parts = []
+        for s in social_networks:
+            title = f"{s.social_network.name} ({s.subscribers})" if s.subscribers else s.social_network.name
+            link = s.external_id or ""
+            parts.append(f"{title}\n{link}")
+        return '\n\n'.join(parts)
+    
+class EventExport(resources.ModelResource):
+    name = fields.Field(attribute='name', column_name='Наименование')
+    address = fields.Field(attribute='address', column_name='Адрес')
+    date_start = fields.Field(attribute='date_start', column_name='Дата начала')
+    date_end = fields.Field(attribute='date_end', column_name='Дата окончания')
+    is_visible = fields.Field(attribute='is_visible', column_name='Видимость на портале')
+    managers = fields.Field(attribute='managers', column_name='Менеджеры')
+    producers = fields.Field(attribute='producers', column_name='Продюсеры')
+    checkers = fields.Field(attribute='checkers', column_name='Модераторы')
+    announced_count = fields.Field(attribute='announced_count', column_name='Количество заявленных')
+    invited_count = fields.Field(attribute='invited_count', column_name='Количество приглашенных')
+    registered_count = fields.Field(attribute='registered_count', column_name='Количество зарегистрированных')
+    cancelled_count = fields.Field(attribute='cancelled_count', column_name='Количество отмененных')
+    visited_count = fields.Field(attribute='visited_count', column_name='Количество посетивших')
+
+    class Meta:
+        model = ModuleInstance
+        fields = ('name', 'address', 'date_start', 'date_end', 'is_visible', 'managers', 'producers', 'checkers', 'announced_count', 'invited_count', 'registered_count', 'cancelled_count', 'visited_count')
+
+    def dehydrate_managers(self, obj):
+        """Формирует список менеджеров в формате Фамилия Имя или телефон"""
+        return ', '.join([f"{m.last_name} {m.first_name}" if m.last_name and m.first_name else m.phone for m in obj.managers.all()])
+
+    def dehydrate_producers(self, obj):
+        """Формирует список продюсеров в формате Фамилия Имя или телефон"""
+        return ', '.join([f"{p.last_name} {p.first_name}" if p.last_name and p.first_name else p.phone for p in obj.producers.all()])
+
+    def dehydrate_checkers(self, obj):
+        """Формирует список модераторов в формате Фамилия Имя или телефон"""
+        return ', '.join([f"{c.last_name} {c.first_name}" if c.last_name and c.first_name else c.phone for c in obj.checkers.all()])
+
+    def dehydrate_announced_count(self, obj):
+        """Считает количество заявленных"""
+        return Action.objects.filter(event=obj, action_type='announced').count()
+
+    def dehydrate_invited_count(self, obj):
+        """Считает количество приглашенных"""
+        return Action.objects.filter(event=obj, action_type='invited').count()
+
+    def dehydrate_registered_count(self, obj):
+        """Считает количество зарегистрированных"""
+        return Action.objects.filter(event=obj, action_type='registered').count()
+    
+    def dehydrate_cancelled_count(self, obj):
+        """Считает количество отмененных"""
+        return Action.objects.filter(event=obj, action_type='cancelled').count()
+    
+    def dehydrate_visited_count(self, obj):
+        """Считает количество посетивших"""
+        return Action.objects.filter(event=obj, action_type='visited').count()
+    
+    def dehydrate_is_visible(self, obj):
+        """
+        Преобразует булево значение is_visible в "Да"/"Нет".
+        """
+        return "Да" if obj.is_visible else "Нет"
+
+class ActionImport(resources.ModelResource):
     module_name = fields.Field(column_name='Мероприятие')
     last_name = fields.Field(column_name='Фамилия')
     first_name = fields.Field(column_name='Имя')
@@ -130,73 +258,81 @@ class ActionResource(resources.ModelResource):
                 contact=contact, event=event,
                 defaults={'create_user': request}
             )
-    
-class ModuleInstanceResource(resources.ModelResource):
-    managers = fields.Field(column_name='managers')
-    producers = fields.Field(column_name='producers')
-    checkers = fields.Field(column_name='checkers')
-    registrations_count = fields.Field(column_name='registrations_count')
-    checkins_count = fields.Field(column_name='checkins_count')
 
-    class Meta:
-        model = ModuleInstance
-        fields = ('name', 'address', 'date_start', 'date_end', 'is_visible', 'managers', 'producers', 'checkers', 'registrations_count', 'checkins_count')
-        export_order = ('name', 'address', 'date_start', 'date_end', 'is_visible', 'managers', 'producers', 'checkers', 'registrations_count', 'checkins_count')
-
-    def dehydrate_managers(self, obj):
-        """Формирует список менеджеров в формате Фамилия Имя или телефон"""
-        return ', '.join([f"{m.last_name} {m.first_name}" if m.last_name and m.first_name else m.phone for m in obj.managers.all()])
-
-    def dehydrate_producers(self, obj):
-        """Формирует список продюсеров в формате Фамилия Имя или телефон"""
-        return ', '.join([f"{p.last_name} {p.first_name}" if p.last_name and p.first_name else p.phone for p in obj.producers.all()])
-
-    def dehydrate_checkers(self, obj):
-        """Формирует список модераторов в формате Фамилия Имя или телефон"""
-        return ', '.join([f"{c.last_name} {c.first_name}" if c.last_name and c.first_name else c.phone for c in obj.checkers.all()])
-
-    def dehydrate_registrations_count(self, obj):
-        """Считает количество регистраций"""
-        return Action.objects.filter(event=obj, action_type__in=['new', 'checkin']).count()
-
-    def dehydrate_checkins_count(self, obj):
-        """Считает количество чекинов"""
-        return Action.objects.filter(event=obj, action_type='checkin').count()
-    
-    def dehydrate_is_visible(self, obj):
-        """
-        Преобразует булево значение is_visible в "Да"/"Нет".
-        """
-        return "Да" if obj.is_visible else "Нет"
-
-
-class ActionResourceRead(resources.ModelResource):
-    social_networks = fields.Field(column_name='social_networks')
-    action_type_display = fields.Field(column_name='action_type_display')
+class ActionExport(resources.ModelResource):
+    id = fields.Field(attribute='id', column_name='ID')
+    event__name = fields.Field(attribute='event__name', column_name='Наименование события')
+    contact__last_name = fields.Field(attribute='contact__last_name', column_name='Фамилия')
+    contact__first_name = fields.Field(attribute='contact__first_name', column_name='Имя')
+    contact__middle_name = fields.Field(attribute='contact__middle_name', column_name='Отчество')
+    contact__nickname = fields.Field(attribute='contact__nickname', column_name='Ник')
+    contact__company__name = fields.Field(attribute='contact__company__name', column_name='Компания')
+    contact__category__name = fields.Field(attribute='contact__category__name', column_name='Категория')
+    contact__type_guest__name = fields.Field(attribute='contact__type_guest__name', column_name='Тип гостя')
+    contact__producer = fields.Field(attribute='contact__producer', column_name='Продюсер')
+    action_type_display = fields.Field(attribute='action_type_display', column_name='Статус')
+    create_date = fields.Field(attribute='create_date', column_name='Когда создано')
+    update_date = fields.Field(attribute='update_date', column_name='Когда обновлено')
+    create_user = fields.Field(attribute='create_user', column_name='Кем создано')
+    update_user = fields.Field(attribute='update_user', column_name='Кем обновлено')
+    social_networks = fields.Field(attribute='social_networks', column_name='Социальные сети')
     
     class Meta:
         model = Action
         fields = ('id', 'event__name', 'contact__last_name', 'contact__first_name', 'contact__middle_name',
                   'contact__nickname', 'contact__company__name', 'contact__category__name', 'contact__type_guest__name',
-                  'action_type_display', 'update_date', 'create_user__last_name', 'create_user__first_name', 'social_networks')
-        export_order = ('id', 'event__name', 'contact__last_name', 'contact__first_name', 'contact__middle_name',
-                        'contact__nickname', 'contact__company__name', 'contact__category__name', 'contact__type_guest__name',
-                        'action_type_display', 'update_date', 'update_user__last_name', 'update_user__first_name', 'social_networks')
+                  'contact__producer',
+                  'action_type_display', 'create_date', 'update_date', 'create_user', 'update_user', 'social_networks')
+        
+    def dehydrate_contact__producer(self, obj):
+        """Формирует список менеджеров в формате Фамилия Имя или телефон"""
+        if obj.contact.producer:
+            return f"{obj.contact.producer.last_name} {obj.contact.producer.first_name}"
+        else:
+            return "-"
+    
+    def dehydrate_create_user(self, obj):
+        """Формирует список менеджеров в формате Фамилия Имя или телефон"""
+        if obj.create_user and obj.create_user.last_name and obj.create_user.first_name:
+            return f"{obj.create_user.last_name} {obj.create_user.first_name}"
+        else:
+            return "-"
+    
+    def dehydrate_update_user(self, obj):
+        """Формирует список менеджеров в формате Фамилия Имя или телефон"""
+        if obj.update_user and obj.update_user.last_name and obj.update_user.first_name:
+            return f"{obj.update_user.last_name} {obj.update_user.first_name}"
+        else:
+                return "-"
 
     def dehydrate_social_networks(self, obj):
         """
-        Формирует строку с соцсетями в формате:
-        "Facebook: 12345 (444), Instagram: 67890 (888)"
+        Формирует строку с соцсетями для выгрузки в формате:
+        VK (151627)
+        https://vk.com/...
+
+        Instagram (105400)
+        https://www.instagram.com/...
+
+        И т.д.
         """
         social_networks = InfoContact.objects.filter(contact=obj.contact)
-        return ', '.join([f"{s.social_network.name}: {s.external_id} ({s.subscribers})" for s in social_networks])
+        parts = []
+        for s in social_networks:
+            title = f"{s.social_network.name} ({s.subscribers})" if s.subscribers else s.social_network.name
+            link = s.external_id or ""
+            parts.append(f"{title}\n{link}")
+        return '\n\n'.join(parts)
     
     def dehydrate_action_type_display(self, obj):
         """
         Преобразует тип действия в удобочитаемый формат.
         """
         action_types = {
-            'new': 'Регистрация',
-            'checkin': 'Чекин'
+            'announced': 'Заявлен',
+            'invited': 'Приглашён',
+            'registered': 'Зарегистрирован',
+            'cancelled': 'Отменён',
+            'visited': 'Зачекинен',
         }
         return action_types.get(obj.action_type, obj.action_type)
