@@ -19,15 +19,22 @@ class ProducerWidget(ForeignKeyWidget):
     def clean(self, value, row=None, *args, **kwargs):
         if not value:
             return None
+        # Очищаем значение
+        value = str(value).strip()
+        if not value:
+            return None
         try:
-            return CustomUser.objects.get(last_name=value)
+            producer = CustomUser.objects.get(last_name=value)
+            print(f"Найден продюсер: {producer.last_name} {producer.first_name}")
+            return producer
         except CustomUser.DoesNotExist:
+            print(f"Продюсер не найден по фамилии: {value}")
             return None
 
 class ContactImport(resources.ModelResource):
-    social_network_name = fields.Field(column_name='Соцсеть')
-    social_network_id = fields.Field(column_name='ID соцсети')
-    subscribers = fields.Field(column_name='Подписчики')
+    social_network_name = fields.Field(column_name='social_network_name')
+    social_network_id = fields.Field(column_name='social_network_id')
+    social_network_subscribers = fields.Field(column_name='social_network_subscribers')
 
     company = fields.Field(
         column_name='company',
@@ -97,9 +104,17 @@ class ContactImport(resources.ModelResource):
 
     def after_import_row(self, row, row_result, **kwargs):
         # Обработка соцсетей после сохранения контакта
-        social_name = row.get('social_network_name') or row.get('Соцсеть')
-        social_id = row.get('social_network_id') or row.get('ID соцсети')
-        social_subscribers = row.get('subscribers') or row.get('Подписчики')
+        social_name = row.get('social_network_name')
+        social_id = row.get('social_network_id')
+        social_subscribers = row.get('social_network_subscribers')
+        
+        # Преобразуем подписчиков в число
+        if social_subscribers:
+            try:
+                social_subscribers = int(float(str(social_subscribers)))
+            except (ValueError, TypeError):
+                social_subscribers = None
+        
         if social_name and social_id:
             instance = self.get_instance(None, row)
             if instance:
