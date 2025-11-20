@@ -3,29 +3,17 @@
 
 {% block result_list %}
   {% if per_page_options %}
-    <div class="per-page-selector" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+    <form method="get" class="per-page-selector" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+      {% for key, value in per_page_hidden_fields %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
       <label for="action-per-page-select" style="font-weight: 600;">Показывать по:</label>
-      <select id="action-per-page-select" style="min-width: 120px;">
+      <select id="action-per-page-select" name="{{ per_page_query_param }}" style="min-width: 120px;" onchange="this.form.submit()">
         {% for option in per_page_options %}
           <option value="{{ option }}" {% if option == current_per_page %}selected{% endif %}>{{ option }}</option>
         {% endfor %}
       </select>
-    </div>
-    <script>
-      (function() {
-        const select = document.getElementById('action-per-page-select');
-        if (!select) { return; }
-        const baseQuery = "{{ per_page_base_query|escapejs }}";
-        const paramName = "{{ per_page_query_param|escapejs }}";
-        select.addEventListener('change', function() {
-          const params = new URLSearchParams(baseQuery);
-          params.set(paramName, this.value);
-          const queryString = params.toString();
-          const newUrl = queryString ? ('?' + queryString) : ('?' + paramName + '=' + this.value);
-          window.location.search = newUrl;
-        });
-      })();
-    </script>
+    </form>
   {% endif %}
   {{ block.super }}
 {% endblock %}

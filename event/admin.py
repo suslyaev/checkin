@@ -240,6 +240,7 @@ class CopyInvitationsForm(forms.Form):
             widget = AutocompleteSelect(rel, admin_site)
             widget.attrs.update({'style': 'width: 100%; min-width: 320px;'})
             self.fields['source_event'].widget = widget
+            self.fields['source_event'].widget.choices = self.fields['source_event'].choices
 
 ProducerActionFilter = AutocompleteFilterFactory(
     'Продюсер',
@@ -1001,11 +1002,15 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
         base_params = request.GET.copy()
         if self.per_page_query_param in base_params:
             base_params.pop(self.per_page_query_param)
+        preserved_params = []
+        for key in base_params:
+            for value in base_params.getlist(key):
+                preserved_params.append((key, value))
         extra_context.update({
             'per_page_options': self.per_page_options,
             'current_per_page': self._get_per_page_value(request),
             'per_page_query_param': self.per_page_query_param,
-            'per_page_base_query': base_params.urlencode(),
+            'per_page_hidden_fields': preserved_params,
         })
         return super().changelist_view(request, extra_context)
 
