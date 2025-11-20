@@ -236,11 +236,10 @@ class CopyInvitationsForm(forms.Form):
         admin_site = kwargs.pop('admin_site', None)
         super().__init__(*args, **kwargs)
         if admin_site:
-            rel = Action._meta.get_field('event').remote_field
-            widget = AutocompleteSelect(rel, admin_site)
+            event_field = Action._meta.get_field('event')
+            widget = AutocompleteSelect(event_field, admin_site)
             widget.attrs.update({'style': 'width: 100%; min-width: 320px;'})
             self.fields['source_event'].widget = widget
-            self.fields['source_event'].widget.choices = self.fields['source_event'].choices
 
 ProducerActionFilter = AutocompleteFilterFactory(
     'Продюсер',
@@ -698,7 +697,6 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
 # Действие
 @admin.register(Action)
 class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
-    change_list_template = 'admin/event/action/change_list.html'
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
     list_filter = (ModuleInstanceFilter, ContactFilter, ProducerActionFilter, 'action_type', 'event__date_start')
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
@@ -708,10 +706,6 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
     view_on_site = False
     show_change_form_export = False
     list_max_show_all = 10000
-    per_page_default = 100
-    per_page_options = [25, 50, 100, 200]
-    per_page_query_param = 'per_page'
-    per_page_session_key = 'event_action_admin_per_page'
 
     class Media:
         js = ('js/checkin_list.js',)
@@ -964,55 +958,6 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
         if request.user.groups.filter(name='Менеджер').exists():
             qs = qs.filter(event__managers=request.user)
         return qs
-    
-    def _get_per_page_value(self, request):
-        per_page_param = request.GET.get(self.per_page_query_param)
-        valid_values = set(self.per_page_options)
-
-        if per_page_param:
-            try:
-                per_page_value = int(per_page_param)
-            except (TypeError, ValueError):
-                per_page_value = self.per_page_default
-            else:
-                if per_page_value not in valid_values:
-                    per_page_value = self.per_page_default
-            request.session[self.per_page_session_key] = per_page_value
-            return per_page_value
-
-        stored_value = request.session.get(self.per_page_session_key)
-        if isinstance(stored_value, int) and stored_value in valid_values:
-            return stored_value
-
-        request.session[self.per_page_session_key] = self.per_page_default
-        return self.per_page_default
-
-    def get_paginator(self, request, queryset, per_page, orphans=0, allow_empty_first_page=True):
-        per_page = self._get_per_page_value(request)
-        return super().get_paginator(
-            request,
-            queryset,
-            per_page,
-            orphans=orphans,
-            allow_empty_first_page=allow_empty_first_page
-        )
-
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        base_params = request.GET.copy()
-        if self.per_page_query_param in base_params:
-            base_params.pop(self.per_page_query_param)
-        preserved_params = []
-        for key in base_params:
-            for value in base_params.getlist(key):
-                preserved_params.append((key, value))
-        extra_context.update({
-            'per_page_options': self.per_page_options,
-            'current_per_page': self._get_per_page_value(request),
-            'per_page_query_param': self.per_page_query_param,
-            'per_page_hidden_fields': preserved_params,
-        })
-        return super().changelist_view(request, extra_context)
 
     # Отображение кнопок Сохранить, Сохранить и продолжить, Удалить, Закрыть
     def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
