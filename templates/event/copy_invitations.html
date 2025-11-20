@@ -16,7 +16,9 @@
     <p>Выберите мероприятие-источник, из которого будут взяты участники.</p>
     <form action="" method="post">
       {% csrf_token %}
-      {{ form._selected_action }}
+      {% for hidden in form.hidden_fields %}
+        {{ hidden }}
+      {% endfor %}
       <div class="form-row">
         {{ form.source_event.errors }}
         {{ form.source_event.label_tag }} {{ form.source_event }}

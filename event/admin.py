@@ -964,7 +964,7 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
             qs = qs.filter(event__managers=request.user)
         return qs
     
-    def get_list_per_page(self, request):
+    def _get_per_page_value(self, request):
         per_page_param = request.GET.get(self.per_page_query_param)
         valid_values = set(self.per_page_options)
 
@@ -986,6 +986,16 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
         request.session[self.per_page_session_key] = self.per_page_default
         return self.per_page_default
 
+    def get_paginator(self, request, queryset, per_page, orphans=0, allow_empty_first_page=True):
+        per_page = self._get_per_page_value(request)
+        return super().get_paginator(
+            request,
+            queryset,
+            per_page,
+            orphans=orphans,
+            allow_empty_first_page=allow_empty_first_page
+        )
+
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         base_params = request.GET.copy()
@@ -993,7 +1003,7 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
             base_params.pop(self.per_page_query_param)
         extra_context.update({
             'per_page_options': self.per_page_options,
-            'current_per_page': self.get_list_per_page(request),
+            'current_per_page': self._get_per_page_value(request),
             'per_page_query_param': self.per_page_query_param,
             'per_page_base_query': base_params.urlencode(),
         })
