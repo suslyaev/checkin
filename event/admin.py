@@ -239,6 +239,7 @@ class CopyInvitationsForm(forms.Form):
             event_field = Action._meta.get_field('event')
             widget = AutocompleteSelect(event_field, admin_site)
             widget.attrs.update({'style': 'width: 100%; min-width: 320px;'})
+            widget.choices = self.fields['source_event'].choices
             self.fields['source_event'].widget = widget
 
 ProducerActionFilter = AutocompleteFilterFactory(
