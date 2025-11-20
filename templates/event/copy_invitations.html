@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+  {{ form.media }}
+  <div class="module">
+    <h2>Импорт приглашений</h2>
+    <p>Вы собираетесь скопировать приглашения в выбранные мероприятия:</p>
+    <ul>
+      {% for event in selected_events %}
+        <li>{{ event }}</li>
+      {% empty %}
+        <li>Нет выбранных мероприятий.</li>
+      {% endfor %}
+    </ul>
+    <p>Выберите мероприятие-источник, из которого будут взяты участники.</p>
+    <form action="" method="post">
+      {% csrf_token %}
+      {{ form._selected_action }}
+      <div class="form-row">
+        {{ form.source_event.errors }}
+        {{ form.source_event.label_tag }} {{ form.source_event }}
+      </div>
+      <input type="hidden" name="action" value="{{ action_name }}">
+      <div class="submit-row">
+        <button type="submit" name="apply" class="default">Скопировать</button>
+        <a href=".." class="button cancel-link">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
