@@ -252,6 +252,152 @@ const statusOptions = {
   'cancelled': 'Отклонил'
 };
 
+// ==================== ФУНКЦИИ (объявляем ДО инициализации таблицы) ====================
+
+// Кэш для автокомплита
+const autocompleteCache = {
+  company: [],
+  category: [],
+  type_guest: [],
+  producer: []
+};
+
+// Загрузка списков для автокомплита
+function loadAutocompleteData(field) {
+  const url = `/admin/event/moduleinstance/${eventId}/autocomplete/${field}/`;
+  console.log(`Загрузка автокомплита для ${field} из ${url}`);
+  
+  return fetch(url, {
+    headers: {
+      'X-CSRFToken': csrftoken
+    }
+  })
+  .then(response => {
+    console.log(`Ответ для ${field}:`, response.status, response.statusText);
+    if (!response.ok) {
+      return response.text().then(text => {
+        console.error(`Ошибка ${response.status} для ${field}:`, text);
+        throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
+      });
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log(`Данные для ${field}:`, data);
+    autocompleteCache[field] = data.results || [];
+    return autocompleteCache[field];
+  })
+  .catch(error => {
+    console.error(`Error loading autocomplete for ${field}:`, error);
+    // Возвращаем пустой массив, чтобы не блокировать остальную функциональность
+    autocompleteCache[field] = [];
+    return [];
+  });
+}
+
+// Создание autocomplete редактора
+function createAutocompleteEditor(field) {
+  return function(cell, onRendered, success, cancel) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = cell.getValue() || "";
+    input.style.width = "100%";
+    input.style.padding = "4px";
+    input.style.boxSizing = "border-box";
+    
+    const listDiv = document.createElement("div");
+    listDiv.style.position = "absolute";
+    listDiv.style.background = "white";
+    listDiv.style.border = "1px solid #ddd";
+    listDiv.style.maxHeight = "200px";
+    listDiv.style.overflowY = "auto";
+    listDiv.style.zIndex = "1000";
+    listDiv.style.width = cell.getElement().offsetWidth + "px";
+    listDiv.style.display = "none";
+    
+    function showList(items, inputValue) {
+      listDiv.innerHTML = "";
+      
+      // Добавляем опцию "Создать новый"
+      if (inputValue) {
+        const createItem = document.createElement("div");
+        createItem.style.padding = "8px";
+        createItem.style.cursor = "pointer";
+        createItem.style.background = "#e8f4f8";
+        createItem.style.borderBottom = "1px solid #ddd";
+        createItem.style.fontWeight = "bold";
+        createItem.textContent = `➕ Создать "${inputValue}"`;
+        createItem.onclick = function() {
+          success(inputValue);
+          listDiv.style.display = "none";
+        };
+        listDiv.appendChild(createItem);
+      }
+      
+      // Добавляем существующие элементы
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.style.padding = "8px";
+        div.style.cursor = "pointer";
+        div.textContent = item.name;
+        div.onmouseover = function() {
+          this.style.background = "#f0f0f0";
+        };
+        div.onmouseout = function() {
+          this.style.background = "white";
+        };
+        div.onclick = function() {
+          success(item.name);
+          listDiv.style.display = "none";
+        };
+        listDiv.appendChild(div);
+      });
+      
+      listDiv.style.display = items.length > 0 || inputValue ? "block" : "none";
+    }
+    
+    input.addEventListener("focus", function() {
+      loadAutocompleteData(field).then(items => {
+        showList(items, input.value);
+      });
+    });
+    
+    input.addEventListener("input", function() {
+      const value = input.value.toLowerCase();
+      const filtered = autocompleteCache[field].filter(item => 
+        item.name.toLowerCase().includes(value)
+      );
+      showList(filtered, input.value);
+    });
+    
+    input.addEventListener("blur", function() {
+      setTimeout(() => {
+        listDiv.style.display = "none";
+        success(input.value);
+      }, 200);
+    });
+    
+    input.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        success(input.value);
+        listDiv.style.display = "none";
+      } else if (e.key === "Escape") {
+        cancel();
+        listDiv.style.display = "none";
+      }
+    });
+    
+    onRendered(function() {
+      input.focus();
+      input.select();
+      cell.getElement().style.position = "relative";
+      cell.getElement().appendChild(listDiv);
+    });
+    
+    return input;
+  };
+}
+
 // ==================== ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ ====================
 
 const table = new Tabulator("#guests-table", {
@@ -414,151 +560,7 @@ const table = new Tabulator("#guests-table", {
   }
 });
 
-// ==================== ФУНКЦИИ ====================
-
-// Кэш для автокомплита
-const autocompleteCache = {
-  company: [],
-  category: [],
-  type_guest: [],
-  producer: []
-};
-
-// Загрузка списков для автокомплита
-function loadAutocompleteData(field) {
-  const url = `/admin/event/moduleinstance/${eventId}/autocomplete/${field}/`;
-  console.log(`Загрузка автокомплита для ${field} из ${url}`);
-  
-  return fetch(url, {
-    headers: {
-      'X-CSRFToken': csrftoken
-    }
-  })
-  .then(response => {
-    console.log(`Ответ для ${field}:`, response.status, response.statusText);
-    if (!response.ok) {
-      return response.text().then(text => {
-        console.error(`Ошибка ${response.status} для ${field}:`, text);
-        throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
-      });
-    }
-    return response.json();
-  })
-  .then(data => {
-    console.log(`Данные для ${field}:`, data);
-    autocompleteCache[field] = data.results || [];
-    return autocompleteCache[field];
-  })
-  .catch(error => {
-    console.error(`Error loading autocomplete for ${field}:`, error);
-    // Возвращаем пустой массив, чтобы не блокировать остальную функциональность
-    autocompleteCache[field] = [];
-    return [];
-  });
-}
-
-// Создание autocomplete редактора
-function createAutocompleteEditor(field) {
-  return function(cell, onRendered, success, cancel) {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = cell.getValue() || "";
-    input.style.width = "100%";
-    input.style.padding = "4px";
-    input.style.boxSizing = "border-box";
-    
-    const listDiv = document.createElement("div");
-    listDiv.style.position = "absolute";
-    listDiv.style.background = "white";
-    listDiv.style.border = "1px solid #ddd";
-    listDiv.style.maxHeight = "200px";
-    listDiv.style.overflowY = "auto";
-    listDiv.style.zIndex = "1000";
-    listDiv.style.width = cell.getElement().offsetWidth + "px";
-    listDiv.style.display = "none";
-    
-    function showList(items, inputValue) {
-      listDiv.innerHTML = "";
-      
-      // Добавляем опцию "Создать новый"
-      if (inputValue) {
-        const createItem = document.createElement("div");
-        createItem.style.padding = "8px";
-        createItem.style.cursor = "pointer";
-        createItem.style.background = "#e8f4f8";
-        createItem.style.borderBottom = "1px solid #ddd";
-        createItem.style.fontWeight = "bold";
-        createItem.textContent = `➕ Создать "${inputValue}"`;
-        createItem.onclick = function() {
-          success(inputValue);
-          listDiv.style.display = "none";
-        };
-        listDiv.appendChild(createItem);
-      }
-      
-      // Добавляем существующие элементы
-      items.forEach(item => {
-        const div = document.createElement("div");
-        div.style.padding = "8px";
-        div.style.cursor = "pointer";
-        div.textContent = item.name;
-        div.onmouseover = function() {
-          this.style.background = "#f0f0f0";
-        };
-        div.onmouseout = function() {
-          this.style.background = "white";
-        };
-        div.onclick = function() {
-          success(item.name);
-          listDiv.style.display = "none";
-        };
-        listDiv.appendChild(div);
-      });
-      
-      listDiv.style.display = items.length > 0 || inputValue ? "block" : "none";
-    }
-    
-    input.addEventListener("focus", function() {
-      loadAutocompleteData(field).then(items => {
-        showList(items, input.value);
-      });
-    });
-    
-    input.addEventListener("input", function() {
-      const value = input.value.toLowerCase();
-      const filtered = autocompleteCache[field].filter(item => 
-        item.name.toLowerCase().includes(value)
-      );
-      showList(filtered, input.value);
-    });
-    
-    input.addEventListener("blur", function() {
-      setTimeout(() => {
-        listDiv.style.display = "none";
-        success(input.value);
-      }, 200);
-    });
-    
-    input.addEventListener("keydown", function(e) {
-      if (e.key === "Enter") {
-        success(input.value);
-        listDiv.style.display = "none";
-      } else if (e.key === "Escape") {
-        cancel();
-        listDiv.style.display = "none";
-      }
-    });
-    
-    onRendered(function() {
-      input.focus();
-      input.select();
-      cell.getElement().style.position = "relative";
-      cell.getElement().appendChild(listDiv);
-    });
-    
-    return input;
-  };
-}
+// ==================== ОСТАЛЬНЫЕ ФУНКЦИИ ====================
 
 // Сохранение строки
 function saveRow(row) {
