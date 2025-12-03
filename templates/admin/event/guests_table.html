@@ -280,6 +280,23 @@ const table = new Tabulator("#guests-table", {
       visible: false
     },
     {
+      title: "", 
+      field: "contact_id",
+      formatter: function(cell) {
+        const contactId = cell.getValue();
+        if (!contactId) return '';
+        const url = `/admin/event/contact/${contactId}/change/`;
+        return `<a href="${url}" target="_blank" title="Открыть карточку человека" style="color: #417690; font-size: 16px; text-decoration: none;">👤</a>`;
+      },
+      width: 40,
+      hozAlign: "center",
+      headerSort: false,
+      cellClick: function(e, cell) {
+        // Предотвращаем редактирование при клике
+        e.stopPropagation();
+      }
+    },
+    {
       title: "Фамилия", 
       field: "last_name", 
       editor: "input", 
@@ -312,27 +329,28 @@ const table = new Tabulator("#guests-table", {
     {
       title: "Компания", 
       field: "company", 
-      editor: "input", 
+      editor: createAutocompleteEditor('company'),
       width: 150, 
       headerFilter: "input"
     },
     {
       title: "Категория", 
       field: "category", 
-      editor: "input", 
+      editor: createAutocompleteEditor('category'),
       width: 130, 
       headerFilter: "input"
     },
     {
       title: "Тип гостя", 
       field: "type_guest", 
-      editor: "input", 
+      editor: createAutocompleteEditor('type_guest'),
       width: 130, 
       headerFilter: "input"
     },
     {
       title: "Продюсер", 
       field: "producer", 
+      editor: createAutocompleteEditor('producer'),
       width: 150, 
       headerFilter: "input"
     },
@@ -377,13 +395,155 @@ const table = new Tabulator("#guests-table", {
     }
   ],
   
-  // Автосохранение при редактировании
+  // Автосохранение при редактировании с задержкой
   cellEdited: function(cell) {
-    saveRow(cell.getRow());
+    const row = cell.getRow();
+    
+    // Показываем что идет сохранение
+    showIndicator('💾 Сохранение...', 'saving');
+    
+    // Отменяем предыдущий таймер если есть
+    if (row.saveTimer) {
+      clearTimeout(row.saveTimer);
+    }
+    
+    // Сохраняем с задержкой 1 секунда
+    row.saveTimer = setTimeout(() => {
+      saveRow(row);
+    }, 1000);
   }
 });
 
 // ==================== ФУНКЦИИ ====================
+
+// Кэш для автокомплита
+const autocompleteCache = {
+  company: [],
+  category: [],
+  type_guest: [],
+  producer: []
+};
+
+// Загрузка списков для автокомплита
+function loadAutocompleteData(field) {
+  return fetch(`/admin/event/moduleinstance/${eventId}/autocomplete/${field}/`, {
+    headers: {
+      'X-CSRFToken': csrftoken
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    autocompleteCache[field] = data.results || [];
+    return autocompleteCache[field];
+  })
+  .catch(error => {
+    console.error('Error loading autocomplete:', error);
+    return [];
+  });
+}
+
+// Создание autocomplete редактора
+function createAutocompleteEditor(field) {
+  return function(cell, onRendered, success, cancel) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = cell.getValue() || "";
+    input.style.width = "100%";
+    input.style.padding = "4px";
+    input.style.boxSizing = "border-box";
+    
+    const listDiv = document.createElement("div");
+    listDiv.style.position = "absolute";
+    listDiv.style.background = "white";
+    listDiv.style.border = "1px solid #ddd";
+    listDiv.style.maxHeight = "200px";
+    listDiv.style.overflowY = "auto";
+    listDiv.style.zIndex = "1000";
+    listDiv.style.width = cell.getElement().offsetWidth + "px";
+    listDiv.style.display = "none";
+    
+    function showList(items, inputValue) {
+      listDiv.innerHTML = "";
+      
+      // Добавляем опцию "Создать новый"
+      if (inputValue) {
+        const createItem = document.createElement("div");
+        createItem.style.padding = "8px";
+        createItem.style.cursor = "pointer";
+        createItem.style.background = "#e8f4f8";
+        createItem.style.borderBottom = "1px solid #ddd";
+        createItem.style.fontWeight = "bold";
+        createItem.textContent = `➕ Создать "${inputValue}"`;
+        createItem.onclick = function() {
+          success(inputValue);
+          listDiv.style.display = "none";
+        };
+        listDiv.appendChild(createItem);
+      }
+      
+      // Добавляем существующие элементы
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.style.padding = "8px";
+        div.style.cursor = "pointer";
+        div.textContent = item.name;
+        div.onmouseover = function() {
+          this.style.background = "#f0f0f0";
+        };
+        div.onmouseout = function() {
+          this.style.background = "white";
+        };
+        div.onclick = function() {
+          success(item.name);
+          listDiv.style.display = "none";
+        };
+        listDiv.appendChild(div);
+      });
+      
+      listDiv.style.display = items.length > 0 || inputValue ? "block" : "none";
+    }
+    
+    input.addEventListener("focus", function() {
+      loadAutocompleteData(field).then(items => {
+        showList(items, input.value);
+      });
+    });
+    
+    input.addEventListener("input", function() {
+      const value = input.value.toLowerCase();
+      const filtered = autocompleteCache[field].filter(item => 
+        item.name.toLowerCase().includes(value)
+      );
+      showList(filtered, input.value);
+    });
+    
+    input.addEventListener("blur", function() {
+      setTimeout(() => {
+        listDiv.style.display = "none";
+        success(input.value);
+      }, 200);
+    });
+    
+    input.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        success(input.value);
+        listDiv.style.display = "none";
+      } else if (e.key === "Escape") {
+        cancel();
+        listDiv.style.display = "none";
+      }
+    });
+    
+    onRendered(function() {
+      input.focus();
+      input.select();
+      cell.getElement().style.position = "relative";
+      cell.getElement().appendChild(listDiv);
+    });
+    
+    return input;
+  };
+}
 
 // Сохранение строки
 function saveRow(row) {
@@ -391,9 +551,11 @@ function saveRow(row) {
   
   // Валидация
   if (!data.last_name || !data.first_name) {
-    showIndicator('Ошибка: Фамилия и Имя обязательны', 'error');
+    showIndicator('❌ Ошибка: Фамилия и Имя обязательны', 'error');
     return;
   }
+  
+  console.log('Сохранение данных:', data);
   
   fetch("{% url 'admin:event_guest_save' event.id %}", {
     method: 'POST',
@@ -403,26 +565,38 @@ function saveRow(row) {
     },
     body: JSON.stringify(data)
   })
-  .then(response => response.json())
+  .then(response => {
+    console.log('Response status:', response.status);
+    return response.json();
+  })
   .then(result => {
+    console.log('Result:', result);
     if (result.success) {
       // Обновляем ID если это была новая строка
       if (!data.id) {
         row.update({
           id: result.id, 
           contact_id: result.contact_id
-        });
+        }, true);  // true = не триггерить cellEdited
       }
-      showIndicator('✅ Изменения сохранены', 'success');
+      showIndicator('✅ Сохранено: ' + data.last_name + ' ' + data.first_name, 'success');
+      
+      // Перезагружаем списки для автокомплита
+      loadAutocompleteData('company');
+      loadAutocompleteData('category');
+      loadAutocompleteData('type_guest');
+      loadAutocompleteData('producer');
       
       // Обновляем статистику
-      table.replaceData();
+      setTimeout(() => {
+        table.replaceData();
+      }, 500);
     } else {
-      showIndicator('❌ ' + result.error, 'error');
+      showIndicator('❌ Ошибка: ' + result.error, 'error');
     }
   })
   .catch(error => {
-    console.error('Error:', error);
+    console.error('Save error:', error);
     showIndicator('❌ Ошибка сохранения: ' + error, 'error');
   });
 }
@@ -464,6 +638,7 @@ function deleteRow(row) {
 }
 
 // Индикатор сохранения
+let indicatorTimeout;
 function showIndicator(message, type = 'success') {
   const indicator = document.getElementById('save-indicator');
   indicator.textContent = message;
@@ -471,11 +646,28 @@ function showIndicator(message, type = 'success') {
   
   if (type === 'error') {
     indicator.classList.add('error');
+  } else if (type === 'saving') {
+    indicator.style.background = '#fff3cd';
+    indicator.style.borderColor = '#ffeaa7';
+    indicator.style.color = '#856404';
+  } else {
+    // success
+    indicator.style.background = '#d4edda';
+    indicator.style.borderColor = '#c3e6cb';
+    indicator.style.color = '#155724';
   }
   
-  setTimeout(() => {
-    indicator.classList.remove('show');
-  }, 3000);
+  // Очищаем предыдущий таймаут
+  if (indicatorTimeout) {
+    clearTimeout(indicatorTimeout);
+  }
+  
+  // Для 'saving' не скрываем автоматически
+  if (type !== 'saving') {
+    indicatorTimeout = setTimeout(() => {
+      indicator.classList.remove('show');
+    }, 3000);
+  }
 }
 
 // Обновление статистики
@@ -532,6 +724,15 @@ document.getElementById('download-csv').addEventListener('click', function() {
 document.getElementById('reload-data').addEventListener('click', function() {
   table.replaceData();
   showIndicator('Данные обновлены', 'success');
+});
+
+// Предзагружаем списки для автокомплита при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Загрузка списков для автокомплита...');
+  loadAutocompleteData('company');
+  loadAutocompleteData('category');
+  loadAutocompleteData('type_guest');
+  loadAutocompleteData('producer');
 });
 </script>
 

@@ -26,5 +26,10 @@ urlpatterns = [
     path('<int:event_id>/guest-delete/', 
          views_guests_table.guest_delete_api,
          name='event_guest_delete'),
+    
+    # API для автокомплита справочников
+    path('<int:event_id>/autocomplete/<str:field>/', 
+         views_guests_table.autocomplete_api,
+         name='event_guest_autocomplete'),
 ]
 

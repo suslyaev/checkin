@@ -60,8 +60,11 @@ def guests_data_api(request, event_id):
             'middle_name': contact.middle_name or '',
             'nickname': contact.nickname or '',
             'company': contact.company.name if contact.company else '',
+            'company_id': contact.company.id if contact.company else None,
             'category': contact.category.name if contact.category else '',
+            'category_id': contact.category.id if contact.category else None,
             'type_guest': contact.type_guest.name if contact.type_guest else '',
+            'type_guest_id': contact.type_guest.id if contact.type_guest else None,
             'producer': f"{contact.producer.last_name} {contact.producer.first_name}" if contact.producer else '',
             'action_type': action.action_type,
             'action_type_display': action.get_action_type_display(),
@@ -69,6 +72,38 @@ def guests_data_api(request, event_id):
         })
     
     return JsonResponse({'data': data})
+
+
+@require_http_methods(["GET"])
+def autocomplete_api(request, event_id, field):
+    """
+    API для автокомплита справочников
+    field: company, category, type_guest, producer
+    """
+    term = request.GET.get('term', '')
+    
+    if field == 'company':
+        items = CompanyContact.objects.filter(name__icontains=term).order_by('name')[:20]
+        results = [{'id': item.id, 'name': item.name} for item in items]
+    elif field == 'category':
+        items = CategoryContact.objects.filter(name__icontains=term).order_by('name')[:20]
+        results = [{'id': item.id, 'name': item.name} for item in items]
+    elif field == 'type_guest':
+        items = TypeGuestContact.objects.filter(name__icontains=term).order_by('name')[:20]
+        results = [{'id': item.id, 'name': item.name} for item in items]
+    elif field == 'producer':
+        from .models import CustomUser
+        # Ищем только продюсеров
+        items = CustomUser.objects.filter(
+            groups__name='Продюсер'
+        ).filter(
+            Q(last_name__icontains=term) | Q(first_name__icontains=term)
+        ).order_by('last_name', 'first_name')[:20]
+        results = [{'id': item.id, 'name': f"{item.last_name} {item.first_name}"} for item in items]
+    else:
+        return JsonResponse({'error': 'Invalid field'}, status=400)
+    
+    return JsonResponse({'results': results})
 
 
 @require_http_methods(["POST"])
@@ -134,6 +169,23 @@ def guest_save_api(request, event_id):
                 )
             else:
                 contact.type_guest = None
+            
+            # Продюсер - ищем по ФИО
+            producer_name = data.get('producer', '').strip()
+            if producer_name:
+                # Пытаемся найти продюсера по ФИО
+                parts = producer_name.split()
+                if len(parts) >= 2:
+                    from .models import CustomUser
+                    producer = CustomUser.objects.filter(
+                        last_name__iexact=parts[0],
+                        first_name__iexact=parts[1],
+                        groups__name='Продюсер'
+                    ).first()
+                    if producer:
+                        contact.producer = producer
+            else:
+                contact.producer = None
             
             contact.save()
             
