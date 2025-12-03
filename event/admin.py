@@ -233,10 +233,17 @@ class CopyInvitationsForm(forms.Form):
         required=True,
         widget=forms.Select(attrs={
             'class': 'admin-autocomplete',
+            'data-autocomplete-light-function': 'select2',
             'data-placeholder': 'Начните вводить название мероприятия...',
             'style': 'max-width: 500px; width: 500px;'
         })
     )
+    
+    class Media:
+        css = {
+            'all': ('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',)
+        }
+        js = ()
 
 ProducerActionFilter = AutocompleteFilterFactory(
     'Продюсер',
