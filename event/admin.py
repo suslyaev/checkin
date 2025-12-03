@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 import event.services as service
 from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, ActionLog
 from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
@@ -7,10 +7,10 @@ from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
 from .resources import ContactImport, EventExport
 from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils.html import format_html, format_html_join
 from django.urls import reverse
-from django.http import FileResponse
+from django.http import FileResponse, QueryDict
 import os
 from django.utils import timezone
 from django.forms import Textarea
@@ -20,6 +20,8 @@ from django.urls import path
 from django.urls import reverse
 from django.shortcuts import redirect
 from admin_auto_filters.filters import AutocompleteFilterMultiple
+from django import forms
+from django.contrib.admin.widgets import AutocompleteSelect
 
 
 class CustomAdminSite(admin.AdminSite):
@@ -29,49 +31,67 @@ class CustomAdminSite(admin.AdminSite):
 
     def get_app_list(self, request, app_label=None):
         """
-        Кастомный порядок моделей в приложении event с разделителями.
+        Возвращает кастомный список приложений с настоящей группировкой
         """
         app_list = super().get_app_list(request)
 
-        # Ищем в списке приложение event
+        # Создаём кастомные группы
+        custom_apps = []
+
+        # 1. События
+        events_group = {
+            'name': 'События',
+            'app_label': 'event_events',
+            'app_url': '/admin/event/',
+            'has_module_perms': True,
+            'models': []
+        }
+
+        # 2. Справочники
+        reference_group = {
+            'name': 'Справочники',
+            'app_label': 'event_reference',
+            'app_url': '/admin/event/',
+            'has_module_perms': True,
+            'models': []
+        }
+
+        # 3. Доступы
+        access_group = {
+            'name': 'Доступы',
+            'app_label': 'event_access',
+            'app_url': '/admin/event/',
+            'has_module_perms': True,
+            'models': []
+        }
+
+        # Распределяем модели по группам
         for app in app_list:
             if app["app_label"] == "event":
-                # Желаемый порядок моделей
-                custom_order = [
-                    "События",
-                    "Contact",
-                    "ModuleInstance",
-                    "Action",
-                    "Справочники",
-                    "CompanyContact",
-                    "CategoryContact",
-                    "TypeGuestContact",
-                    "SocialNetwork",
-                    "Доступы",
-                    "CustomUser",
-                ]
-
-                # Разбиваем модели на словарь {Имя модели: данные}
+                # Создаём словарь для быстрого поиска
                 model_dict = {model["object_name"]: model for model in app["models"]}
 
-                # Создаем новый список моделей в заданном порядке
-                new_models = []
-                for model_name in custom_order:
-                    if model_name == "---":
-                        new_models.append({"name": "---", "admin_url": None})
-                    elif model_name == "События":
-                        new_models.append({"name": "-- События --", "admin_url": None})
-                    elif model_name == "Справочники":
-                        new_models.append({"name": "-- Справочники --", "admin_url": None})
-                    elif model_name == "Доступы":
-                        new_models.append({"name": "-- Доступы --", "admin_url": None})
-                    elif model_name in model_dict:
-                        new_models.append(model_dict[model_name])
+                # События
+                for model_name in ['Contact', 'ModuleInstance', 'Action']:
+                    if model_name in model_dict:
+                        events_group['models'].append(model_dict[model_name])
 
-                # Обновляем модели приложения
-                app["models"] = new_models
+                # Справочники
+                for model_name in ['CompanyContact', 'CategoryContact', 'TypeGuestContact', 'SocialNetwork']:
+                    if model_name in model_dict:
+                        reference_group['models'].append(model_dict[model_name])
 
-        return app_list
+                # Доступы
+                for model_name in ['CustomUser']:
+                    if model_name in model_dict:
+                        access_group['models'].append(model_dict[model_name])
+
+        # Добавляем только непустые группы
+        for group in [events_group, reference_group, access_group]:
+            if group['models']:
+                custom_apps.append(group)
+
+        return custom_apps
 
 admin.site.__class__ = CustomAdminSite
 
@@ -222,6 +242,26 @@ class TypeGuestContactFilter(AutocompleteFilterMultiple):
 class ProducerContactFilter(AutocompleteFilterMultiple):
     title = 'Продюсер'
     field_name = 'producer'
+
+class CopyInvitationsForm(forms.Form):
+    _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)
+    source_event = forms.ModelChoiceField(
+        queryset=ModuleInstance.objects.all(),
+        label='Выберите источник приглашений',
+        required=True,
+        widget=forms.Select(attrs={
+            'class': 'admin-autocomplete',
+            'data-autocomplete-light-function': 'select2',
+            'data-placeholder': 'Начните вводить название мероприятия...',
+            'style': 'max-width: 500px; width: 500px;'
+        })
+    )
+    
+    class Media:
+        css = {
+            'all': ('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',)
+        }
+        js = ()
 
 ProducerActionFilter = AutocompleteFilterFactory(
     'Продюсер',
@@ -400,7 +440,7 @@ class TypeGuestContactAdmin(BaseAdminPage):
 class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
     form = ModuleInstanceForm
     resource_class = EventExport
-    search_fields = ['get_name_event']
+    search_fields = ['name', 'address']
     show_change_form_export = False
     fieldsets = (
         (None, {
@@ -430,6 +470,10 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
     list_per_page = 25
     view_on_site = False
     list_max_show_all = 10000
+    actions = ['copy_invitations_action', 'delete_selected']
+    action_changelist_url_name = 'admin:event_action_changelist'
+    event_filter_param = 'event__pk__in'
+    status_filter_param = 'action_type__exact'
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
@@ -446,24 +490,47 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
     add_person_button.short_description = "Добавить человека на мероприятие"
 
     def announced_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='announced').count()
+        return self._status_count_link(obj, 'announced', 'announced_total')
     announced_count.short_description = 'Заявлено'
+    announced_count.admin_order_field = 'announced_total'
 
     def invited_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='invited').count()
+        return self._status_count_link(obj, 'invited', 'invited_total')
     invited_count.short_description = 'Приглашено'
+    invited_count.admin_order_field = 'invited_total'
 
     def registered_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='registered').count()
+        return self._status_count_link(obj, 'registered', 'registered_total')
     registered_count.short_description = 'Согласовано'
+    registered_count.admin_order_field = 'registered_total'
 
     def checkins_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='visited').count()
+        return self._status_count_link(obj, 'visited', 'visited_total')
     checkins_count.short_description = 'Посещено'
+    checkins_count.admin_order_field = 'visited_total'
 
     def cancelled_count(self, obj):
-        return Action.objects.filter(event=obj, action_type='cancelled').count()
+        return self._status_count_link(obj, 'cancelled', 'cancelled_total')
     cancelled_count.short_description = 'Отклонено'
+    cancelled_count.admin_order_field = 'cancelled_total'
+
+    def _status_count_link(self, obj, status, annotation_attr):
+        count = getattr(obj, annotation_attr, None)
+        if count is None:
+            queryset = Action.objects.filter(event=obj)
+            if status:
+                queryset = queryset.filter(action_type=status)
+            count = queryset.count()
+        url = self._build_action_changelist_url(obj.pk, status)
+        return format_html('<a href="{url}">{count}</a>', url=url, count=count)
+
+    def _build_action_changelist_url(self, event_pk, status=None):
+        base_url = reverse(self.action_changelist_url_name)
+        params = QueryDict('', mutable=True)
+        params[self.event_filter_param] = str(event_pk)
+        if status:
+            params[self.status_filter_param] = status
+        return f'{base_url}?{params.urlencode()}'
 
     def announced_list(self, obj): # Список заявленных (action_type='announced')
         actions = Action.objects.filter(action_type='announced', event=obj).select_related('contact')
@@ -537,7 +604,13 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
         if request.user.groups.filter(name='Модератор').exists():
             qs = qs.filter(checkers=request.user)
 
-        return qs
+        return qs.annotate(
+            announced_total=Count('action', filter=Q(action__action_type='announced')),
+            invited_total=Count('action', filter=Q(action__action_type='invited')),
+            registered_total=Count('action', filter=Q(action__action_type='registered')),
+            visited_total=Count('action', filter=Q(action__action_type='visited')),
+            cancelled_total=Count('action', filter=Q(action__action_type='cancelled')),
+        )
 
     def has_change_permission(self, request, obj=None):
         """
@@ -565,6 +638,109 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
         # Иначе возвращаем стандартную проверку
         return super().has_change_permission(request, obj=obj)
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('autocomplete-events/', self.admin_site.admin_view(self.autocomplete_events_view), name='autocomplete_events'),
+        ]
+        return custom_urls + urls
+    
+    def autocomplete_events_view(self, request):
+        """Кастомный autocomplete для выбора мероприятий"""
+        from django.http import JsonResponse
+        term = request.GET.get('term', '')
+        
+        queryset = ModuleInstance.objects.all()
+        if term:
+            queryset = queryset.filter(name__icontains=term)
+        
+        # Ограничиваем результаты
+        queryset = queryset[:20]
+        
+        results = [{'id': obj.pk, 'text': str(obj)} for obj in queryset]
+        
+        return JsonResponse({
+            'results': results,
+            'pagination': {'more': False}
+        })
+    
+    @admin.action(description='Импортировать приглашения')
+    def copy_invitations_action(self, request, queryset):
+        selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)
+        if not selected_ids:
+            selected_ids = [str(pk) for pk in queryset.values_list('pk', flat=True)]
+        if not selected_ids:
+            self.message_user(request, "Сначала выберите одно или несколько мероприятий.", level=messages.WARNING)
+            return
+
+        form = None
+        if 'apply' in request.POST:
+            form = CopyInvitationsForm(request.POST)
+            if form.is_valid():
+                source_event = form.cleaned_data['source_event']
+                target_events = list(queryset.exclude(pk=source_event.pk))
+                if not target_events:
+                    self.message_user(request, "Нет мероприятий для копирования (источник исключается из списка).", level=messages.WARNING)
+                    return HttpResponseRedirect(request.get_full_path())
+
+                stats = self._copy_invitations_from_event(request.user, source_event, target_events)
+                total_created = sum(stats.values())
+                if total_created:
+                    summary = "; ".join(f'"{event.name}" — {count}' for event, count in stats.items())
+                    self.message_user(request, f'Создано {total_created} приглашений: {summary}')
+                else:
+                    self.message_user(request, 'Новые приглашения не созданы: все выбранные участники уже присутствуют.', level=messages.INFO)
+
+                return HttpResponseRedirect(request.get_full_path())
+
+        if not form:
+            form = CopyInvitationsForm(
+                initial={'_selected_action': selected_ids}
+            )
+
+        context = {
+            'title': 'Импорт приглашений',
+            'selected_events': list(queryset),
+            'form': form,
+            'action_name': 'copy_invitations_action',
+            'opts': self.model._meta,
+        }
+
+        return render(request, 'event/copy_invitations.html', context)
+
+    def _copy_invitations_from_event(self, user, source_event, target_events):
+        source_actions = list(
+            Action.objects.filter(event=source_event, contact__isnull=False).select_related('contact')
+        )
+        results = {}
+
+        for target in target_events:
+            existing_contact_ids = set(
+                Action.objects.filter(event=target).values_list('contact_id', flat=True)
+            )
+            to_create = []
+
+            for action in source_actions:
+                contact_id = action.contact_id
+                if not contact_id or contact_id in existing_contact_ids:
+                    continue
+                to_create.append(Action(
+                    contact=action.contact,
+                    event=target,
+                    action_type='announced',
+                    comment=action.comment,
+                    create_user=user,
+                    update_user=user,
+                ))
+                existing_contact_ids.add(contact_id)
+
+            if to_create:
+                Action.objects.bulk_create(to_create, ignore_conflicts=True)
+
+            results[target] = len(to_create)
+
+        return results
+
 # Действие
 @admin.register(Action)
 class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
@@ -573,7 +749,7 @@ class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModel
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
     autocomplete_fields = ['contact', 'event']
     readonly_fields = ('action_type', 'create_date', 'update_date', 'create_user', 'update_user', 'audit_log_table')
-    list_per_page = 25
+    list_per_page = 100
     view_on_site = False
     show_change_form_export = False
     list_max_show_all = 10000

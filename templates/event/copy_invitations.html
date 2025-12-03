@@ -1,0 +1,192 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+  <style>
+    .copy-invitations-container .form-row {
+      margin-bottom: 20px;
+    }
+    .copy-invitations-container .form-row label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    .copy-invitations-container .form-row select,
+    .copy-invitations-container .form-row .select2-container {
+      max-width: 500px !important;
+      width: 500px !important;
+    }
+    .submit-row {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      margin: 0 0 15px;
+      background: #f8f8f8;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    .submit-row button,
+    .submit-row a {
+      padding: 10px 15px;
+      font-size: 13px;
+      line-height: 1;
+      border-radius: 4px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      font-weight: normal;
+      display: inline-block;
+    }
+    .submit-row button.default {
+      background: #417690;
+      color: #fff;
+    }
+    .submit-row button.default:hover {
+      background: #205067;
+    }
+    .submit-row a.cancel-link {
+      background: #ba2121;
+      color: #fff;
+    }
+    .submit-row a.cancel-link:hover {
+      background: #a41515;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  {{ form.media }}
+  <div class="module">
+    <h2>Импорт приглашений</h2>
+    <p>Вы собираетесь скопировать приглашения в выбранные мероприятия:</p>
+    <ul>
+      {% for event in selected_events %}
+        <li>{{ event }}</li>
+      {% empty %}
+        <li>Нет выбранных мероприятий.</li>
+      {% endfor %}
+    </ul>
+    <p>Выберите мероприятие-источник, из которого будут взяты участники.</p>
+    <form action="" method="post" class="copy-invitations-container">
+      {% csrf_token %}
+      {% for hidden in form.hidden_fields %}
+        {{ hidden }}
+      {% endfor %}
+      <div class="form-row">
+        {{ form.source_event.errors }}
+        {{ form.source_event.label_tag }} {{ form.source_event }}
+      </div>
+      <input type="hidden" name="action" value="{{ action_name }}">
+      <div class="submit-row">
+        <button type="submit" name="apply" class="default">Скопировать</button>
+        <a href=".." class="cancel-link">Отмена</a>
+      </div>
+    </form>
+  </div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script>
+    (function($) {
+      console.log('=== Начало инициализации ===');
+      console.log('✓ jQuery версия:', $.fn.jquery);
+      console.log('✓ Select2 доступен:', typeof $.fn.select2 !== 'undefined');
+      
+      // Получаем CSRF токен
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          var cookies = document.cookie.split(';');
+          for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      var csrftoken = getCookie('csrftoken');
+      console.log('CSRF токен:', csrftoken ? 'найден' : 'НЕ найден');
+      
+      $(document).ready(function() {
+        console.log('DOM готов');
+        
+        var $select = $('#id_source_event');
+        console.log('Select элемент:', $select.length > 0 ? 'найден' : 'НЕ найден');
+        
+        if ($select.length > 0) {
+          console.log('ID элемента:', $select.attr('id'));
+          console.log('Класс элемента:', $select.attr('class'));
+          
+          try {
+            // Настраиваем jQuery для отправки CSRF токена
+            $.ajaxSetup({
+              beforeSend: function(xhr, settings) {
+                if (!(/^http:.*/.test(settings.url) || /^https:.*/.test(settings.url))) {
+                  // Только для локальных запросов
+                  xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                }
+              }
+            });
+            
+            $select.select2({
+              placeholder: 'Начните вводить название мероприятия...',
+              allowClear: false,
+              width: '500px',
+              minimumInputLength: 0,
+              ajax: {
+                url: '/admin/event/moduleinstance/autocomplete-events/',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                  var query = {
+                    term: params.term || ''
+                  };
+                  console.log('Запрос к кастомному endpoint:', query);
+                  return query;
+                },
+                processResults: function (data) {
+                  console.log('✓ Получены данные:', data);
+                  return {
+                    results: data.results.map(function(item) {
+                      return {
+                        id: item.id,
+                        text: item.text
+                      };
+                    })
+                  };
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                  console.error('✗ Ошибка запроса:', textStatus, errorThrown);
+                  console.error('Статус:', jqXHR.status);
+                  console.error('Ответ:', jqXHR.responseText);
+                },
+                cache: true
+              }
+            });
+            console.log('✓✓✓ Select2 инициализирован успешно!');
+            
+            // Проверяем, что виджет действительно создан
+            setTimeout(function() {
+              if ($select.hasClass('select2-hidden-accessible')) {
+                console.log('✓ Select2 виджет активирован');
+              } else {
+                console.error('✗ Select2 виджет НЕ активирован');
+              }
+            }, 100);
+          } catch(e) {
+            console.error('✗ Ошибка инициализации Select2:', e);
+          }
+        } else {
+          console.error('✗ Select элемент не найден!');
+        }
+      });
+    })(jQuery);
+  </script>
+{% endblock %}
+
