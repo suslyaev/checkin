@@ -61,7 +61,32 @@
         jQuery('#id_source_event').select2({
           placeholder: 'Начните вводить название мероприятия...',
           allowClear: false,
-          width: '500px'
+          width: '500px',
+          minimumInputLength: 0,
+          ajax: {
+            url: '/admin/autocomplete/',
+            dataType: 'json',
+            delay: 250,
+            data: function (params) {
+              return {
+                term: params.term || '',
+                app_label: 'event',
+                model_name: 'moduleinstance',
+                field_name: 'source_event'
+              };
+            },
+            processResults: function (data) {
+              return {
+                results: data.results.map(function(item) {
+                  return {
+                    id: item.id,
+                    text: item.text
+                  };
+                })
+              };
+            },
+            cache: true
+          }
         });
       }
     });
