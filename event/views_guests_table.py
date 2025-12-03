@@ -6,10 +6,11 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.db import transaction
+from django.db.models import Q
 from django.views.decorators.http import require_http_methods
 import json
 
-from .models import ModuleInstance, Action, Contact, CompanyContact, CategoryContact, TypeGuestContact
+from .models import ModuleInstance, Action, Contact, CompanyContact, CategoryContact, TypeGuestContact, CustomUser
 
 
 def guests_table_view(request, event_id):
@@ -92,7 +93,6 @@ def autocomplete_api(request, event_id, field):
         items = TypeGuestContact.objects.filter(name__icontains=term).order_by('name')[:20]
         results = [{'id': item.id, 'name': item.name} for item in items]
     elif field == 'producer':
-        from .models import CustomUser
         # Ищем только продюсеров
         items = CustomUser.objects.filter(
             groups__name='Продюсер'
@@ -176,7 +176,6 @@ def guest_save_api(request, event_id):
                 # Пытаемся найти продюсера по ФИО
                 parts = producer_name.split()
                 if len(parts) >= 2:
-                    from .models import CustomUser
                     producer = CustomUser.objects.filter(
                         last_name__iexact=parts[0],
                         first_name__iexact=parts[1],
