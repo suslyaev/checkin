@@ -31,49 +31,67 @@ class CustomAdminSite(admin.AdminSite):
 
     def get_app_list(self, request, app_label=None):
         """
-        Кастомный порядок моделей в приложении event с разделителями.
+        Возвращает кастомный список приложений с настоящей группировкой
         """
         app_list = super().get_app_list(request)
 
-        # Ищем в списке приложение event
+        # Создаём кастомные группы
+        custom_apps = []
+
+        # 1. События
+        events_group = {
+            'name': 'События',
+            'app_label': 'event_events',
+            'app_url': '/admin/event/',
+            'has_module_perms': True,
+            'models': []
+        }
+
+        # 2. Справочники
+        reference_group = {
+            'name': 'Справочники',
+            'app_label': 'event_reference',
+            'app_url': '/admin/event/',
+            'has_module_perms': True,
+            'models': []
+        }
+
+        # 3. Доступы
+        access_group = {
+            'name': 'Доступы',
+            'app_label': 'event_access',
+            'app_url': '/admin/event/',
+            'has_module_perms': True,
+            'models': []
+        }
+
+        # Распределяем модели по группам
         for app in app_list:
             if app["app_label"] == "event":
-                # Желаемый порядок моделей
-                custom_order = [
-                    "События",
-                    "Contact",
-                    "ModuleInstance",
-                    "Action",
-                    "Справочники",
-                    "CompanyContact",
-                    "CategoryContact",
-                    "TypeGuestContact",
-                    "SocialNetwork",
-                    "Доступы",
-                    "CustomUser",
-                ]
-
-                # Разбиваем модели на словарь {Имя модели: данные}
+                # Создаём словарь для быстрого поиска
                 model_dict = {model["object_name"]: model for model in app["models"]}
 
-                # Создаем новый список моделей в заданном порядке
-                new_models = []
-                for model_name in custom_order:
-                    if model_name == "---":
-                        new_models.append({"name": "---", "admin_url": None})
-                    elif model_name == "События":
-                        new_models.append({"name": "-- События --", "admin_url": None})
-                    elif model_name == "Справочники":
-                        new_models.append({"name": "-- Справочники --", "admin_url": None})
-                    elif model_name == "Доступы":
-                        new_models.append({"name": "-- Доступы --", "admin_url": None})
-                    elif model_name in model_dict:
-                        new_models.append(model_dict[model_name])
+                # События
+                for model_name in ['Contact', 'ModuleInstance', 'Action']:
+                    if model_name in model_dict:
+                        events_group['models'].append(model_dict[model_name])
 
-                # Обновляем модели приложения
-                app["models"] = new_models
+                # Справочники
+                for model_name in ['CompanyContact', 'CategoryContact', 'TypeGuestContact', 'SocialNetwork']:
+                    if model_name in model_dict:
+                        reference_group['models'].append(model_dict[model_name])
 
-        return app_list
+                # Доступы
+                for model_name in ['CustomUser']:
+                    if model_name in model_dict:
+                        access_group['models'].append(model_dict[model_name])
+
+        # Добавляем только непустые группы
+        for group in [events_group, reference_group, access_group]:
+            if group['models']:
+                custom_apps.append(group)
+
+        return custom_apps
 
 admin.site.__class__ = CustomAdminSite
 
