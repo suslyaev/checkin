@@ -230,23 +230,13 @@ class CopyInvitationsForm(forms.Form):
     source_event = forms.ModelChoiceField(
         queryset=ModuleInstance.objects.all(),
         label='Выберите источник приглашений',
-        required=True
+        required=True,
+        widget=forms.Select(attrs={
+            'class': 'admin-autocomplete',
+            'data-placeholder': 'Начните вводить название мероприятия...',
+            'style': 'max-width: 500px; width: 500px;'
+        })
     )
-
-    def __init__(self, *args, **kwargs):
-        admin_site = kwargs.pop('admin_site', None)
-        super().__init__(*args, **kwargs)
-        if admin_site:
-            # Используем remote_field (ForeignKey relation) из поля event модели Action
-            event_field = Action._meta.get_field('event')
-            # AutocompleteSelect требует remote_field (relation), а не само поле
-            widget = AutocompleteSelect(event_field.remote_field, admin_site)
-            widget.attrs.update({
-                'data-ajax--delay': '250',
-                'data-placeholder': 'Начните вводить название мероприятия...',
-                'style': 'max-width: 500px;'
-            })
-            self.fields['source_event'].widget = widget
 
 ProducerActionFilter = AutocompleteFilterFactory(
     'Продюсер',

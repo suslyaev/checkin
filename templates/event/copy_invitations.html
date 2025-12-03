@@ -3,6 +3,8 @@
 
 {% block extrahead %}
   {{ block.super }}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <style>
     .copy-invitations-container .form-row {
       margin-bottom: 20px;
@@ -53,6 +55,17 @@
       background: #a41515;
     }
   </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+        jQuery('#id_source_event').select2({
+          placeholder: 'Начните вводить название мероприятия...',
+          allowClear: false,
+          width: '500px'
+        });
+      }
+    });
+  </script>
 {% endblock %}
 
 {% block content %}
