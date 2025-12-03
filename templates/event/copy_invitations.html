@@ -4,11 +4,6 @@
 {% block extrahead %}
   {{ block.super }}
   <style>
-    .copy-invitations-container {
-      max-width: 800px;
-      margin: 20px auto;
-      padding: 20px;
-    }
     .copy-invitations-container .form-row {
       margin-bottom: 20px;
     }
@@ -20,7 +15,7 @@
     .copy-invitations-container .form-row select,
     .copy-invitations-container .form-row .select2-container {
       max-width: 500px !important;
-      width: 100% !important;
+      width: 500px !important;
     }
     .submit-row {
       display: flex;
@@ -62,7 +57,7 @@
 
 {% block content %}
   {{ form.media }}
-  <div class="module copy-invitations-container">
+  <div class="module">
     <h2>Импорт приглашений</h2>
     <p>Вы собираетесь скопировать приглашения в выбранные мероприятия:</p>
     <ul>
@@ -73,7 +68,7 @@
       {% endfor %}
     </ul>
     <p>Выберите мероприятие-источник, из которого будут взяты участники.</p>
-    <form action="" method="post">
+    <form action="" method="post" class="copy-invitations-container">
       {% csrf_token %}
       {% for hidden in form.hidden_fields %}
         {{ hidden }}
