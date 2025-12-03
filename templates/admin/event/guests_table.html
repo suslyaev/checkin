@@ -76,26 +76,56 @@
       border-radius: 4px;
     }
     
+    /* Разрешаем overflow для выпадающих списков */
+    .tabulator-cell {
+      overflow: visible !important;
+    }
+    
+    .tabulator-row {
+      overflow: visible !important;
+    }
+    
+    /* Стили для выпадающего списка */
+    .autocomplete-list {
+      box-sizing: border-box;
+    }
+    
+    .autocomplete-list > div {
+      white-space: nowrap;
+    }
+    
     .save-indicator {
-      display: none;
+      min-height: 44px;
       padding: 12px 20px;
-      background: #d4edda;
-      border: 1px solid #c3e6cb;
-      color: #155724;
+      background: transparent;
+      border: 1px solid transparent;
       border-radius: 4px;
       margin-bottom: 15px;
       font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.3s;
     }
     
     .save-indicator.show {
-      display: block;
-      animation: fadeIn 0.3s;
+      opacity: 1;
     }
     
-    .save-indicator.error {
+    .save-indicator.show.success {
+      background: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    
+    .save-indicator.show.error {
       background: #f8d7da;
       border-color: #f5c6cb;
       color: #721c24;
+    }
+    
+    .save-indicator.show.saving {
+      background: #fff3cd;
+      border-color: #ffeaa7;
+      color: #856404;
     }
     
     @keyframes fadeIn {
@@ -325,28 +355,36 @@ function createAutocompleteEditor(field) {
     input.style.boxSizing = "border-box";
     
     const listDiv = document.createElement("div");
+    listDiv.className = "autocomplete-list";
     listDiv.style.position = "absolute";
     listDiv.style.background = "white";
-    listDiv.style.border = "1px solid #ddd";
-    listDiv.style.maxHeight = "200px";
+    listDiv.style.border = "2px solid #417690";
+    listDiv.style.borderRadius = "4px";
+    listDiv.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+    listDiv.style.maxHeight = "250px";
     listDiv.style.overflowY = "auto";
-    listDiv.style.zIndex = "1000";
-    listDiv.style.width = cell.getElement().offsetWidth + "px";
+    listDiv.style.zIndex = "10000";
+    listDiv.style.minWidth = "200px";
     listDiv.style.display = "none";
+    listDiv.style.marginTop = "2px";
     
     function showList(items, inputValue) {
+      console.log(`showList вызван для ${field}, элементов: ${items.length}, inputValue: "${inputValue}"`);
+      
       listDiv.innerHTML = "";
       
       // Добавляем опцию "Создать новый"
       if (inputValue) {
         const createItem = document.createElement("div");
-        createItem.style.padding = "8px";
+        createItem.style.padding = "10px 12px";
         createItem.style.cursor = "pointer";
         createItem.style.background = "#e8f4f8";
-        createItem.style.borderBottom = "1px solid #ddd";
+        createItem.style.borderBottom = "2px solid #ddd";
         createItem.style.fontWeight = "bold";
+        createItem.style.fontSize = "13px";
         createItem.textContent = `➕ Создать "${inputValue}"`;
-        createItem.onclick = function() {
+        createItem.onmousedown = function(e) {
+          e.preventDefault(); // Предотвращаем blur
           console.log(`Выбрано "Создать новый" для ${field}:`, inputValue);
           success(inputValue);
           listDiv.style.display = "none";
@@ -363,8 +401,9 @@ function createAutocompleteEditor(field) {
       // Добавляем существующие элементы
       items.forEach(item => {
         const div = document.createElement("div");
-        div.style.padding = "8px";
+        div.style.padding = "10px 12px";
         div.style.cursor = "pointer";
+        div.style.fontSize = "13px";
         div.textContent = item.name;
         div.onmouseover = function() {
           this.style.background = "#f0f0f0";
@@ -372,7 +411,8 @@ function createAutocompleteEditor(field) {
         div.onmouseout = function() {
           this.style.background = "white";
         };
-        div.onclick = function() {
+        div.onmousedown = function(e) {
+          e.preventDefault(); // Предотвращаем blur
           console.log(`Выбран элемент для ${field}:`, item.name);
           success(item.name);
           listDiv.style.display = "none";
@@ -386,11 +426,15 @@ function createAutocompleteEditor(field) {
         listDiv.appendChild(div);
       });
       
-      listDiv.style.display = items.length > 0 || inputValue ? "block" : "none";
+      const shouldShow = items.length > 0 || inputValue;
+      listDiv.style.display = shouldShow ? "block" : "none";
+      console.log(`Список ${shouldShow ? 'показан' : 'скрыт'}, элементов в DOM: ${listDiv.children.length}`);
     }
     
     input.addEventListener("focus", function() {
+      console.log(`Focus на поле ${field}, текущее значение: "${input.value}"`);
       loadAutocompleteData(field).then(items => {
+        console.log(`Получено ${items.length} элементов для ${field}`);
         showList(items, input.value);
       });
     });
@@ -438,10 +482,24 @@ function createAutocompleteEditor(field) {
     });
     
     onRendered(function() {
+      console.log(`onRendered для ${field}`);
       input.focus();
       input.select();
-      cell.getElement().style.position = "relative";
-      cell.getElement().appendChild(listDiv);
+      
+      // Устанавливаем relative позиционирование для ячейки
+      const cellElement = cell.getElement();
+      cellElement.style.position = "relative";
+      cellElement.style.overflow = "visible";
+      
+      // Добавляем список к ячейке
+      cellElement.appendChild(listDiv);
+      
+      console.log(`Список добавлен к ячейке, родитель:`, cellElement);
+      console.log(`Стили списка:`, {
+        display: listDiv.style.display,
+        zIndex: listDiv.style.zIndex,
+        position: listDiv.style.position
+      });
     });
     
     return input;
@@ -751,20 +809,12 @@ let indicatorTimeout;
 function showIndicator(message, type = 'success') {
   const indicator = document.getElementById('save-indicator');
   indicator.textContent = message;
-  indicator.className = 'save-indicator show';
   
-  if (type === 'error') {
-    indicator.classList.add('error');
-  } else if (type === 'saving') {
-    indicator.style.background = '#fff3cd';
-    indicator.style.borderColor = '#ffeaa7';
-    indicator.style.color = '#856404';
-  } else {
-    // success
-    indicator.style.background = '#d4edda';
-    indicator.style.borderColor = '#c3e6cb';
-    indicator.style.color = '#155724';
-  }
+  // Убираем все классы типов
+  indicator.classList.remove('success', 'error', 'saving');
+  
+  // Добавляем show и нужный тип
+  indicator.className = `save-indicator show ${type}`;
   
   // Очищаем предыдущий таймаут
   if (indicatorTimeout) {
@@ -774,7 +824,7 @@ function showIndicator(message, type = 'success') {
   // Для 'saving' не скрываем автоматически
   if (type !== 'saving') {
     indicatorTimeout = setTimeout(() => {
-      indicator.classList.remove('show');
+      indicator.classList.remove('show', 'success', 'error', 'saving');
     }, 3000);
   }
 }
