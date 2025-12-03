@@ -219,16 +219,16 @@
   <!-- Индикатор сохранения -->
   <div id="save-indicator" class="save-indicator"></div>
   
-  <!-- Таблица -->
-  <div id="guests-table"></div>
-  
-  <!-- Кнопки под таблицей -->
-  <div style="margin-top: 15px; display: flex; gap: 10px;">
+  <!-- Кнопки над таблицей -->
+  <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center;">
     <button id="add-row" class="btn btn-success">+ Добавить гостя</button>
-    <div style="color: #6c757d; font-size: 13px; padding: 10px 0;">
+    <div style="color: #6c757d; font-size: 13px;">
       Клик на ячейку для редактирования | 👤 - открыть карточку | 🗑️ - удалить запись
     </div>
   </div>
+  
+  <!-- Таблица -->
+  <div id="guests-table"></div>
 </div>
 
 <!-- Tabulator JS -->
@@ -274,6 +274,9 @@ const autocompleteCache = {
   type_guest: [],
   producer: []
 };
+
+// Хранилище таймеров для debounce сохранения
+const saveTimers = {};
 
 // Загрузка списков для автокомплита
 function loadAutocompleteData(field) {
@@ -626,21 +629,25 @@ const table = new Tabulator("#guests-table", {
 
 // Функция для триггера сохранения с debounce
 function triggerSave(row) {
-  console.log('triggerSave вызван для строки');
+  const rowData = row.getData();
+  const rowId = rowData.id || 'new_' + Date.now(); // ID строки для таймера
+  
+  console.log('triggerSave вызван для строки с ID:', rowId);
   
   // Показываем что идет сохранение
   showIndicator('💾 Сохранение...', 'saving');
   
   // Отменяем предыдущий таймер если есть
-  if (row.saveTimer) {
-    clearTimeout(row.saveTimer);
-    console.log('Предыдущий таймер отменен');
+  if (saveTimers[rowId]) {
+    clearTimeout(saveTimers[rowId]);
+    console.log('Предыдущий таймер отменен для', rowId);
   }
   
   // Сохраняем с задержкой 1 секунда
-  row.saveTimer = setTimeout(() => {
-    console.log('Таймер истек, вызываем saveRow');
+  saveTimers[rowId] = setTimeout(() => {
+    console.log('Таймер истек, вызываем saveRow для', rowId);
     saveRow(row);
+    delete saveTimers[rowId]; // Очищаем таймер после выполнения
   }, 1000);
 }
 

@@ -198,7 +198,13 @@ def guest_save_api(request, event_id):
             else:
                 contact.producer = None
             
-            contact.save()
+            # Сохраняем контакт, но не проверяем файл фото если его нет
+            try:
+                contact.save()
+            except FileNotFoundError as e:
+                # Если файл фото не найден - просто очищаем поле фото и сохраняем снова
+                contact.photo = None
+                contact.save()
             
             # Обновляем действие
             action.contact = contact
