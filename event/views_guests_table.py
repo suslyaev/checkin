@@ -76,6 +76,64 @@ def guests_data_api(request, event_id):
 
 
 @require_http_methods(["GET"])
+def search_contacts_api(request, event_id):
+    """
+    API для поиска существующих контактов по ФИО
+    """
+    try:
+        term = request.GET.get('term', '').strip()
+        
+        if not term:
+            return JsonResponse({'results': []})
+        
+        # Ищем по фамилии или имени
+        contacts = Contact.objects.filter(
+            Q(last_name__icontains=term) | 
+            Q(first_name__icontains=term) |
+            Q(middle_name__icontains=term) |
+            Q(nickname__icontains=term)
+        ).select_related('company', 'category', 'type_guest', 'producer')[:20]
+        
+        results = []
+        for contact in contacts:
+            fio = f"{contact.last_name} {contact.first_name}"
+            if contact.middle_name:
+                fio += f" {contact.middle_name}"
+            
+            # Дополнительная информация
+            info_parts = []
+            if contact.company:
+                info_parts.append(contact.company.name)
+            if contact.category:
+                info_parts.append(contact.category.name)
+            
+            info = f" ({', '.join(info_parts)})" if info_parts else ""
+            
+            results.append({
+                'id': contact.id,
+                'name': fio + info,
+                'contact': {
+                    'id': contact.id,
+                    'last_name': contact.last_name,
+                    'first_name': contact.first_name,
+                    'middle_name': contact.middle_name or '',
+                    'nickname': contact.nickname or '',
+                    'company': contact.company.name if contact.company else '',
+                    'category': contact.category.name if contact.category else '',
+                    'type_guest': contact.type_guest.name if contact.type_guest else '',
+                    'producer': f"{contact.producer.last_name} {contact.producer.first_name}" if contact.producer else '',
+                }
+            })
+        
+        return JsonResponse({'results': results})
+    except Exception as e:
+        import traceback
+        print(f"Ошибка в search_contacts_api:")
+        print(traceback.format_exc())
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
 def autocomplete_api(request, event_id, field):
     """
     API для автокомплита справочников
@@ -148,7 +206,31 @@ def guest_save_api(request, event_id):
                 contact = action.contact
             else:
                 # Создание новой записи
-                contact = Contact()
+                # Сначала проверяем, существует ли уже такой контакт
+                last_name = data.get('last_name', '').strip()
+                first_name = data.get('first_name', '').strip()
+                middle_name = data.get('middle_name', '').strip()
+                
+                # Ищем по ФИО (точное совпадение)
+                existing_contact = Contact.objects.filter(
+                    last_name__iexact=last_name,
+                    first_name__iexact=first_name
+                ).first()
+                
+                # Если нашли и отчества совпадают (или оба пустые) - используем существующего
+                if existing_contact:
+                    if not middle_name or not existing_contact.middle_name or \
+                       existing_contact.middle_name.lower() == middle_name.lower():
+                        contact = existing_contact
+                        print(f"Используем существующего контакта: {contact.id} - {contact.last_name} {contact.first_name}")
+                    else:
+                        # Отчества разные - это другой человек, создаем нового
+                        contact = Contact()
+                        print(f"Отчества разные, создаем нового контакта")
+                else:
+                    contact = Contact()
+                    print(f"Контакт не найден, создаем нового")
+                
                 action = Action(event=event, create_user=request.user, update_user=request.user)
             
             # Обновляем данные контакта
@@ -213,11 +295,20 @@ def guest_save_api(request, event_id):
             action.update_user = request.user
             action.save()
             
+            # Определяем сообщение для пользователя
+            if not action_id and existing_contact:
+                message = f'Использован существующий контакт из БД: {contact.last_name} {contact.first_name}'
+            elif not action_id:
+                message = 'Создан новый контакт'
+            else:
+                message = 'Данные обновлены'
+            
             return JsonResponse({
                 'success': True,
                 'id': action.id,
                 'contact_id': contact.id,
-                'message': 'Данные сохранены'
+                'message': message,
+                'used_existing': not action_id and existing_contact is not None
             })
             
     except Action.DoesNotExist:

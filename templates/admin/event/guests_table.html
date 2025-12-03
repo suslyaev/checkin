@@ -250,8 +250,9 @@
   <div id="save-indicator" class="save-indicator"></div>
   
   <!-- Кнопки над таблицей -->
-  <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center;">
+  <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
     <button id="add-row" class="btn btn-success">+ Добавить гостя</button>
+    <button id="clear-filters" class="btn btn-secondary">🔄 Сбросить фильтры</button>
     <div style="color: #6c757d; font-size: 13px;">
       Клик на ячейку для редактирования | 👤 - открыть карточку | 🗑️ - удалить запись
     </div>
@@ -597,7 +598,7 @@ const table = new Tabulator("#guests-table", {
       title: "Фамилия", 
       field: "last_name", 
       editor: "input", 
-      width: 150, 
+      width: 160, 
       headerFilter: "input",
       validator: "required",
       cellEdited: function(cell) {
@@ -609,7 +610,7 @@ const table = new Tabulator("#guests-table", {
       title: "Имя", 
       field: "first_name", 
       editor: "input", 
-      width: 130, 
+      width: 140, 
       headerFilter: "input",
       validator: "required",
       cellEdited: function(cell) {
@@ -621,7 +622,7 @@ const table = new Tabulator("#guests-table", {
       title: "Отчество", 
       field: "middle_name", 
       editor: "input", 
-      width: 150, 
+      width: 160, 
       headerFilter: "input",
       cellEdited: function(cell) {
         console.log('Отчество изменено:', cell.getValue());
@@ -632,7 +633,7 @@ const table = new Tabulator("#guests-table", {
       title: "Никнейм", 
       field: "nickname", 
       editor: "input", 
-      width: 130, 
+      width: 120, 
       headerFilter: "input",
       cellEdited: function(cell) {
         console.log('Никнейм изменен:', cell.getValue());
@@ -643,7 +644,7 @@ const table = new Tabulator("#guests-table", {
       title: "Компания", 
       field: "company", 
       editor: createAutocompleteEditor('company'),
-      width: 150, 
+      width: 170, 
       headerFilter: "list",
       headerFilterFunc: "=",
       headerFilterParams: {
@@ -656,7 +657,7 @@ const table = new Tabulator("#guests-table", {
       title: "Категория", 
       field: "category", 
       editor: createAutocompleteEditor('category'),
-      width: 130, 
+      width: 140, 
       headerFilter: "list",
       headerFilterFunc: "=",
       headerFilterParams: {
@@ -669,7 +670,7 @@ const table = new Tabulator("#guests-table", {
       title: "Тип гостя", 
       field: "type_guest", 
       editor: createAutocompleteEditor('type_guest'),
-      width: 130, 
+      width: 160, 
       headerFilter: "list",
       headerFilterFunc: "=",
       headerFilterParams: {
@@ -682,7 +683,7 @@ const table = new Tabulator("#guests-table", {
       title: "Продюсер", 
       field: "producer", 
       editor: createAutocompleteEditor('producer'),
-      width: 150, 
+      width: 170, 
       headerFilter: "list",
       headerFilterFunc: "=",
       headerFilterParams: {
@@ -716,7 +717,7 @@ const table = new Tabulator("#guests-table", {
       title: "Комментарий", 
       field: "comment", 
       editor: "input", 
-      width: 200,
+      width: 150,
       cellEdited: function(cell) {
         console.log('Комментарий изменен:', cell.getValue());
         triggerSave(cell.getRow());
@@ -743,12 +744,12 @@ function triggerSave(row) {
     console.log('Предыдущий таймер отменен для', rowId);
   }
   
-  // Сохраняем с задержкой 1 секунда
+  // Сохраняем с задержкой 500мс (было 1000)
   saveTimers[rowId] = setTimeout(() => {
     console.log('Таймер истек, вызываем saveRow для', rowId);
     saveRow(row);
     delete saveTimers[rowId]; // Очищаем таймер после выполнения
-  }, 1000);
+  }, 500);
 }
 
 // Сохранение строки
@@ -788,18 +789,30 @@ function saveRow(row) {
           contact_id: result.contact_id
         }, true);  // true = не триггерить cellEdited
       }
-      showIndicator('✅ Сохранено: ' + data.last_name + ' ' + data.first_name, 'success');
       
-      // Перезагружаем списки для автокомплита
-      loadAutocompleteData('company');
-      loadAutocompleteData('category');
-      loadAutocompleteData('type_guest');
-      loadAutocompleteData('producer');
+      // Показываем соответствующее сообщение
+      let message = '✅ ';
+      if (result.used_existing) {
+        message += '🔗 ' + result.message;
+      } else if (!data.id) {
+        message += '➕ ' + result.message;
+      } else {
+        message += '💾 ' + result.message;
+      }
       
-      // Обновляем статистику
-      setTimeout(() => {
-        table.replaceData();
-      }, 500);
+      showIndicator(message, 'success');
+      
+      // Перезагружаем списки для автокомплита (только если создали новый справочник)
+      if (!data.id || result.used_existing) {
+        loadAutocompleteData('company');
+        loadAutocompleteData('category');
+        loadAutocompleteData('type_guest');
+        loadAutocompleteData('producer');
+      }
+      
+      // НЕ перезагружаем таблицу, чтобы не сбросить несохраненные изменения
+      // Статистику обновим только счетчики
+      updateStatsOnly();
     } else {
       showIndicator('❌ Ошибка: ' + result.error, 'error');
     }
@@ -834,8 +847,8 @@ function deleteRow(row) {
       row.delete();
       showIndicator('✅ Запись удалена', 'success');
       
-      // Обновляем статистику
-      table.replaceData();
+      // Обновляем только счетчики, не перезагружая таблицу
+      updateStatsOnly();
     } else {
       showIndicator('❌ ' + result.error, 'error');
     }
@@ -895,11 +908,17 @@ function updateStats(data) {
   document.getElementById('visited-count').textContent = stats.visited;
 }
 
+// Обновление только счетчиков без перезагрузки таблицы
+function updateStatsOnly() {
+  const data = table.getData();
+  updateStats(data);
+}
+
 // ==================== ОБРАБОТЧИКИ СОБЫТИЙ ====================
 
 // Добавление новой строки
 document.getElementById('add-row').addEventListener('click', function() {
-  table.addRow({
+  const newRow = table.addRow({
     last_name: '',
     first_name: '',
     middle_name: '',
@@ -911,7 +930,17 @@ document.getElementById('add-row').addEventListener('click', function() {
     comment: ''
   }, true);  // true = добавить в начало
   
-  showIndicator('Новая строка добавлена. Заполните данные.', 'success');
+  showIndicator('Новая строка добавлена. Введите фамилию и имя - если человек уже есть в БД, система найдет его автоматически.', 'success');
+  
+  // Автоматически открываем редактор фамилии
+  setTimeout(() => {
+    const cells = newRow.getCells();
+    const lastNameCell = cells.find(c => c.getField() === 'last_name');
+    if (lastNameCell) {
+      table.scrollToRow(newRow, "top", true);
+      lastNameCell.edit();
+    }
+  }, 100);
 });
 
 // Скачать CSV
@@ -925,6 +954,13 @@ document.getElementById('download-csv').addEventListener('click', function() {
 document.getElementById('reload-data').addEventListener('click', function() {
   table.replaceData();
   showIndicator('Данные обновлены', 'success');
+});
+
+// Сбросить все фильтры
+document.getElementById('clear-filters').addEventListener('click', function() {
+  console.log('Сброс всех фильтров');
+  table.clearHeaderFilter();
+  showIndicator('Фильтры сброшены', 'success');
 });
 
 // Предзагружаем списки для автокомплита при загрузке страницы

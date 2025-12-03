@@ -31,5 +31,10 @@ urlpatterns = [
     path('<int:event_id>/autocomplete/<str:field>/', 
          views_guests_table.autocomplete_api,
          name='event_guest_autocomplete'),
+    
+    # API для поиска существующих контактов
+    path('<int:event_id>/search-contacts/', 
+         views_guests_table.search_contacts_api,
+         name='event_search_contacts'),
 ]
 
