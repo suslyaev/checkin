@@ -236,9 +236,16 @@ class CopyInvitationsForm(forms.Form):
         admin_site = kwargs.pop('admin_site', None)
         super().__init__(*args, **kwargs)
         if admin_site:
+            # Используем поле event из модели ModuleInstance для правильной настройки виджета
+            from django.db.models import ForeignKey
+            # Создаем временное поле для получения правильного remote field
             event_field = Action._meta.get_field('event')
-            widget = AutocompleteSelect(event_field, admin_site)
-            widget.attrs.update({'style': 'width: 100%; min-width: 320px;'})
+            widget = AutocompleteSelect(event_field.remote_field, admin_site)
+            widget.attrs.update({
+                'data-ajax--delay': '250',
+                'data-placeholder': 'Начните вводить название мероприятия...',
+                'style': 'max-width: 500px;'
+            })
             widget.choices = self.fields['source_event'].choices
             self.fields['source_event'].widget = widget
 
@@ -419,7 +426,7 @@ class TypeGuestContactAdmin(BaseAdminPage):
 class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
     form = ModuleInstanceForm
     resource_class = EventExport
-    search_fields = ['get_name_event']
+    search_fields = ['name', 'address']
     show_change_form_export = False
     fieldsets = (
         (None, {

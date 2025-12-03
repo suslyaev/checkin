@@ -1,9 +1,68 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
 
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .copy-invitations-container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    .copy-invitations-container .form-row {
+      margin-bottom: 20px;
+    }
+    .copy-invitations-container .form-row label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    .copy-invitations-container .form-row select,
+    .copy-invitations-container .form-row .select2-container {
+      max-width: 500px !important;
+      width: 100% !important;
+    }
+    .submit-row {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      margin: 0 0 15px;
+      background: #f8f8f8;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    .submit-row button,
+    .submit-row a {
+      padding: 10px 15px;
+      font-size: 13px;
+      line-height: 1;
+      border-radius: 4px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      font-weight: normal;
+      display: inline-block;
+    }
+    .submit-row button.default {
+      background: #417690;
+      color: #fff;
+    }
+    .submit-row button.default:hover {
+      background: #205067;
+    }
+    .submit-row a.cancel-link {
+      background: #ba2121;
+      color: #fff;
+    }
+    .submit-row a.cancel-link:hover {
+      background: #a41515;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
   {{ form.media }}
-  <div class="module">
+  <div class="module copy-invitations-container">
     <h2>Импорт приглашений</h2>
     <p>Вы собираетесь скопировать приглашения в выбранные мероприятия:</p>
     <ul>
@@ -26,7 +85,7 @@
       <input type="hidden" name="action" value="{{ action_name }}">
       <div class="submit-row">
         <button type="submit" name="apply" class="default">Скопировать</button>
-        <a href=".." class="button cancel-link">Отмена</a>
+        <a href=".." class="cancel-link">Отмена</a>
       </div>
     </form>
   </div>
