@@ -297,7 +297,10 @@ function loadAutocompleteData(field) {
 
 // Создание autocomplete редактора
 function createAutocompleteEditor(field) {
+  console.log(`Создание редактора для поля: ${field}`);
   return function(cell, onRendered, success, cancel) {
+    console.log(`Редактор открыт для поля ${field}, текущее значение:`, cell.getValue());
+    
     const input = document.createElement("input");
     input.type = "text";
     input.value = cell.getValue() || "";
@@ -399,6 +402,12 @@ function createAutocompleteEditor(field) {
 }
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ ====================
+
+// Проверка что все функции определены
+console.log('Проверка функций перед инициализацией таблицы:');
+console.log('- createAutocompleteEditor:', typeof createAutocompleteEditor);
+console.log('- loadAutocompleteData:', typeof loadAutocompleteData);
+console.log('- Test editor для company:', typeof createAutocompleteEditor('company'));
 
 const table = new Tabulator("#guests-table", {
   height: "600px",
@@ -543,7 +552,10 @@ const table = new Tabulator("#guests-table", {
   
   // Автосохранение при редактировании с задержкой
   cellEdited: function(cell) {
+    console.log('cellEdited вызван! Поле:', cell.getField(), 'Новое значение:', cell.getValue());
+    
     const row = cell.getRow();
+    console.log('Данные строки:', row.getData());
     
     // Показываем что идет сохранение
     showIndicator('💾 Сохранение...', 'saving');
@@ -551,10 +563,12 @@ const table = new Tabulator("#guests-table", {
     // Отменяем предыдущий таймер если есть
     if (row.saveTimer) {
       clearTimeout(row.saveTimer);
+      console.log('Предыдущий таймер отменен');
     }
     
     // Сохраняем с задержкой 1 секунда
     row.saveTimer = setTimeout(() => {
+      console.log('Таймер истек, вызываем saveRow');
       saveRow(row);
     }, 1000);
   }
@@ -564,15 +578,18 @@ const table = new Tabulator("#guests-table", {
 
 // Сохранение строки
 function saveRow(row) {
+  console.log('=== saveRow вызван ===');
   const data = row.getData();
+  console.log('Данные для сохранения:', data);
   
   // Валидация
   if (!data.last_name || !data.first_name) {
+    console.error('Валидация не прошла: нет фамилии или имени');
     showIndicator('❌ Ошибка: Фамилия и Имя обязательны', 'error');
     return;
   }
   
-  console.log('Сохранение данных:', data);
+  console.log('Отправка запроса на сервер...');
   
   fetch("{% url 'admin:event_guest_save' event.id %}", {
     method: 'POST',
