@@ -295,6 +295,14 @@ const statusOptions = {
   'cancelled': 'Отклонил'
 };
 
+// Опции для фильтров справочников (будут заполнены после загрузки)
+const filterOptions = {
+  company: {},
+  category: {},
+  type_guest: {},
+  producer: {}
+};
+
 // ==================== ФУНКЦИИ (объявляем ДО инициализации таблицы) ====================
 
 // Кэш для автокомплита
@@ -331,12 +339,22 @@ function loadAutocompleteData(field) {
   .then(data => {
     console.log(`Данные для ${field}:`, data);
     autocompleteCache[field] = data.results || [];
+    
+    // Формируем опции для фильтров
+    filterOptions[field] = {};
+    autocompleteCache[field].forEach(item => {
+      filterOptions[field][item.name] = item.name;
+    });
+    
+    console.log(`Опции фильтра для ${field}:`, Object.keys(filterOptions[field]).length);
+    
     return autocompleteCache[field];
   })
   .catch(error => {
     console.error(`Error loading autocomplete for ${field}:`, error);
     // Возвращаем пустой массив, чтобы не блокировать остальную функциональность
     autocompleteCache[field] = [];
+    filterOptions[field] = {};
     return [];
   });
 }
@@ -626,28 +644,52 @@ const table = new Tabulator("#guests-table", {
       field: "company", 
       editor: createAutocompleteEditor('company'),
       width: 150, 
-      headerFilter: "input"
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.company,
+        clearable: true,
+        multiselect: false
+      }
     },
     {
       title: "Категория", 
       field: "category", 
       editor: createAutocompleteEditor('category'),
       width: 130, 
-      headerFilter: "input"
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.category,
+        clearable: true,
+        multiselect: false
+      }
     },
     {
       title: "Тип гостя", 
       field: "type_guest", 
       editor: createAutocompleteEditor('type_guest'),
       width: 130, 
-      headerFilter: "input"
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.type_guest,
+        clearable: true,
+        multiselect: false
+      }
     },
     {
       title: "Продюсер", 
       field: "producer", 
       editor: createAutocompleteEditor('producer'),
       width: 150, 
-      headerFilter: "input"
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.producer,
+        clearable: true,
+        multiselect: false
+      }
     },
     {
       title: "Статус", 
@@ -888,10 +930,24 @@ document.getElementById('reload-data').addEventListener('click', function() {
 // Предзагружаем списки для автокомплита при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Загрузка списков для автокомплита...');
-  loadAutocompleteData('company');
-  loadAutocompleteData('category');
-  loadAutocompleteData('type_guest');
-  loadAutocompleteData('producer');
+  
+  // Загружаем все справочники
+  Promise.all([
+    loadAutocompleteData('company'),
+    loadAutocompleteData('category'),
+    loadAutocompleteData('type_guest'),
+    loadAutocompleteData('producer')
+  ]).then(() => {
+    console.log('Все списки загружены, обновляем фильтры таблицы');
+    
+    // Обновляем параметры фильтров в заголовках
+    table.getColumn('company').updateDefinition({headerFilterParams: {values: filterOptions.company, clearable: true}});
+    table.getColumn('category').updateDefinition({headerFilterParams: {values: filterOptions.category, clearable: true}});
+    table.getColumn('type_guest').updateDefinition({headerFilterParams: {values: filterOptions.type_guest, clearable: true}});
+    table.getColumn('producer').updateDefinition({headerFilterParams: {values: filterOptions.producer, clearable: true}});
+    
+    console.log('Фильтры обновлены');
+  });
 });
 </script>
 
