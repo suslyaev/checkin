@@ -3,6 +3,7 @@
 
 {% block extrahead %}
   {{ block.super }}
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
   <style>
     .copy-invitations-container .form-row {
@@ -86,111 +87,75 @@
     </form>
   </div>
   
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <script>
-    (function() {
+    (function($) {
       console.log('=== Начало инициализации ===');
+      console.log('✓ jQuery версия:', $.fn.jquery);
+      console.log('✓ Select2 доступен:', typeof $.fn.select2 !== 'undefined');
       
-      // Ждем загрузки jQuery из Django admin
-      function initSelect2() {
-        var $ = window.django && window.django.jQuery ? window.django.jQuery : window.jQuery;
+      $(document).ready(function() {
+        console.log('DOM готов');
         
-        if (!$ || typeof $ === 'undefined') {
-          console.log('jQuery еще не загружен, ждем...');
-          setTimeout(initSelect2, 100);
-          return;
-        }
+        var $select = $('#id_source_event');
+        console.log('Select элемент:', $select.length > 0 ? 'найден' : 'НЕ найден');
         
-        console.log('✓ jQuery найден, версия:', $.fn.jquery);
-        
-        // Загружаем Select2
-        if (typeof $.fn.select2 === 'undefined') {
-          console.log('Загружаем Select2...');
-          var script = document.createElement('script');
-          script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
-          script.onload = function() {
-            console.log('✓ Select2 загружен');
-            setupSelect2($);
-          };
-          script.onerror = function() {
-            console.error('✗ Ошибка загрузки Select2');
-          };
-          document.head.appendChild(script);
-        } else {
-          console.log('✓ Select2 уже загружен');
-          setupSelect2($);
-        }
-      }
-      
-      function setupSelect2($) {
-        console.log('Настройка Select2...');
-        
-        $(document).ready(function() {
-          var $select = $('#id_source_event');
-          console.log('Select элемент:', $select.length > 0 ? 'найден' : 'НЕ найден');
+        if ($select.length > 0) {
           console.log('ID элемента:', $select.attr('id'));
           console.log('Класс элемента:', $select.attr('class'));
           
-          if ($select.length > 0) {
-            try {
-              $select.select2({
-                placeholder: 'Начните вводить название мероприятия...',
-                allowClear: false,
-                width: '500px',
-                minimumInputLength: 0,
-                ajax: {
-                  url: '/admin/autocomplete/',
-                  dataType: 'json',
-                  delay: 250,
-                  data: function (params) {
-                    var query = {
-                      term: params.term || '',
-                      app_label: 'event',
-                      model_name: 'moduleinstance',
-                      field_name: 'source_event'
-                    };
-                    console.log('Запрос:', query);
-                    return query;
-                  },
-                  processResults: function (data) {
-                    console.log('✓ Получены данные:', data);
-                    return {
-                      results: data.results.map(function(item) {
-                        return {
-                          id: item.id,
-                          text: item.text
-                        };
-                      })
-                    };
-                  },
-                  cache: true
-                }
-              });
-              console.log('✓✓✓ Select2 инициализирован успешно!');
-              
-              // Проверяем, что виджет действительно создан
+          try {
+            $select.select2({
+              placeholder: 'Начните вводить название мероприятия...',
+              allowClear: false,
+              width: '500px',
+              minimumInputLength: 0,
+              ajax: {
+                url: '/admin/autocomplete/',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                  var query = {
+                    term: params.term || '',
+                    app_label: 'event',
+                    model_name: 'moduleinstance',
+                    field_name: 'source_event'
+                  };
+                  console.log('Запрос:', query);
+                  return query;
+                },
+                processResults: function (data) {
+                  console.log('✓ Получены данные:', data);
+                  return {
+                    results: data.results.map(function(item) {
+                      return {
+                        id: item.id,
+                        text: item.text
+                      };
+                    })
+                  };
+                },
+                cache: true
+              }
+            });
+            console.log('✓✓✓ Select2 инициализирован успешно!');
+            
+            // Проверяем, что виджет действительно создан
+            setTimeout(function() {
               if ($select.hasClass('select2-hidden-accessible')) {
                 console.log('✓ Select2 виджет активирован');
               } else {
                 console.error('✗ Select2 виджет НЕ активирован');
               }
-            } catch(e) {
-              console.error('✗ Ошибка инициализации Select2:', e);
-            }
-          } else {
-            console.error('✗ Select элемент не найден!');
+            }, 100);
+          } catch(e) {
+            console.error('✗ Ошибка инициализации Select2:', e);
           }
-        });
-      }
-      
-      // Запускаем инициализацию
-      if (document.readyState === 'loading') {
-        console.log('Ждем DOMContentLoaded...');
-        document.addEventListener('DOMContentLoaded', initSelect2);
-      } else {
-        console.log('DOM уже загружен, запускаем...');
-        initSelect2();
-      }
-    })();
+        } else {
+          console.error('✗ Select элемент не найден!');
+        }
+      });
+    })(jQuery);
   </script>
 {% endblock %}
 
