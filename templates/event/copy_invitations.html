@@ -94,6 +94,25 @@
       console.log('✓ jQuery версия:', $.fn.jquery);
       console.log('✓ Select2 доступен:', typeof $.fn.select2 !== 'undefined');
       
+      // Получаем CSRF токен
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          var cookies = document.cookie.split(';');
+          for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      
+      var csrftoken = getCookie('csrftoken');
+      console.log('CSRF токен:', csrftoken ? 'найден' : 'НЕ найден');
+      
       $(document).ready(function() {
         console.log('DOM готов');
         
@@ -114,6 +133,9 @@
                 url: '/admin/autocomplete/',
                 dataType: 'json',
                 delay: 250,
+                headers: {
+                  'X-CSRFToken': csrftoken
+                },
                 data: function (params) {
                   var query = {
                     term: params.term || '',
@@ -134,6 +156,11 @@
                       };
                     })
                   };
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                  console.error('✗ Ошибка запроса:', textStatus, errorThrown);
+                  console.error('Статус:', jqXHR.status);
+                  console.error('Ответ:', jqXHR.responseText);
                 },
                 cache: true
               }
