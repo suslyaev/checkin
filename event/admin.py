@@ -23,6 +23,9 @@ from admin_auto_filters.filters import AutocompleteFilterMultiple
 from django import forms
 from django.contrib.admin.widgets import AutocompleteSelect
 
+# Импорт миксина для интерактивной таблицы гостей
+from .admin_guests_table_mixin import GuestsTableMixin
+
 
 class CustomAdminSite(admin.AdminSite):
 
@@ -437,7 +440,7 @@ class TypeGuestContactAdmin(BaseAdminPage):
 
 # Событие
 @admin.register(ModuleInstance)
-class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
+class ModuleInstanceAdmin(GuestsTableMixin, BaseAdminPage, ExportActionModelAdmin):
     form = ModuleInstanceForm
     resource_class = EventExport
     search_fields = ['name', 'address']

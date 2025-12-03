@@ -1,0 +1,539 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <!-- Tabulator CSS -->
+  <link href="https://unpkg.com/tabulator-tables@5.5/dist/css/tabulator.min.css" rel="stylesheet">
+  
+  <style>
+    .guests-container {
+      padding: 20px;
+      max-width: 100%;
+    }
+    
+    .guests-header {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    
+    .guests-header h2 {
+      margin: 0;
+      color: #333;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 10px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+    
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    
+    .btn-primary {
+      background: #417690;
+      color: white;
+    }
+    
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+    
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+    
+    #guests-table {
+      font-size: 14px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    .save-indicator {
+      display: none;
+      padding: 12px 20px;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+    
+    .save-indicator.show {
+      display: block;
+      animation: fadeIn 0.3s;
+    }
+    
+    .save-indicator.error {
+      background: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Стили для Tabulator */
+    .tabulator-row.tabulator-row-even {
+      background-color: #f9f9f9;
+    }
+    
+    .tabulator-row:hover {
+      background-color: #e8f4f8 !important;
+    }
+    
+    .tabulator-cell {
+      padding: 8px;
+    }
+    
+    .tabulator-header {
+      background-color: #417690;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .tabulator-header .tabulator-col {
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .tabulator-header-filter input {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 4px 8px;
+      border-radius: 3px;
+    }
+    
+    /* Статусы с цветами */
+    .status-announced { color: #6c757d; }
+    .status-invited { color: #007bff; }
+    .status-registered { color: #28a745; }
+    .status-visited { color: #6610f2; }
+    .status-cancelled { color: #dc3545; }
+    
+    .info-panel {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    
+    .info-item {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .info-item-label {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 5px;
+    }
+    
+    .info-item-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="guests-container">
+  <!-- Заголовок и кнопки -->
+  <div class="guests-header">
+    <div>
+      <h2>📊 Список гостей: {{ event.name }}</h2>
+      <p style="color: #6c757d; margin: 5px 0 0 0;">
+        Интерактивная таблица с редактированием в ячейках
+      </p>
+    </div>
+    <div class="action-buttons">
+      <button id="add-row" class="btn btn-success">+ Добавить гостя</button>
+      <button id="download-csv" class="btn btn-secondary">📥 Скачать CSV</button>
+      <button id="reload-data" class="btn btn-primary">🔄 Обновить</button>
+      <a href="{% url 'admin:event_moduleinstance_change' event.id %}" class="btn btn-secondary">← Назад</a>
+    </div>
+  </div>
+  
+  <!-- Информационная панель -->
+  <div class="info-panel">
+    <div class="info-item">
+      <span class="info-item-label">Всего гостей</span>
+      <span class="info-item-value" id="total-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Заявлено</span>
+      <span class="info-item-value status-announced" id="announced-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Приглашено</span>
+      <span class="info-item-value status-invited" id="invited-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Подтверждено</span>
+      <span class="info-item-value status-registered" id="registered-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Посетило</span>
+      <span class="info-item-value status-visited" id="visited-count">0</span>
+    </div>
+  </div>
+  
+  <!-- Индикатор сохранения -->
+  <div id="save-indicator" class="save-indicator"></div>
+  
+  <!-- Таблица -->
+  <div id="guests-table"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5/dist/js/tabulator.min.js"></script>
+
+<script>
+// ==================== НАСТРОЙКИ ====================
+
+// Получаем CSRF токен
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
+const eventId = {{ event.id }};
+
+// Опции для статусов
+const statusOptions = {
+  'announced': 'Заявлен',
+  'invited': 'Приглашён',
+  'registered': 'Зарегистрирован',
+  'visited': 'Посетил',
+  'cancelled': 'Отклонил'
+};
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ ====================
+
+const table = new Tabulator("#guests-table", {
+  height: "600px",
+  layout: "fitDataStretch",
+  placeholder: "Нет данных. Нажмите '+ Добавить гостя' для создания первой записи.",
+  resizableColumns: true,
+  
+  // Загрузка данных
+  ajaxURL: "{% url 'admin:event_guests_data' event.id %}",
+  ajaxConfig: {
+    headers: {
+      'X-CSRFToken': csrftoken
+    }
+  },
+  ajaxResponse: function(url, params, response) {
+    updateStats(response.data);
+    return response.data;
+  },
+  
+  // Колонки
+  columns: [
+    {
+      title: "ID", 
+      field: "id", 
+      visible: false
+    },
+    {
+      title: "Фамилия", 
+      field: "last_name", 
+      editor: "input", 
+      width: 150, 
+      headerFilter: "input",
+      validator: "required"
+    },
+    {
+      title: "Имя", 
+      field: "first_name", 
+      editor: "input", 
+      width: 130, 
+      headerFilter: "input",
+      validator: "required"
+    },
+    {
+      title: "Отчество", 
+      field: "middle_name", 
+      editor: "input", 
+      width: 150, 
+      headerFilter: "input"
+    },
+    {
+      title: "Никнейм", 
+      field: "nickname", 
+      editor: "input", 
+      width: 130, 
+      headerFilter: "input"
+    },
+    {
+      title: "Компания", 
+      field: "company", 
+      editor: "input", 
+      width: 150, 
+      headerFilter: "input"
+    },
+    {
+      title: "Категория", 
+      field: "category", 
+      editor: "input", 
+      width: 130, 
+      headerFilter: "input"
+    },
+    {
+      title: "Тип гостя", 
+      field: "type_guest", 
+      editor: "input", 
+      width: 130, 
+      headerFilter: "input"
+    },
+    {
+      title: "Продюсер", 
+      field: "producer", 
+      width: 150, 
+      headerFilter: "input"
+    },
+    {
+      title: "Статус", 
+      field: "action_type", 
+      editor: "list",
+      editorParams: {
+        values: statusOptions,
+        clearable: false
+      },
+      formatter: function(cell) {
+        const value = cell.getValue();
+        const text = statusOptions[value] || value;
+        return '<span class="status-' + value + '">' + text + '</span>';
+      },
+      width: 150,
+      headerFilter: "list",
+      headerFilterParams: {values: statusOptions}
+    },
+    {
+      title: "Комментарий", 
+      field: "comment", 
+      editor: "input", 
+      width: 200
+    },
+    {
+      title: "Действия",
+      formatter: function(cell) {
+        return '<button class="btn btn-danger btn-delete">Удалить</button>';
+      },
+      width: 100,
+      hozAlign: "center",
+      headerSort: false,
+      cellClick: function(e, cell) {
+        if (e.target.classList.contains('btn-delete')) {
+          if (confirm('Удалить эту запись?\n\nГость: ' + cell.getRow().getData().last_name + ' ' + cell.getRow().getData().first_name)) {
+            deleteRow(cell.getRow());
+          }
+        }
+      }
+    }
+  ],
+  
+  // Автосохранение при редактировании
+  cellEdited: function(cell) {
+    saveRow(cell.getRow());
+  }
+});
+
+// ==================== ФУНКЦИИ ====================
+
+// Сохранение строки
+function saveRow(row) {
+  const data = row.getData();
+  
+  // Валидация
+  if (!data.last_name || !data.first_name) {
+    showIndicator('Ошибка: Фамилия и Имя обязательны', 'error');
+    return;
+  }
+  
+  fetch("{% url 'admin:event_guest_save' event.id %}", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken
+    },
+    body: JSON.stringify(data)
+  })
+  .then(response => response.json())
+  .then(result => {
+    if (result.success) {
+      // Обновляем ID если это была новая строка
+      if (!data.id) {
+        row.update({
+          id: result.id, 
+          contact_id: result.contact_id
+        });
+      }
+      showIndicator('✅ Изменения сохранены', 'success');
+      
+      // Обновляем статистику
+      table.replaceData();
+    } else {
+      showIndicator('❌ ' + result.error, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showIndicator('❌ Ошибка сохранения: ' + error, 'error');
+  });
+}
+
+// Удаление строки
+function deleteRow(row) {
+  const data = row.getData();
+  
+  if (!data.id) {
+    row.delete();
+    showIndicator('✅ Запись удалена', 'success');
+    return;
+  }
+  
+  fetch("{% url 'admin:event_guest_delete' event.id %}", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken
+    },
+    body: JSON.stringify({id: data.id})
+  })
+  .then(response => response.json())
+  .then(result => {
+    if (result.success) {
+      row.delete();
+      showIndicator('✅ Запись удалена', 'success');
+      
+      // Обновляем статистику
+      table.replaceData();
+    } else {
+      showIndicator('❌ ' + result.error, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showIndicator('❌ Ошибка удаления: ' + error, 'error');
+  });
+}
+
+// Индикатор сохранения
+function showIndicator(message, type = 'success') {
+  const indicator = document.getElementById('save-indicator');
+  indicator.textContent = message;
+  indicator.className = 'save-indicator show';
+  
+  if (type === 'error') {
+    indicator.classList.add('error');
+  }
+  
+  setTimeout(() => {
+    indicator.classList.remove('show');
+  }, 3000);
+}
+
+// Обновление статистики
+function updateStats(data) {
+  const stats = {
+    total: data.length,
+    announced: 0,
+    invited: 0,
+    registered: 0,
+    visited: 0,
+    cancelled: 0
+  };
+  
+  data.forEach(row => {
+    if (stats.hasOwnProperty(row.action_type)) {
+      stats[row.action_type]++;
+    }
+  });
+  
+  document.getElementById('total-count').textContent = stats.total;
+  document.getElementById('announced-count').textContent = stats.announced;
+  document.getElementById('invited-count').textContent = stats.invited;
+  document.getElementById('registered-count').textContent = stats.registered;
+  document.getElementById('visited-count').textContent = stats.visited;
+}
+
+// ==================== ОБРАБОТЧИКИ СОБЫТИЙ ====================
+
+// Добавление новой строки
+document.getElementById('add-row').addEventListener('click', function() {
+  table.addRow({
+    last_name: '',
+    first_name: '',
+    middle_name: '',
+    nickname: '',
+    company: '',
+    category: '',
+    type_guest: '',
+    action_type: 'announced',
+    comment: ''
+  }, true);  // true = добавить в начало
+  
+  showIndicator('Новая строка добавлена. Заполните данные.', 'success');
+});
+
+// Скачать CSV
+document.getElementById('download-csv').addEventListener('click', function() {
+  const filename = 'guests_{{ event.name|slugify }}_' + new Date().toISOString().split('T')[0] + '.csv';
+  table.download("csv", filename, {delimiter: ";"});
+  showIndicator('CSV файл скачивается...', 'success');
+});
+
+// Обновить данные
+document.getElementById('reload-data').addEventListener('click', function() {
+  table.replaceData();
+  showIndicator('Данные обновлены', 'success');
+});
+</script>
+
+{% endblock %}
+
