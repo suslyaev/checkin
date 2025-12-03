@@ -426,18 +426,33 @@ const autocompleteCache = {
 
 // Загрузка списков для автокомплита
 function loadAutocompleteData(field) {
-  return fetch(`/admin/event/moduleinstance/${eventId}/autocomplete/${field}/`, {
+  const url = `/admin/event/moduleinstance/${eventId}/autocomplete/${field}/`;
+  console.log(`Загрузка автокомплита для ${field} из ${url}`);
+  
+  return fetch(url, {
     headers: {
       'X-CSRFToken': csrftoken
     }
   })
-  .then(response => response.json())
+  .then(response => {
+    console.log(`Ответ для ${field}:`, response.status, response.statusText);
+    if (!response.ok) {
+      return response.text().then(text => {
+        console.error(`Ошибка ${response.status} для ${field}:`, text);
+        throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
+      });
+    }
+    return response.json();
+  })
   .then(data => {
+    console.log(`Данные для ${field}:`, data);
     autocompleteCache[field] = data.results || [];
     return autocompleteCache[field];
   })
   .catch(error => {
-    console.error('Error loading autocomplete:', error);
+    console.error(`Error loading autocomplete for ${field}:`, error);
+    // Возвращаем пустой массив, чтобы не блокировать остальную функциональность
+    autocompleteCache[field] = [];
     return [];
   });
 }

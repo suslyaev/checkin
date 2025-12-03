@@ -81,29 +81,41 @@ def autocomplete_api(request, event_id, field):
     API для автокомплита справочников
     field: company, category, type_guest, producer
     """
-    term = request.GET.get('term', '')
-    
-    if field == 'company':
-        items = CompanyContact.objects.filter(name__icontains=term).order_by('name')[:20]
-        results = [{'id': item.id, 'name': item.name} for item in items]
-    elif field == 'category':
-        items = CategoryContact.objects.filter(name__icontains=term).order_by('name')[:20]
-        results = [{'id': item.id, 'name': item.name} for item in items]
-    elif field == 'type_guest':
-        items = TypeGuestContact.objects.filter(name__icontains=term).order_by('name')[:20]
-        results = [{'id': item.id, 'name': item.name} for item in items]
-    elif field == 'producer':
-        # Ищем только продюсеров
-        items = CustomUser.objects.filter(
-            groups__name='Продюсер'
-        ).filter(
-            Q(last_name__icontains=term) | Q(first_name__icontains=term)
-        ).order_by('last_name', 'first_name')[:20]
-        results = [{'id': item.id, 'name': f"{item.last_name} {item.first_name}"} for item in items]
-    else:
-        return JsonResponse({'error': 'Invalid field'}, status=400)
-    
-    return JsonResponse({'results': results})
+    try:
+        term = request.GET.get('term', '')
+        
+        if field == 'company':
+            items = CompanyContact.objects.filter(name__icontains=term).order_by('name')[:20]
+            results = [{'id': item.id, 'name': item.name} for item in items]
+        elif field == 'category':
+            items = CategoryContact.objects.filter(name__icontains=term).order_by('name')[:20]
+            results = [{'id': item.id, 'name': item.name} for item in items]
+        elif field == 'type_guest':
+            items = TypeGuestContact.objects.filter(name__icontains=term).order_by('name')[:20]
+            results = [{'id': item.id, 'name': item.name} for item in items]
+        elif field == 'producer':
+            # Ищем только продюсеров
+            if term:
+                items = CustomUser.objects.filter(
+                    groups__name='Продюсер'
+                ).filter(
+                    Q(last_name__icontains=term) | Q(first_name__icontains=term)
+                ).distinct().order_by('last_name', 'first_name')[:20]
+            else:
+                items = CustomUser.objects.filter(
+                    groups__name='Продюсер'
+                ).distinct().order_by('last_name', 'first_name')[:20]
+            
+            results = [{'id': item.id, 'name': f"{item.last_name} {item.first_name}"} for item in items]
+        else:
+            return JsonResponse({'error': 'Invalid field'}, status=400)
+        
+        return JsonResponse({'results': results})
+    except Exception as e:
+        import traceback
+        print(f"Ошибка в autocomplete_api для поля {field}:")
+        print(traceback.format_exc())
+        return JsonResponse({'error': str(e), 'field': field}, status=500)
 
 
 @require_http_methods(["POST"])
