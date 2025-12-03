@@ -4,7 +4,6 @@
 {% block extrahead %}
   {{ block.super }}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <style>
     .copy-invitations-container .form-row {
       margin-bottom: 20px;
@@ -55,42 +54,6 @@
       background: #a41515;
     }
   </style>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
-        jQuery('#id_source_event').select2({
-          placeholder: 'Начните вводить название мероприятия...',
-          allowClear: false,
-          width: '500px',
-          minimumInputLength: 0,
-          ajax: {
-            url: '/admin/autocomplete/',
-            dataType: 'json',
-            delay: 250,
-            data: function (params) {
-              return {
-                term: params.term || '',
-                app_label: 'event',
-                model_name: 'moduleinstance',
-                field_name: 'source_event'
-              };
-            },
-            processResults: function (data) {
-              return {
-                results: data.results.map(function(item) {
-                  return {
-                    id: item.id,
-                    text: item.text
-                  };
-                })
-              };
-            },
-            cache: true
-          }
-        });
-      }
-    });
-  </script>
 {% endblock %}
 
 {% block content %}
@@ -122,5 +85,56 @@
       </div>
     </form>
   </div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script>
+    (function($) {
+      $(document).ready(function() {
+        console.log('Инициализация Select2...');
+        console.log('jQuery версия:', $.fn.jquery);
+        console.log('Select2 доступен:', typeof $.fn.select2 !== 'undefined');
+        
+        var $select = $('#id_source_event');
+        console.log('Select найден:', $select.length > 0);
+        
+        if ($select.length > 0 && typeof $.fn.select2 !== 'undefined') {
+          $select.select2({
+            placeholder: 'Начните вводить название мероприятия...',
+            allowClear: false,
+            width: '500px',
+            minimumInputLength: 0,
+            ajax: {
+              url: '/admin/autocomplete/',
+              dataType: 'json',
+              delay: 250,
+              data: function (params) {
+                return {
+                  term: params.term || '',
+                  app_label: 'event',
+                  model_name: 'moduleinstance',
+                  field_name: 'source_event'
+                };
+              },
+              processResults: function (data) {
+                console.log('Получены данные:', data);
+                return {
+                  results: data.results.map(function(item) {
+                    return {
+                      id: item.id,
+                      text: item.text
+                    };
+                  })
+                };
+              },
+              cache: true
+            }
+          });
+          console.log('Select2 инициализирован успешно');
+        } else {
+          console.error('Не удалось инициализировать Select2');
+        }
+      });
+    })(django.jQuery);
+  </script>
 {% endblock %}
 
