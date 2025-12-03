@@ -620,6 +620,32 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
         # Иначе возвращаем стандартную проверку
         return super().has_change_permission(request, obj=obj)
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('autocomplete-events/', self.admin_site.admin_view(self.autocomplete_events_view), name='autocomplete_events'),
+        ]
+        return custom_urls + urls
+    
+    def autocomplete_events_view(self, request):
+        """Кастомный autocomplete для выбора мероприятий"""
+        from django.http import JsonResponse
+        term = request.GET.get('term', '')
+        
+        queryset = ModuleInstance.objects.all()
+        if term:
+            queryset = queryset.filter(name__icontains=term)
+        
+        # Ограничиваем результаты
+        queryset = queryset[:20]
+        
+        results = [{'id': obj.pk, 'text': str(obj)} for obj in queryset]
+        
+        return JsonResponse({
+            'results': results,
+            'pagination': {'more': False}
+        })
+    
     @admin.action(description='Импортировать приглашения')
     def copy_invitations_action(self, request, queryset):
         selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)

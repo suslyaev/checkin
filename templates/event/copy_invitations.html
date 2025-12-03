@@ -124,26 +124,30 @@
           console.log('Класс элемента:', $select.attr('class'));
           
           try {
+            // Настраиваем jQuery для отправки CSRF токена
+            $.ajaxSetup({
+              beforeSend: function(xhr, settings) {
+                if (!(/^http:.*/.test(settings.url) || /^https:.*/.test(settings.url))) {
+                  // Только для локальных запросов
+                  xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                }
+              }
+            });
+            
             $select.select2({
               placeholder: 'Начните вводить название мероприятия...',
               allowClear: false,
               width: '500px',
               minimumInputLength: 0,
               ajax: {
-                url: '/admin/autocomplete/',
+                url: '/admin/event/moduleinstance/autocomplete-events/',
                 dataType: 'json',
                 delay: 250,
-                headers: {
-                  'X-CSRFToken': csrftoken
-                },
                 data: function (params) {
                   var query = {
-                    term: params.term || '',
-                    app_label: 'event',
-                    model_name: 'moduleinstance',
-                    field_name: 'source_event'
+                    term: params.term || ''
                   };
-                  console.log('Запрос:', query);
+                  console.log('Запрос к кастомному endpoint:', query);
                   return query;
                 },
                 processResults: function (data) {
