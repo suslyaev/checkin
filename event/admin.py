@@ -624,7 +624,7 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
 
         form = None
         if 'apply' in request.POST:
-            form = CopyInvitationsForm(request.POST, admin_site=self.admin_site)
+            form = CopyInvitationsForm(request.POST)
             if form.is_valid():
                 source_event = form.cleaned_data['source_event']
                 target_events = list(queryset.exclude(pk=source_event.pk))
@@ -644,8 +644,7 @@ class ModuleInstanceAdmin(BaseAdminPage, ExportActionModelAdmin):
 
         if not form:
             form = CopyInvitationsForm(
-                initial={'_selected_action': selected_ids},
-                admin_site=self.admin_site
+                initial={'_selected_action': selected_ids}
             )
 
         context = {
