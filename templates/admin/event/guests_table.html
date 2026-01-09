@@ -1,0 +1,991 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <!-- Tabulator CSS -->
+  <link href="https://unpkg.com/tabulator-tables@5.5/dist/css/tabulator.min.css" rel="stylesheet">
+  
+  <style>
+    .guests-container {
+      padding: 20px;
+      max-width: 100%;
+    }
+    
+    .guests-header {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    
+    .guests-header h2 {
+      margin: 0;
+      color: #333;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 10px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+    
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    
+    .btn-primary {
+      background: #417690;
+      color: white;
+    }
+    
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+    
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+    
+    #guests-table {
+      font-size: 14px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    /* Разрешаем overflow для выпадающих списков */
+    .tabulator-cell {
+      overflow: visible !important;
+    }
+    
+    .tabulator-row {
+      overflow: visible !important;
+    }
+    
+    /* Стили для выпадающего списка */
+    .autocomplete-list {
+      box-sizing: border-box;
+    }
+    
+    .autocomplete-list > div {
+      white-space: nowrap;
+    }
+    
+    .save-indicator {
+      min-height: 44px;
+      padding: 12px 20px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .save-indicator.show {
+      opacity: 1;
+    }
+    
+    .save-indicator.show.success {
+      background: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    
+    .save-indicator.show.error {
+      background: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+    
+    .save-indicator.show.saving {
+      background: #fff3cd;
+      border-color: #ffeaa7;
+      color: #856404;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Стили для Tabulator */
+    .tabulator-row.tabulator-row-even {
+      background-color: #f9f9f9;
+    }
+    
+    .tabulator-row:hover {
+      background-color: #e8f4f8 !important;
+    }
+    
+    .tabulator-cell {
+      padding: 8px;
+    }
+    
+    .tabulator-header {
+      background-color: #417690;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .tabulator-header .tabulator-col {
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .tabulator-header-filter input {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 4px 8px;
+      border-radius: 3px;
+    }
+    
+    /* Статусы с цветами */
+    .status-announced { color: #6c757d; }
+    .status-invited { color: #007bff; }
+    .status-registered { color: #28a745; }
+    .status-visited { color: #6610f2; }
+    .status-cancelled { color: #dc3545; }
+    
+    /* Иконка удаления */
+    .btn-delete-icon:hover {
+      transform: scale(1.2);
+      transition: transform 0.2s;
+    }
+    
+    .info-panel {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    
+    .info-item {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .info-item-label {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 5px;
+    }
+    
+    .info-item-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="guests-container">
+  <!-- Заголовок и кнопки -->
+  <div class="guests-header">
+    <div>
+      <h2>📊 Список гостей: {{ event.name }}</h2>
+      <p style="color: #6c757d; margin: 5px 0 0 0;">
+        Интерактивная таблица с редактированием в ячейках
+      </p>
+    </div>
+    <div class="action-buttons">
+      <button id="download-csv" class="btn btn-secondary">📥 Скачать CSV</button>
+      <button id="reload-data" class="btn btn-primary">🔄 Обновить</button>
+      <a href="{% url 'admin:event_moduleinstance_change' event.id %}" class="btn btn-secondary">← Назад</a>
+    </div>
+  </div>
+  
+  <!-- Информационная панель -->
+  <div class="info-panel">
+    <div class="info-item">
+      <span class="info-item-label">Всего гостей</span>
+      <span class="info-item-value" id="total-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Заявлено</span>
+      <span class="info-item-value status-announced" id="announced-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Приглашено</span>
+      <span class="info-item-value status-invited" id="invited-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Подтверждено</span>
+      <span class="info-item-value status-registered" id="registered-count">0</span>
+    </div>
+    <div class="info-item">
+      <span class="info-item-label">Посетило</span>
+      <span class="info-item-value status-visited" id="visited-count">0</span>
+    </div>
+  </div>
+  
+  <!-- Индикатор сохранения -->
+  <div id="save-indicator" class="save-indicator"></div>
+  
+  <!-- Кнопки над таблицей -->
+  <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+    <button id="add-row" class="btn btn-success">+ Добавить гостя</button>
+    <button id="clear-filters" class="btn btn-secondary">🔄 Сбросить фильтры</button>
+    <div style="color: #6c757d; font-size: 13px;">
+      Клик на ячейку для редактирования | 👤 - открыть карточку | 🗑️ - удалить запись
+    </div>
+  </div>
+  
+  <!-- Таблица -->
+  <div id="guests-table"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5/dist/js/tabulator.min.js"></script>
+
+<script>
+// ==================== НАСТРОЙКИ ====================
+
+// Получаем CSRF токен
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
+const eventId = {{ event.id }};
+
+// Опции для статусов
+const statusOptions = {
+  'announced': 'Заявлен',
+  'invited': 'Приглашён',
+  'registered': 'Зарегистрирован',
+  'visited': 'Посетил',
+  'cancelled': 'Отклонил'
+};
+
+// Опции для фильтров справочников (будут заполнены после загрузки)
+const filterOptions = {
+  company: {},
+  category: {},
+  type_guest: {},
+  producer: {}
+};
+
+// ==================== ФУНКЦИИ (объявляем ДО инициализации таблицы) ====================
+
+// Кэш для автокомплита
+const autocompleteCache = {
+  company: [],
+  category: [],
+  type_guest: [],
+  producer: []
+};
+
+// Хранилище таймеров для debounce сохранения
+const saveTimers = {};
+
+// Загрузка списков для автокомплита
+function loadAutocompleteData(field) {
+  const url = `/admin/event/moduleinstance/${eventId}/autocomplete/${field}/`;
+  console.log(`Загрузка автокомплита для ${field} из ${url}`);
+  
+  return fetch(url, {
+    headers: {
+      'X-CSRFToken': csrftoken
+    }
+  })
+  .then(response => {
+    console.log(`Ответ для ${field}:`, response.status, response.statusText);
+    if (!response.ok) {
+      return response.text().then(text => {
+        console.error(`Ошибка ${response.status} для ${field}:`, text);
+        throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
+      });
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log(`Данные для ${field}:`, data);
+    autocompleteCache[field] = data.results || [];
+    
+    // Формируем опции для фильтров
+    filterOptions[field] = {};
+    autocompleteCache[field].forEach(item => {
+      filterOptions[field][item.name] = item.name;
+    });
+    
+    console.log(`Опции фильтра для ${field}:`, Object.keys(filterOptions[field]).length);
+    
+    return autocompleteCache[field];
+  })
+  .catch(error => {
+    console.error(`Error loading autocomplete for ${field}:`, error);
+    // Возвращаем пустой массив, чтобы не блокировать остальную функциональность
+    autocompleteCache[field] = [];
+    filterOptions[field] = {};
+    return [];
+  });
+}
+
+// Создание autocomplete редактора
+function createAutocompleteEditor(field) {
+  console.log(`Создание редактора для поля: ${field}`);
+  return function(cell, onRendered, success, cancel) {
+    console.log(`Редактор открыт для поля ${field}, текущее значение:`, cell.getValue());
+    
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = cell.getValue() || "";
+    input.style.width = "100%";
+    input.style.padding = "4px";
+    input.style.boxSizing = "border-box";
+    
+    const listDiv = document.createElement("div");
+    listDiv.className = "autocomplete-list";
+    listDiv.style.position = "absolute";
+    listDiv.style.background = "white";
+    listDiv.style.border = "2px solid #417690";
+    listDiv.style.borderRadius = "4px";
+    listDiv.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+    listDiv.style.maxHeight = "250px";
+    listDiv.style.overflowY = "auto";
+    listDiv.style.zIndex = "10000";
+    listDiv.style.minWidth = "200px";
+    listDiv.style.display = "none";
+    listDiv.style.marginTop = "2px";
+    
+    function showList(items, inputValue) {
+      console.log(`showList вызван для ${field}, элементов: ${items.length}, inputValue: "${inputValue}"`);
+      
+      listDiv.innerHTML = "";
+      
+      // Добавляем опцию "Создать новый"
+      if (inputValue) {
+        const createItem = document.createElement("div");
+        createItem.style.padding = "10px 12px";
+        createItem.style.cursor = "pointer";
+        createItem.style.background = "#e8f4f8";
+        createItem.style.borderBottom = "2px solid #ddd";
+        createItem.style.fontWeight = "bold";
+        createItem.style.fontSize = "13px";
+        createItem.textContent = `➕ Создать "${inputValue}"`;
+        createItem.onmousedown = function(e) {
+          e.preventDefault(); // Предотвращаем blur
+          console.log(`Выбрано "Создать новый" для ${field}:`, inputValue);
+          success(inputValue);
+          listDiv.style.display = "none";
+          
+          // Сохраняем после выбора
+          setTimeout(() => {
+            console.log('Вызываем saveRow после создания нового');
+            saveRow(cell.getRow());
+          }, 100);
+        };
+        listDiv.appendChild(createItem);
+      }
+      
+      // Добавляем существующие элементы
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.style.padding = "10px 12px";
+        div.style.cursor = "pointer";
+        div.style.fontSize = "13px";
+        div.textContent = item.name;
+        div.onmouseover = function() {
+          this.style.background = "#f0f0f0";
+        };
+        div.onmouseout = function() {
+          this.style.background = "white";
+        };
+        div.onmousedown = function(e) {
+          e.preventDefault(); // Предотвращаем blur
+          console.log(`Выбран элемент для ${field}:`, item.name);
+          success(item.name);
+          listDiv.style.display = "none";
+          
+          // Сохраняем после выбора
+          setTimeout(() => {
+            console.log('Вызываем saveRow после выбора из списка');
+            saveRow(cell.getRow());
+          }, 100);
+        };
+        listDiv.appendChild(div);
+      });
+      
+      const shouldShow = items.length > 0 || inputValue;
+      listDiv.style.display = shouldShow ? "block" : "none";
+      console.log(`Список ${shouldShow ? 'показан' : 'скрыт'}, элементов в DOM: ${listDiv.children.length}`);
+    }
+    
+    input.addEventListener("focus", function() {
+      console.log(`Focus на поле ${field}, текущее значение: "${input.value}"`);
+      loadAutocompleteData(field).then(items => {
+        console.log(`Получено ${items.length} элементов для ${field}`);
+        showList(items, input.value);
+      });
+    });
+    
+    input.addEventListener("input", function() {
+      const value = input.value.toLowerCase();
+      const filtered = autocompleteCache[field].filter(item => 
+        item.name.toLowerCase().includes(value)
+      );
+      showList(filtered, input.value);
+    });
+    
+    input.addEventListener("blur", function() {
+      setTimeout(() => {
+        listDiv.style.display = "none";
+        const newValue = input.value;
+        console.log(`Blur на поле ${field}, сохраняем значение:`, newValue);
+        success(newValue);
+        
+        // Триггерим сохранение вручную
+        setTimeout(() => {
+          console.log('Вызываем saveRow из blur редактора');
+          saveRow(cell.getRow());
+        }, 100);
+      }, 200);
+    });
+    
+    input.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        const newValue = input.value;
+        console.log(`Enter на поле ${field}, сохраняем:`, newValue);
+        success(newValue);
+        listDiv.style.display = "none";
+        
+        // Сохраняем после Enter
+        setTimeout(() => {
+          console.log('Вызываем saveRow после Enter');
+          saveRow(cell.getRow());
+        }, 100);
+      } else if (e.key === "Escape") {
+        console.log(`Escape на поле ${field}, отменяем`);
+        cancel();
+        listDiv.style.display = "none";
+      }
+    });
+    
+    onRendered(function() {
+      console.log(`onRendered для ${field}`);
+      input.focus();
+      input.select();
+      
+      // Устанавливаем relative позиционирование для ячейки
+      const cellElement = cell.getElement();
+      cellElement.style.position = "relative";
+      cellElement.style.overflow = "visible";
+      
+      // Добавляем список к ячейке
+      cellElement.appendChild(listDiv);
+      
+      console.log(`Список добавлен к ячейке, родитель:`, cellElement);
+      console.log(`Стили списка:`, {
+        display: listDiv.style.display,
+        zIndex: listDiv.style.zIndex,
+        position: listDiv.style.position
+      });
+    });
+    
+    return input;
+  };
+}
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ ====================
+
+// Проверка что все функции определены
+console.log('Проверка функций перед инициализацией таблицы:');
+console.log('- createAutocompleteEditor:', typeof createAutocompleteEditor);
+console.log('- loadAutocompleteData:', typeof loadAutocompleteData);
+console.log('- Test editor для company:', typeof createAutocompleteEditor('company'));
+
+const table = new Tabulator("#guests-table", {
+  height: "600px",
+  layout: "fitDataStretch",
+  placeholder: "Нет данных. Нажмите '+ Добавить гостя' для создания первой записи.",
+  resizableColumns: true,
+  
+  // Загрузка данных
+  ajaxURL: "{% url 'admin:event_guests_data' event.id %}",
+  ajaxConfig: {
+    headers: {
+      'X-CSRFToken': csrftoken
+    }
+  },
+  ajaxResponse: function(url, params, response) {
+    updateStats(response.data);
+    return response.data;
+  },
+  
+  // Колонки
+  columns: [
+    {
+      title: "ID", 
+      field: "id", 
+      visible: false
+    },
+    {
+      title: "", 
+      field: "contact_id",
+      formatter: function(cell) {
+        const contactId = cell.getValue();
+        const rowData = cell.getRow().getData();
+        const guestName = `${rowData.last_name} ${rowData.first_name}`;
+        
+        let html = '';
+        
+        // Иконка открытия карточки
+        if (contactId) {
+          const url = `/admin/event/contact/${contactId}/change/`;
+          html += `<a href="${url}" target="_blank" title="Открыть карточку человека" style="color: #417690; font-size: 16px; text-decoration: none; margin-right: 5px;">👤</a>`;
+        }
+        
+        // Иконка удаления
+        html += `<span class="btn-delete-icon" title="Удалить запись" style="color: #dc3545; font-size: 14px; cursor: pointer; user-select: none;">🗑️</span>`;
+        
+        return html;
+      },
+      width: 70,
+      hozAlign: "center",
+      headerSort: false,
+      cellClick: function(e, cell) {
+        // Если клик по иконке удаления
+        if (e.target.classList.contains('btn-delete-icon') || e.target.textContent === '🗑️') {
+          e.stopPropagation();
+          const rowData = cell.getRow().getData();
+          if (confirm(`Удалить эту запись?\n\nГость: ${rowData.last_name} ${rowData.first_name}`)) {
+            deleteRow(cell.getRow());
+          }
+        }
+        // Если клик по ссылке на человека - не мешаем
+      }
+    },
+    {
+      title: "Фамилия", 
+      field: "last_name", 
+      editor: "input", 
+      width: 160, 
+      headerFilter: "input",
+      validator: "required",
+      cellEdited: function(cell) {
+        console.log('Фамилия изменена:', cell.getValue());
+        triggerSave(cell.getRow());
+      }
+    },
+    {
+      title: "Имя", 
+      field: "first_name", 
+      editor: "input", 
+      width: 140, 
+      headerFilter: "input",
+      validator: "required",
+      cellEdited: function(cell) {
+        console.log('Имя изменено:', cell.getValue());
+        triggerSave(cell.getRow());
+      }
+    },
+    {
+      title: "Отчество", 
+      field: "middle_name", 
+      editor: "input", 
+      width: 160, 
+      headerFilter: "input",
+      cellEdited: function(cell) {
+        console.log('Отчество изменено:', cell.getValue());
+        triggerSave(cell.getRow());
+      }
+    },
+    {
+      title: "Никнейм", 
+      field: "nickname", 
+      editor: "input", 
+      width: 120, 
+      headerFilter: "input",
+      cellEdited: function(cell) {
+        console.log('Никнейм изменен:', cell.getValue());
+        triggerSave(cell.getRow());
+      }
+    },
+    {
+      title: "Компания", 
+      field: "company", 
+      editor: createAutocompleteEditor('company'),
+      width: 170, 
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.company,
+        clearable: true,
+        multiselect: false
+      }
+    },
+    {
+      title: "Категория", 
+      field: "category", 
+      editor: createAutocompleteEditor('category'),
+      width: 140, 
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.category,
+        clearable: true,
+        multiselect: false
+      }
+    },
+    {
+      title: "Тип гостя", 
+      field: "type_guest", 
+      editor: createAutocompleteEditor('type_guest'),
+      width: 160, 
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.type_guest,
+        clearable: true,
+        multiselect: false
+      }
+    },
+    {
+      title: "Продюсер", 
+      field: "producer", 
+      editor: createAutocompleteEditor('producer'),
+      width: 170, 
+      headerFilter: "list",
+      headerFilterFunc: "=",
+      headerFilterParams: {
+        values: filterOptions.producer,
+        clearable: true,
+        multiselect: false
+      }
+    },
+    {
+      title: "Статус", 
+      field: "action_type", 
+      editor: "list",
+      editorParams: {
+        values: statusOptions,
+        clearable: false
+      },
+      formatter: function(cell) {
+        const value = cell.getValue();
+        const text = statusOptions[value] || value;
+        return '<span class="status-' + value + '">' + text + '</span>';
+      },
+      width: 150,
+      headerFilter: "list",
+      headerFilterParams: {values: statusOptions},
+      cellEdited: function(cell) {
+        console.log('Статус изменен:', cell.getValue());
+        triggerSave(cell.getRow());
+      }
+    },
+    {
+      title: "Комментарий", 
+      field: "comment", 
+      editor: "input", 
+      width: 150,
+      cellEdited: function(cell) {
+        console.log('Комментарий изменен:', cell.getValue());
+        triggerSave(cell.getRow());
+      }
+    }
+  ]
+});
+
+// ==================== ОСТАЛЬНЫЕ ФУНКЦИИ ====================
+
+// Функция для триггера сохранения с debounce
+function triggerSave(row) {
+  const rowData = row.getData();
+  const rowId = rowData.id || 'new_' + Date.now(); // ID строки для таймера
+  
+  console.log('triggerSave вызван для строки с ID:', rowId);
+  
+  // Показываем что идет сохранение
+  showIndicator('💾 Сохранение...', 'saving');
+  
+  // Отменяем предыдущий таймер если есть
+  if (saveTimers[rowId]) {
+    clearTimeout(saveTimers[rowId]);
+    console.log('Предыдущий таймер отменен для', rowId);
+  }
+  
+  // Сохраняем с задержкой 500мс (было 1000)
+  saveTimers[rowId] = setTimeout(() => {
+    console.log('Таймер истек, вызываем saveRow для', rowId);
+    saveRow(row);
+    delete saveTimers[rowId]; // Очищаем таймер после выполнения
+  }, 500);
+}
+
+// Сохранение строки
+function saveRow(row) {
+  console.log('=== saveRow вызван ===');
+  const data = row.getData();
+  console.log('Данные для сохранения:', data);
+  
+  // Валидация
+  if (!data.last_name || !data.first_name) {
+    console.error('Валидация не прошла: нет фамилии или имени');
+    showIndicator('❌ Ошибка: Фамилия и Имя обязательны', 'error');
+    return;
+  }
+  
+  console.log('Отправка запроса на сервер...');
+  
+  fetch("{% url 'admin:event_guest_save' event.id %}", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken
+    },
+    body: JSON.stringify(data)
+  })
+  .then(response => {
+    console.log('Response status:', response.status);
+    return response.json();
+  })
+  .then(result => {
+    console.log('Result:', result);
+    if (result.success) {
+      // Обновляем ID если это была новая строка
+      if (!data.id) {
+        row.update({
+          id: result.id, 
+          contact_id: result.contact_id
+        }, true);  // true = не триггерить cellEdited
+      }
+      
+      // Показываем соответствующее сообщение
+      let message = '✅ ';
+      if (result.used_existing) {
+        message += '🔗 ' + result.message;
+      } else if (!data.id) {
+        message += '➕ ' + result.message;
+      } else {
+        message += '💾 ' + result.message;
+      }
+      
+      showIndicator(message, 'success');
+      
+      // Перезагружаем списки для автокомплита (только если создали новый справочник)
+      if (!data.id || result.used_existing) {
+        loadAutocompleteData('company');
+        loadAutocompleteData('category');
+        loadAutocompleteData('type_guest');
+        loadAutocompleteData('producer');
+      }
+      
+      // НЕ перезагружаем таблицу, чтобы не сбросить несохраненные изменения
+      // Статистику обновим только счетчики
+      updateStatsOnly();
+    } else {
+      showIndicator('❌ Ошибка: ' + result.error, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Save error:', error);
+    showIndicator('❌ Ошибка сохранения: ' + error, 'error');
+  });
+}
+
+// Удаление строки
+function deleteRow(row) {
+  const data = row.getData();
+  
+  if (!data.id) {
+    row.delete();
+    showIndicator('✅ Запись удалена', 'success');
+    return;
+  }
+  
+  fetch("{% url 'admin:event_guest_delete' event.id %}", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken
+    },
+    body: JSON.stringify({id: data.id})
+  })
+  .then(response => response.json())
+  .then(result => {
+    if (result.success) {
+      row.delete();
+      showIndicator('✅ Запись удалена', 'success');
+      
+      // Обновляем только счетчики, не перезагружая таблицу
+      updateStatsOnly();
+    } else {
+      showIndicator('❌ ' + result.error, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showIndicator('❌ Ошибка удаления: ' + error, 'error');
+  });
+}
+
+// Индикатор сохранения
+let indicatorTimeout;
+function showIndicator(message, type = 'success') {
+  const indicator = document.getElementById('save-indicator');
+  indicator.textContent = message;
+  
+  // Убираем все классы типов
+  indicator.classList.remove('success', 'error', 'saving');
+  
+  // Добавляем show и нужный тип
+  indicator.className = `save-indicator show ${type}`;
+  
+  // Очищаем предыдущий таймаут
+  if (indicatorTimeout) {
+    clearTimeout(indicatorTimeout);
+  }
+  
+  // Для 'saving' не скрываем автоматически
+  if (type !== 'saving') {
+    indicatorTimeout = setTimeout(() => {
+      indicator.classList.remove('show', 'success', 'error', 'saving');
+    }, 3000);
+  }
+}
+
+// Обновление статистики
+function updateStats(data) {
+  const stats = {
+    total: data.length,
+    announced: 0,
+    invited: 0,
+    registered: 0,
+    visited: 0,
+    cancelled: 0
+  };
+  
+  data.forEach(row => {
+    if (stats.hasOwnProperty(row.action_type)) {
+      stats[row.action_type]++;
+    }
+  });
+  
+  document.getElementById('total-count').textContent = stats.total;
+  document.getElementById('announced-count').textContent = stats.announced;
+  document.getElementById('invited-count').textContent = stats.invited;
+  document.getElementById('registered-count').textContent = stats.registered;
+  document.getElementById('visited-count').textContent = stats.visited;
+}
+
+// Обновление только счетчиков без перезагрузки таблицы
+function updateStatsOnly() {
+  const data = table.getData();
+  updateStats(data);
+}
+
+// ==================== ОБРАБОТЧИКИ СОБЫТИЙ ====================
+
+// Добавление новой строки
+document.getElementById('add-row').addEventListener('click', function() {
+  const newRow = table.addRow({
+    last_name: '',
+    first_name: '',
+    middle_name: '',
+    nickname: '',
+    company: '',
+    category: '',
+    type_guest: '',
+    action_type: 'announced',
+    comment: ''
+  }, true);  // true = добавить в начало
+  
+  showIndicator('Новая строка добавлена. Введите фамилию и имя - если человек уже есть в БД, система найдет его автоматически.', 'success');
+  
+  // Автоматически открываем редактор фамилии
+  setTimeout(() => {
+    const cells = newRow.getCells();
+    const lastNameCell = cells.find(c => c.getField() === 'last_name');
+    if (lastNameCell) {
+      table.scrollToRow(newRow, "top", true);
+      lastNameCell.edit();
+    }
+  }, 100);
+});
+
+// Скачать CSV
+document.getElementById('download-csv').addEventListener('click', function() {
+  const filename = 'guests_{{ event.name|slugify }}_' + new Date().toISOString().split('T')[0] + '.csv';
+  table.download("csv", filename, {delimiter: ";"});
+  showIndicator('CSV файл скачивается...', 'success');
+});
+
+// Обновить данные
+document.getElementById('reload-data').addEventListener('click', function() {
+  table.replaceData();
+  showIndicator('Данные обновлены', 'success');
+});
+
+// Сбросить все фильтры
+document.getElementById('clear-filters').addEventListener('click', function() {
+  console.log('Сброс всех фильтров');
+  table.clearHeaderFilter();
+  showIndicator('Фильтры сброшены', 'success');
+});
+
+// Предзагружаем списки для автокомплита при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Загрузка списков для автокомплита...');
+  
+  // Загружаем все справочники
+  Promise.all([
+    loadAutocompleteData('company'),
+    loadAutocompleteData('category'),
+    loadAutocompleteData('type_guest'),
+    loadAutocompleteData('producer')
+  ]).then(() => {
+    console.log('Все списки загружены, обновляем фильтры таблицы');
+    
+    // Обновляем параметры фильтров в заголовках
+    table.getColumn('company').updateDefinition({headerFilterParams: {values: filterOptions.company, clearable: true}});
+    table.getColumn('category').updateDefinition({headerFilterParams: {values: filterOptions.category, clearable: true}});
+    table.getColumn('type_guest').updateDefinition({headerFilterParams: {values: filterOptions.type_guest, clearable: true}});
+    table.getColumn('producer').updateDefinition({headerFilterParams: {values: filterOptions.producer, clearable: true}});
+    
+    console.log('Фильтры обновлены');
+  });
+});
+</script>
+
+{% endblock %}
+
