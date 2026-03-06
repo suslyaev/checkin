@@ -384,7 +384,6 @@ class InfoContact(models.Model):
 
 class Community(BaseModelClass):
     name = models.CharField(max_length=255, unique=True, verbose_name='Наименование сообщества')
-    comment = models.CharField(max_length=255, verbose_name='Описание', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Сообщество'

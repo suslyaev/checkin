@@ -464,11 +464,71 @@ class CategoryContactAdmin(BaseAdminPage):
 
 @admin.register(Community)
 class CommunityAdmin(BaseAdminPage):
-    list_display = ('name',)
+    list_display = ('id', 'name')
     list_editable = ('name',)
     search_fields = ['name']
     ordering = ['name']
+    readonly_fields = ('members_socials_summary',)
     inlines = [InfoCommunityInline, CommunityMemberInline]
+    fieldsets = (
+        (None, {
+            'fields': ('name',)
+        }),
+        ('Участники и их соцсети', {
+            'fields': ('members_socials_summary',),
+            'description': 'Сводка по соцсетям участников сообщества (для людей — из карточки человека)',
+        }),
+    )
+
+    def members_socials_summary(self, obj):
+        """Выводит список участников сообщества с их соцсетями."""
+        if not obj or not obj.pk:
+            return format_html('<p style="color: #888;">Сохраните сообщество, чтобы увидеть участников.</p>')
+
+        members = CommunityMember.objects.filter(community=obj).select_related('contact').order_by('contact__last_name', 'contact__first_name')
+        if not members.exists():
+            return format_html('<p style="color: #888;">Нет участников. Добавьте их в блоке «Участники» ниже.</p>')
+
+        blocks = []
+        for m in members:
+            contact = m.contact
+            contact_url = reverse('admin:event_contact_change', args=[contact.pk])
+            contact_name = contact.get_fio() or f'#{contact.pk}'
+
+            # Соцсети человека (InfoContact где contact задан, community пустой)
+            infos = InfoContact.objects.filter(contact=contact, community__isnull=True).select_related('social_network').order_by('social_network__name')
+
+            lines = []
+            for info in infos:
+                sn_name = info.social_network.name if info.social_network else '—'
+                ext = (info.external_id or '').strip()
+                subs = f' ({info.subscribers:,})' if info.subscribers is not None else ''
+                if ext.startswith(('http://', 'https://')):
+                    line = format_html(
+                        '• <a href="{}" target="_blank" rel="noopener">{}</a>{}',
+                        ext, sn_name, subs
+                    )
+                else:
+                    line = format_html('• {} — {} {}', sn_name, ext, subs)
+                lines.append(line)
+
+            if lines:
+                socials_html = format_html_join('', '<br>', ((line,) for line in lines))
+            else:
+                socials_html = format_html('<span style="color: #999;">нет соцсетей</span>')
+
+            block = format_html(
+                '<div style="margin-bottom: 14px; padding: 10px 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #417690;">'
+                '<strong><a href="{}">{}</a></strong><br>'
+                '<div style="margin-top: 6px; margin-left: 4px; font-size: 13px; color: #333;">{}</div>'
+                '</div>',
+                contact_url, contact_name, socials_html
+            )
+            blocks.append(block)
+
+        return format_html('<div style="max-width: 600px;">{}</div>', format_html_join('', '{}', ((b,) for b in blocks)))
+
+    members_socials_summary.short_description = 'Участники и соцсети'
 
     class Media:
         js = ('js/admin.js',)  # Костыль для замены УДАЛЕНО на УДАЛИТЬ
