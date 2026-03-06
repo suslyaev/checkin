@@ -3,7 +3,7 @@ from django.db import transaction
 from import_export.widgets import ForeignKeyWidget
 from django.db.models import Q
 
-from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser
+from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser, CommunityMember
 
 
 class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
@@ -342,13 +342,17 @@ class ActionExport(resources.ModelResource):
     create_user = fields.Field(attribute='create_user', column_name='Кем создано')
     update_user = fields.Field(attribute='update_user', column_name='Кем обновлено')
     social_networks = fields.Field(attribute='social_networks', column_name='Социальные сети')
-    
+    communities_ids = fields.Field(attribute='communities_ids', column_name='Сообщества ID')
+    communities_names = fields.Field(attribute='communities_names', column_name='Сообщества Название')
+    communities_socials = fields.Field(attribute='communities_socials', column_name='Сообщества Соц Сети')
+
     class Meta:
         model = Action
         fields = ('id', 'event__name', 'contact__last_name', 'contact__first_name', 'contact__middle_name',
                   'contact__nickname', 'contact__company__name', 'contact__category__name', 'contact__type_guest__name',
                   'contact__producer',
-                  'action_type_display', 'create_date', 'update_date', 'create_user', 'update_user', 'social_networks')
+                  'action_type_display', 'create_date', 'update_date', 'create_user', 'update_user', 'social_networks',
+                  'communities_ids', 'communities_names', 'communities_socials')
         
     def dehydrate_contact__producer(self, obj):
         """Формирует список менеджеров в формате Фамилия Имя или телефон"""
@@ -382,13 +386,51 @@ class ActionExport(resources.ModelResource):
 
         И т.д.
         """
-        social_networks = InfoContact.objects.filter(contact=obj.contact)
+        social_networks = InfoContact.objects.filter(contact=obj.contact, community__isnull=True)
         parts = []
         for s in social_networks:
-            title = f"{s.social_network.name} ({s.subscribers})" if s.subscribers else s.social_network.name
+            title = f"{s.social_network.name} ({s.subscribers})" if s.social_network and s.subscribers else (s.social_network.name if s.social_network else '—')
             link = s.external_id or ""
             parts.append(f"{title}\n{link}")
         return '\n\n'.join(parts)
+
+    def dehydrate_communities_ids(self, obj):
+        """ID сообществ, в которых состоит человек (через запятую)."""
+        if not obj.contact_id:
+            return ""
+        ids = CommunityMember.objects.filter(contact=obj.contact).values_list('community_id', flat=True)
+        return ", ".join(str(pk) for pk in ids)
+
+    def dehydrate_communities_names(self, obj):
+        """Названия сообществ, в которых состоит человек (через запятую)."""
+        if not obj.contact_id:
+            return ""
+        members = CommunityMember.objects.filter(contact=obj.contact).select_related('community')
+        return ", ".join(m.community.name for m in members if m.community)
+
+    def dehydrate_communities_socials(self, obj):
+        """
+        Соцсети сообществ, в которых состоит человек.
+        Формат: Соцсеть (подписчики) ссылка, каждый блок через перенос строки.
+        """
+        if not obj.contact_id:
+            return ""
+        community_ids = list(
+            CommunityMember.objects.filter(contact=obj.contact).values_list('community_id', flat=True)
+        )
+        if not community_ids:
+            return ""
+        infos = InfoContact.objects.filter(
+            community_id__in=community_ids,
+            contact__isnull=True
+        ).select_related('social_network')
+        parts = []
+        for s in infos:
+            sn_name = s.social_network.name if s.social_network else "—"
+            subs = f" ({s.subscribers:,})" if s.subscribers is not None else ""
+            link = s.external_id or ""
+            parts.append(f"{sn_name}{subs} {link}".strip())
+        return "\n".join(parts)
     
     def dehydrate_action_type_display(self, obj):
         """

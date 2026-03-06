@@ -1,6 +1,22 @@
 from django.contrib import admin, messages
 import event.services as service
-from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, ActionLog
+from .models import (
+    CustomUser,
+    ManagerUser,
+    ProducerUser,
+    CheckerUser,
+    CompanyContact,
+    CategoryContact,
+    TypeGuestContact,
+    SocialNetwork,
+    InfoContact,
+    Contact,
+    ModuleInstance,
+    Action,
+    ActionLog,
+    Community,
+    CommunityMember,
+)
 from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
@@ -9,6 +25,7 @@ from .resources import ContactImport, EventExport
 from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
 from django.db.models import Count, Q
 from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.http import FileResponse, QueryDict
 import os
@@ -75,7 +92,7 @@ class CustomAdminSite(admin.AdminSite):
                 model_dict = {model["object_name"]: model for model in app["models"]}
 
                 # События
-                for model_name in ['Contact', 'ModuleInstance', 'Action']:
+                for model_name in ['Contact', 'Community', 'ModuleInstance', 'Action']:
                     if model_name in model_dict:
                         events_group['models'].append(model_dict[model_name])
 
@@ -280,12 +297,48 @@ class SocialNetworkAdmin(BaseAdminPage):
 
 class InfoContactInline(admin.TabularInline):
     model = InfoContact
-    fields = ['contact', 'social_network', 'external_id', 'subscribers']
-    autocomplete_fields = ['social_network', ]
-    readonly_fields = ['contact',]
+    fk_name = 'contact'
+    fields = ['social_network', 'external_id', 'subscribers']
+    autocomplete_fields = ['social_network']
     extra = 0
     verbose_name = 'Контакт'
     verbose_name_plural = "Контакты"
+
+
+class InfoCommunityInline(admin.TabularInline):
+    model = InfoContact
+    fk_name = 'community'
+    fields = ['social_network', 'external_id', 'subscribers']
+    autocomplete_fields = ['social_network']
+    extra = 0
+    verbose_name = 'Соцсеть сообщества'
+    verbose_name_plural = "Соцсети сообщества"
+
+
+class CommunityMemberInline(admin.TabularInline):
+    model = CommunityMember
+    fields = ['contact']
+    autocomplete_fields = ['contact']
+    extra = 0
+    verbose_name = 'Участник'
+    verbose_name_plural = "Участники"
+
+
+class CommunityMemberForContactInline(admin.TabularInline):
+    model = CommunityMember
+    fk_name = 'contact'
+    fields = ['community', 'community_members_count']
+    readonly_fields = ['community_members_count']
+    autocomplete_fields = ['community']
+    extra = 0
+    verbose_name = 'Сообщество'
+    verbose_name_plural = "Сообщества"
+
+    def community_members_count(self, obj):
+        if obj and obj.community_id:
+            return obj.community.communitymember_set.count()
+        return '—'
+    community_members_count.short_description = 'Участников'
 
 # Человек
 @admin.register(Contact)
@@ -296,7 +349,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest', 'producer']
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
-    inlines = [InfoContactInline, ]
+    inlines = [InfoContactInline, CommunityMemberForContactInline]
     show_change_form_export = False
     list_max_show_all = 10000
     fieldsets = (
@@ -415,6 +468,88 @@ class CategoryContactAdmin(BaseAdminPage):
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
+
+@admin.register(Community)
+class CommunityAdmin(BaseAdminPage):
+    list_display = ('name', 'members_count_link')
+    search_fields = ['name']
+    ordering = ['name']
+    readonly_fields = ('members_socials_summary',)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(members_count=Count('communitymember'))
+
+    def members_count_link(self, obj):
+        count = obj.communitymember_set.count()
+        url = reverse('admin:event_community_change', args=[obj.pk])
+        return format_html('<a href="{}">{}</a>', url, count)
+    members_count_link.short_description = 'Участников'
+    members_count_link.admin_order_field = 'members_count'
+    inlines = [InfoCommunityInline, CommunityMemberInline]
+    fieldsets = (
+        (None, {
+            'fields': ('name',)
+        }),
+        ('Участники и их соцсети', {
+            'fields': ('members_socials_summary',),
+            'description': 'Сводка по соцсетям участников сообщества (для людей — из карточки человека)',
+        }),
+    )
+
+    def members_socials_summary(self, obj):
+        """Выводит список участников сообщества с их соцсетями."""
+        if not obj or not obj.pk:
+            return format_html('<p style="color: #888;">Сохраните сообщество, чтобы увидеть участников.</p>')
+
+        members = CommunityMember.objects.filter(community=obj).select_related('contact').order_by('contact__last_name', 'contact__first_name')
+        if not members.exists():
+            return format_html('<p style="color: #888;">Нет участников. Добавьте их в блоке «Участники» ниже.</p>')
+
+        blocks = []
+        for m in members:
+            contact = m.contact
+            contact_url = reverse('admin:event_contact_change', args=[contact.pk])
+            contact_name = contact.get_fio() or f'#{contact.pk}'
+
+            # Соцсети человека (InfoContact где contact задан, community пустой)
+            infos = InfoContact.objects.filter(contact=contact, community__isnull=True).select_related('social_network').order_by('social_network__name')
+
+            lines = []
+            for info in infos:
+                sn_name = info.social_network.name if info.social_network else '—'
+                ext = (info.external_id or '').strip()
+                subs = f' ({info.subscribers:,})' if info.subscribers is not None else ''
+                if ext.startswith(('http://', 'https://')):
+                    line = format_html(
+                        '• <a href="{}" target="_blank" rel="noopener">{}</a>{}',
+                        ext, sn_name, subs
+                    )
+                else:
+                    line = format_html('• {} — {} {}', sn_name, ext, subs)
+                lines.append(line)
+
+            if lines:
+                socials_html = mark_safe('<br>'.join(str(line) for line in lines))
+            else:
+                socials_html = format_html('<span style="color: #999;">нет соцсетей</span>')
+
+            block = format_html(
+                '<div style="margin-bottom: 14px; padding: 10px 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #417690;">'
+                '<strong><a href="{}">{}</a></strong><br>'
+                '<div style="margin-top: 6px; margin-left: 4px; font-size: 13px; color: #333;">{}</div>'
+                '</div>',
+                contact_url, contact_name, socials_html
+            )
+            blocks.append(block)
+
+        return format_html('<div style="max-width: 600px;">{}</div>', format_html_join('', '{}', ((b,) for b in blocks)))
+
+    members_socials_summary.short_description = 'Участники и соцсети'
+
+    class Media:
+        js = ('js/admin.js',)  # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
 # Статус
 @admin.register(TypeGuestContact)
