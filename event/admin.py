@@ -464,8 +464,8 @@ class CategoryContactAdmin(BaseAdminPage):
 
 @admin.register(Community)
 class CommunityAdmin(BaseAdminPage):
-    list_display = ('id', 'name', 'comment')
-    list_editable = ('name', 'comment')
+    list_display = ('name',)
+    list_editable = ('name',)
     search_fields = ['name']
     ordering = ['name']
     inlines = [InfoCommunityInline, CommunityMemberInline]
