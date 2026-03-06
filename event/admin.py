@@ -464,8 +464,7 @@ class CategoryContactAdmin(BaseAdminPage):
 
 @admin.register(Community)
 class CommunityAdmin(BaseAdminPage):
-    list_display = ('id', 'name')
-    list_editable = ('name',)
+    list_display = ('name',)
     search_fields = ['name']
     ordering = ['name']
     readonly_fields = ('members_socials_summary',)
@@ -513,7 +512,7 @@ class CommunityAdmin(BaseAdminPage):
                 lines.append(line)
 
             if lines:
-                socials_html = format_html_join('', '<br>', ((line,) for line in lines))
+                socials_html = format_html_join('<br>', '{}', ((line,) for line in lines))
             else:
                 socials_html = format_html('<span style="color: #999;">нет соцсетей</span>')
 
