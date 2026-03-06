@@ -327,11 +327,18 @@ class CommunityMemberInline(admin.TabularInline):
 class CommunityMemberForContactInline(admin.TabularInline):
     model = CommunityMember
     fk_name = 'contact'
-    fields = ['community']
+    fields = ['community', 'community_members_count']
+    readonly_fields = ['community_members_count']
     autocomplete_fields = ['community']
     extra = 0
     verbose_name = 'Сообщество'
     verbose_name_plural = "Сообщества"
+
+    def community_members_count(self, obj):
+        if obj and obj.community_id:
+            return obj.community.communitymember_set.count()
+        return '—'
+    community_members_count.short_description = 'Участников'
 
 # Человек
 @admin.register(Contact)
