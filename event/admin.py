@@ -326,7 +326,7 @@ class CommunityMemberInline(admin.TabularInline):
 class CommunityMemberForContactInline(admin.TabularInline):
     model = CommunityMember
     fk_name = 'contact'
-    fields = ['community', 'external_id']
+    fields = ['community']
     autocomplete_fields = ['community']
     extra = 0
     verbose_name = 'Сообщество'
