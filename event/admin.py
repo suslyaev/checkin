@@ -25,6 +25,7 @@ from .resources import ContactImport, EventExport
 from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
 from django.db.models import Count, Q
 from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.http import FileResponse, QueryDict
 import os
@@ -464,10 +465,21 @@ class CategoryContactAdmin(BaseAdminPage):
 
 @admin.register(Community)
 class CommunityAdmin(BaseAdminPage):
-    list_display = ('name',)
+    list_display = ('name', 'members_count_link')
     search_fields = ['name']
     ordering = ['name']
     readonly_fields = ('members_socials_summary',)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(members_count=Count('communitymember'))
+
+    def members_count_link(self, obj):
+        count = obj.communitymember_set.count()
+        url = reverse('admin:event_community_change', args=[obj.pk])
+        return format_html('<a href="{}">{}</a>', url, count)
+    members_count_link.short_description = 'Участников'
+    members_count_link.admin_order_field = 'members_count'
     inlines = [InfoCommunityInline, CommunityMemberInline]
     fieldsets = (
         (None, {
@@ -512,7 +524,7 @@ class CommunityAdmin(BaseAdminPage):
                 lines.append(line)
 
             if lines:
-                socials_html = format_html_join('<br>', '{}', ((line,) for line in lines))
+                socials_html = mark_safe('<br>'.join(str(line) for line in lines))
             else:
                 socials_html = format_html('<span style="color: #999;">нет соцсетей</span>')
 
