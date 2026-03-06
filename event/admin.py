@@ -1,6 +1,22 @@
 from django.contrib import admin, messages
 import event.services as service
-from .models import CustomUser, ManagerUser, ProducerUser,  CheckerUser, CompanyContact, CategoryContact, TypeGuestContact, SocialNetwork, InfoContact, Contact, ModuleInstance, Action, ActionLog
+from .models import (
+    CustomUser,
+    ManagerUser,
+    ProducerUser,
+    CheckerUser,
+    CompanyContact,
+    CategoryContact,
+    TypeGuestContact,
+    SocialNetwork,
+    InfoContact,
+    Contact,
+    ModuleInstance,
+    Action,
+    ActionLog,
+    Community,
+    CommunityMember,
+)
 from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
@@ -75,7 +91,7 @@ class CustomAdminSite(admin.AdminSite):
                 model_dict = {model["object_name"]: model for model in app["models"]}
 
                 # События
-                for model_name in ['Contact', 'ModuleInstance', 'Action']:
+                for model_name in ['Contact', 'Community', 'ModuleInstance', 'Action']:
                     if model_name in model_dict:
                         events_group['models'].append(model_dict[model_name])
 
@@ -280,12 +296,41 @@ class SocialNetworkAdmin(BaseAdminPage):
 
 class InfoContactInline(admin.TabularInline):
     model = InfoContact
-    fields = ['contact', 'social_network', 'external_id', 'subscribers']
-    autocomplete_fields = ['social_network', ]
-    readonly_fields = ['contact',]
+    fk_name = 'contact'
+    fields = ['social_network', 'external_id', 'subscribers']
+    autocomplete_fields = ['social_network']
     extra = 0
     verbose_name = 'Контакт'
     verbose_name_plural = "Контакты"
+
+
+class InfoCommunityInline(admin.TabularInline):
+    model = InfoContact
+    fk_name = 'community'
+    fields = ['social_network', 'external_id', 'subscribers']
+    autocomplete_fields = ['social_network']
+    extra = 0
+    verbose_name = 'Соцсеть сообщества'
+    verbose_name_plural = "Соцсети сообщества"
+
+
+class CommunityMemberInline(admin.TabularInline):
+    model = CommunityMember
+    fields = ['contact']
+    autocomplete_fields = ['contact']
+    extra = 0
+    verbose_name = 'Участник'
+    verbose_name_plural = "Участники"
+
+
+class CommunityMemberForContactInline(admin.TabularInline):
+    model = CommunityMember
+    fk_name = 'contact'
+    fields = ['community']
+    autocomplete_fields = ['community']
+    extra = 0
+    verbose_name = 'Сообщество'
+    verbose_name_plural = "Сообщества"
 
 # Человек
 @admin.register(Contact)
@@ -296,7 +341,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
     autocomplete_fields = ['company', 'category', 'type_guest', 'producer']
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
-    inlines = [InfoContactInline, ]
+    inlines = [InfoContactInline, CommunityMemberForContactInline]
     show_change_form_export = False
     list_max_show_all = 10000
     fieldsets = (
@@ -415,6 +460,18 @@ class CategoryContactAdmin(BaseAdminPage):
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
+
+@admin.register(Community)
+class CommunityAdmin(BaseAdminPage):
+    list_display = ('id', 'name', 'comment')
+    list_editable = ('name', 'comment')
+    search_fields = ['name']
+    ordering = ['name']
+    inlines = [InfoCommunityInline, CommunityMemberInline]
+
+    class Media:
+        js = ('js/admin.js',)  # Костыль для замены УДАЛЕНО на УДАЛИТЬ
 
 # Статус
 @admin.register(TypeGuestContact)

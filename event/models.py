@@ -366,16 +366,45 @@ class SocialNetwork(BaseModelClass):
         verbose_name = 'Социальную сеть'
         verbose_name_plural = 'Социальные сети'
 
-# Контакт человека
 class InfoContact(models.Model):
-    contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, verbose_name='Человек', db_index=True)
+    contact = models.ForeignKey('Contact', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Человек', db_index=True)
+    community = models.ForeignKey('Community', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Сообщество', db_index=True)
     social_network = models.ForeignKey('SocialNetwork', on_delete=models.SET_NULL, blank=True, null=True, verbose_name='Социальная сеть', db_index=True)
     external_id = models.CharField(max_length=255, verbose_name='Имя или айди')
     subscribers = models.IntegerField(blank=True, null=True, verbose_name='Подписчики')
 
     def __str__(self):
-        return f"{self.contact} - {self.social_network.name} ({self.external_id})"
+        owner = self.contact or self.community
+        return f"{owner} - {self.social_network.name if self.social_network else '—'} ({self.external_id})"
 
     class Meta:
-        verbose_name = 'Контакт человека'
-        verbose_name_plural = 'Контакты человека'
+        verbose_name = 'Контакт'
+        verbose_name_plural = 'Контакты'
+
+
+class Community(BaseModelClass):
+    name = models.CharField(max_length=255, unique=True, verbose_name='Наименование сообщества')
+    comment = models.CharField(max_length=255, verbose_name='Описание', blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Сообщество'
+        verbose_name_plural = 'Сообщества'
+
+
+# Участники сообществ
+class CommunityMember(models.Model):
+    community = models.ForeignKey('Community', on_delete=models.CASCADE, verbose_name='Сообщество', db_index=True)
+    contact = models.ForeignKey('Contact', on_delete=models.CASCADE, verbose_name='Человек', db_index=True)
+
+    def __str__(self):
+        return f"{self.community} - {self.contact}"
+
+    class Meta:
+        verbose_name = 'Участник сообщества'
+        verbose_name_plural = 'Участники сообществ'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['community', 'contact'],
+                name='unique_community_member'
+            )
+        ]
