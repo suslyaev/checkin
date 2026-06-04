@@ -12,9 +12,10 @@ def _norm(value):
     return str(value).strip()
 
 
-def build_duplicate_candidates_q(contact):
+def build_duplicate_candidates_q(contact, *, weak_last_name=False):
     """
     Q-фильтр: другие люди (и сам контакт), похожие на переданную карточку.
+    weak_last_name: совпадение только по фамилии (даёт очень длинные списки).
     """
     conditions = Q()
     last = _norm(contact.last_name)
@@ -30,8 +31,8 @@ def build_duplicate_candidates_q(contact):
     if first and middle:
         conditions |= Q(first_name__iexact=first, middle_name__iexact=middle)
 
-    # Та же фамилия (слабое совпадение — у популярных фамилий список может быть длинным)
-    if last and len(last) >= 3:
+    # Только фамилия — опционально, по умолчанию выключено
+    if weak_last_name and last and len(last) >= 3:
         conditions |= Q(last_name__iexact=last)
 
     # Никнейм
@@ -60,8 +61,10 @@ def build_duplicate_candidates_q(contact):
     return conditions
 
 
-def duplicate_candidates_queryset(contact):
-    return Contact.objects.filter(build_duplicate_candidates_q(contact)).distinct()
+def duplicate_candidates_queryset(contact, *, weak_last_name=False):
+    return Contact.objects.filter(
+        build_duplicate_candidates_q(contact, weak_last_name=weak_last_name)
+    ).distinct()
 
 
 def get_duplicate_match_reasons(anchor, candidate):

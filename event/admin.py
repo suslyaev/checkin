@@ -278,6 +278,33 @@ class ProducerContactFilter(AutocompleteFilterMultiple):
     title = 'Продюсер'
     field_name = 'producer'
 
+
+class DuplicateOfContactFilter(admin.SimpleListFilter):
+    """Фильтр списка по предположительным дублям выбранной карточки."""
+    title = 'Предположительные дубли'
+    parameter_name = 'duplicate_of'
+
+    def lookups(self, request, model_admin):
+        value = request.GET.get(self.parameter_name)
+        if not value:
+            return ()
+        try:
+            contact = Contact.objects.get(pk=int(value))
+        except (Contact.DoesNotExist, ValueError, TypeError):
+            return ()
+        return [(value, contact.get_fio())]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        try:
+            anchor = Contact.objects.get(pk=int(value))
+        except (Contact.DoesNotExist, ValueError, TypeError):
+            return queryset.none()
+        return queryset.filter(build_duplicate_candidates_q(anchor)).distinct()
+
+
 class CopyInvitationsForm(forms.Form):
     _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)
     source_event = forms.ModelChoiceField(
@@ -361,7 +388,13 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     actions = ['merge_duplicates_action', 'delete_selected']
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'producer', 'photo_preview')
     list_editable = ('company', 'category', 'type_guest', 'producer')
-    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
+    list_filter = (
+        DuplicateOfContactFilter,
+        CompanyContactFilter,
+        CategoryContactFilter,
+        TypeGuestContactFilter,
+        ProducerContactFilter,
+    )
     readonly_fields = (
         'find_duplicates_button',
         'get_fio',
@@ -429,19 +462,17 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
         file_path = os.path.join(os.path.dirname(__file__), "templates", "import_cont.xlsx")
         return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_cont.xlsx")
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        anchor_pk = request.GET.get('possible_duplicates_of')
-        if not anchor_pk:
-            return qs
-        try:
-            anchor = Contact.objects.get(pk=int(anchor_pk))
-        except (Contact.DoesNotExist, ValueError, TypeError):
-            return qs.none()
-        return qs.filter(build_duplicate_candidates_q(anchor)).distinct()
-
     def changelist_view(self, request, extra_context=None):
-        anchor_pk = request.GET.get('possible_duplicates_of')
+        # Старые ссылки с possible_duplicates_of → duplicate_of
+        legacy_pk = request.GET.get('possible_duplicates_of')
+        if legacy_pk and not request.GET.get('duplicate_of'):
+            params = request.GET.copy()
+            params['duplicate_of'] = legacy_pk
+            if 'possible_duplicates_of' in params:
+                del params['possible_duplicates_of']
+            return HttpResponseRedirect(f'{request.path}?{params.urlencode()}')
+
+        anchor_pk = request.GET.get('duplicate_of')
         token = None
         if anchor_pk:
             try:
@@ -456,7 +487,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                     format_html(
                         'Показаны <strong>предположительные дубли</strong> для '
                         '<a href="{}">{}</a> ({} {}). '
-                        'Совпадения: фамилия+имя, имя+отчество, та же фамилия, никнейм, контакт в соцсетях. '
+                        'Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
                         'Отметьте нужные строки → «Объединить дубли». '
                         '<a href="{}">Показать весь справочник</a>.',
                         change_url,
@@ -477,7 +508,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
 
     def get_list_display(self, request):
         display = list(super().get_list_display(request))
-        if request.GET.get('possible_duplicates_of'):
+        if request.GET.get('duplicate_of'):
             if 'duplicate_match_hint' not in display:
                 display.insert(1, 'duplicate_match_hint')
         return display
@@ -487,10 +518,11 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
             return 'Сохраните карточку, затем можно искать дубли.'
         count = duplicate_candidates_queryset(obj).count()
         others = max(count - 1, 0)
-        url = reverse('admin:event_contact_changelist') + f'?possible_duplicates_of={obj.pk}'
+        url = reverse('admin:event_contact_changelist') + f'?duplicate_of={obj.pk}'
         label = f'Найти возможные дубли ({others})' if others else 'Найти возможные дубли'
         return format_html(
-            '<a href="{}" class="button" style="padding: 8px 14px;">{}</a>',
+            '<a href="{}" style="display:inline-block;background:none;color:gray;border:2px solid gray;'
+            'padding:6px 14px;border-radius:3px;font-size:12px;text-decoration:none;">{}</a>',
             url,
             label,
         )
