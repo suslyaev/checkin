@@ -1,10 +1,120 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.contrib.auth.models import Group
-from .models import ModuleInstance, CustomUser
+from .models import (
+    ModuleInstance,
+    CustomUser,
+    Contact,
+    CompanyContact,
+    CategoryContact,
+    TypeGuestContact,
+)
 
 class CheckinOrCancelForm(forms.Form):
     _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)
+
+
+class ContactMergeForm(forms.Form):
+    _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)
+    primary_contact = forms.ModelChoiceField(
+        queryset=Contact.objects.none(),
+        label='Основная запись',
+        widget=forms.RadioSelect,
+        required=True,
+    )
+    last_name = forms.CharField(max_length=300, label='Фамилия')
+    first_name = forms.CharField(max_length=300, label='Имя')
+    middle_name = forms.CharField(max_length=300, label='Отчество', required=False)
+    nickname = forms.CharField(max_length=300, label='Никнейм', required=False)
+    company = forms.ModelChoiceField(
+        queryset=CompanyContact.objects.all(),
+        label='Компания',
+        required=False,
+    )
+    category = forms.ModelChoiceField(
+        queryset=CategoryContact.objects.all(),
+        label='Категория',
+        required=False,
+    )
+    type_guest = forms.ModelChoiceField(
+        queryset=TypeGuestContact.objects.all(),
+        label='Тип гостя',
+        required=False,
+    )
+    producer = forms.ModelChoiceField(
+        queryset=CustomUser.objects.all(),
+        label='Продюсер',
+        required=False,
+    )
+    comment = forms.CharField(
+        label='Комментарий',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 3, 'cols': 60, 'style': 'width: 400px;'}),
+    )
+    photo_source = forms.ChoiceField(
+        label='Фото',
+        required=False,
+        widget=forms.RadioSelect,
+        choices=[],
+    )
+
+    def __init__(self, *args, contacts=None, **kwargs):
+        self.contacts = list(contacts or [])
+        super().__init__(*args, **kwargs)
+        contact_qs = Contact.objects.filter(pk__in=[c.pk for c in self.contacts])
+        self.fields['primary_contact'].queryset = contact_qs
+
+        photo_choices = [('', 'Без фото')]
+        for contact in self.contacts:
+            if contact.photo:
+                photo_choices.append((str(contact.pk), contact.get_fio()))
+        self.fields['photo_source'].choices = photo_choices
+
+        if not self.is_bound and self.contacts:
+            primary = self.contacts[0]
+            self.fields['primary_contact'].initial = primary.pk
+            self._apply_contact_initial(primary)
+            default_photo = ''
+            if primary.photo:
+                default_photo = str(primary.pk)
+            else:
+                for contact in self.contacts:
+                    if contact.photo:
+                        default_photo = str(contact.pk)
+                        break
+            self.fields['photo_source'].initial = default_photo
+
+    def _apply_contact_initial(self, contact):
+        self.fields['last_name'].initial = contact.last_name
+        self.fields['first_name'].initial = contact.first_name
+        self.fields['middle_name'].initial = contact.middle_name or ''
+        self.fields['nickname'].initial = contact.nickname or ''
+        self.fields['company'].initial = contact.company_id
+        self.fields['category'].initial = contact.category_id
+        self.fields['type_guest'].initial = contact.type_guest_id
+        self.fields['producer'].initial = contact.producer_id
+        self.fields['comment'].initial = contact.comment or ''
+
+    def clean_middle_name(self):
+        value = self.cleaned_data.get('middle_name')
+        return value or None
+
+    def clean_nickname(self):
+        value = self.cleaned_data.get('nickname')
+        return value or None
+
+    def clean_comment(self):
+        value = self.cleaned_data.get('comment')
+        return value or None
+
+    def clean_photo_source(self):
+        value = self.cleaned_data.get('photo_source')
+        if value in (None, ''):
+            return ''
+        valid_ids = {str(c.pk) for c in self.contacts}
+        if value not in valid_ids:
+            raise forms.ValidationError('Выберите фото из объединяемых карточек.')
+        return value
 
 
 class ModuleInstanceForm(forms.ModelForm):

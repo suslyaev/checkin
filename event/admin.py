@@ -17,7 +17,14 @@ from .models import (
     Community,
     CommunityMember,
 )
-from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
+from .forms import (
+    CheckinOrCancelForm,
+    ModuleInstanceForm,
+    CustomUserForm,
+    CustomUserChangeForm,
+    ContactMergeForm,
+)
+from .contact_merge import merge_contacts
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
@@ -343,6 +350,7 @@ class CommunityMemberForContactInline(admin.TabularInline):
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
+    actions = ['merge_duplicates_action', 'delete_selected']
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'producer', 'photo_preview')
     list_editable = ('company', 'category', 'type_guest', 'producer')
     list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
@@ -399,6 +407,91 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     def download_template_import_cont(self, request):
         file_path = os.path.join(os.path.dirname(__file__), "templates", "import_cont.xlsx")
         return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_cont.xlsx")
+
+    @admin.action(description='Объединить дубли')
+    def merge_duplicates_action(self, request, queryset):
+        selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)
+        if not selected_ids:
+            selected_ids = [str(pk) for pk in queryset.values_list('pk', flat=True)]
+        if len(selected_ids) < 2:
+            self.message_user(
+                request,
+                'Не выбраны записи для объединения: отметьте минимум двух человек.',
+                level=messages.ERROR,
+            )
+            return
+
+        contacts = list(
+            Contact.objects.filter(pk__in=selected_ids)
+            .select_related('company', 'category', 'type_guest', 'producer')
+            .order_by('last_name', 'first_name')
+        )
+        if len(contacts) < 2:
+            self.message_user(
+                request,
+                'Не выбраны записи для объединения: отметьте минимум двух человек.',
+                level=messages.ERROR,
+            )
+            return
+
+        form = None
+        if 'apply' in request.POST:
+            form = ContactMergeForm(request.POST, contacts=contacts)
+            if form.is_valid():
+                primary = form.cleaned_data['primary_contact']
+                duplicates = [c for c in contacts if c.pk != primary.pk]
+                field_values = {
+                    'last_name': form.cleaned_data['last_name'],
+                    'first_name': form.cleaned_data['first_name'],
+                    'middle_name': form.cleaned_data['middle_name'],
+                    'nickname': form.cleaned_data['nickname'],
+                    'company': form.cleaned_data['company'],
+                    'category': form.cleaned_data['category'],
+                    'type_guest': form.cleaned_data['type_guest'],
+                    'producer': form.cleaned_data['producer'],
+                    'comment': form.cleaned_data['comment'],
+                }
+                try:
+                    removed = merge_contacts(
+                        primary,
+                        duplicates,
+                        field_values,
+                        photo_from_contact_id=form.cleaned_data['photo_source'],
+                    )
+                except ValueError as exc:
+                    self.message_user(request, str(exc), level=messages.ERROR)
+                else:
+                    self.message_user(
+                        request,
+                        f'Объединение выполнено: карточка «{primary.get_fio()}» сохранена, '
+                        f'удалено дубликатов: {removed}.',
+                    )
+                    changelist_url = reverse('admin:event_contact_changelist')
+                    return HttpResponseRedirect(changelist_url)
+
+        if not form:
+            form = ContactMergeForm(
+                initial={'_selected_action': selected_ids},
+                contacts=contacts,
+            )
+
+        contact_stats = []
+        for contact in contacts:
+            contact_stats.append({
+                'contact': contact,
+                'actions_count': Action.objects.filter(contact=contact).count(),
+                'info_count': InfoContact.objects.filter(contact=contact).count(),
+                'communities_count': CommunityMember.objects.filter(contact=contact).count(),
+            })
+
+        context = {
+            'title': 'Объединение дублей',
+            'contact_stats': contact_stats,
+            'form': form,
+            'action_name': 'merge_duplicates_action',
+            'opts': self.model._meta,
+        }
+        return render(request, 'event/merge_contacts.html', context)
 
     def registered_events_list(self, obj):
         """
