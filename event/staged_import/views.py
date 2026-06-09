@@ -8,8 +8,7 @@ from django.shortcuts import render
 from django.urls import path, reverse
 
 from .contact_columns import CONTACT_COLUMN_LABELS, CONTACT_IMPORT_COLUMNS
-from .contact_import import import_contact_rows
-from .contact_preview import annotate_import_actions
+from .contact_import import annotate_import_actions, import_contact_rows
 from .contact_validation import validate_contact_rows
 from .forms import ContactStagedUploadForm
 from .parsers import parse_spreadsheet
