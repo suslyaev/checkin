@@ -250,10 +250,26 @@
     return autocompleteCache[field] || autocompleteCache[field + '::all'] || [];
   }
 
+  function attachDropdownButton(wrap, input, openList) {
+    const dropBtn = document.createElement('button');
+    dropBtn.type = 'button';
+    dropBtn.className = 'zt-cell-dropdown';
+    dropBtn.textContent = '▾';
+    dropBtn.title = 'Открыть список';
+    dropBtn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      input.focus();
+      openList();
+    });
+    wrap.appendChild(dropBtn);
+    return dropBtn;
+  }
+
   function createAutocompleteEditor(field) {
     return function (cell, onRendered, success, cancel) {
       const wrap = document.createElement('div');
-      wrap.className = 'zt-cell-editor';
+      wrap.className = 'zt-cell-editor zt-cell-editor--autocomplete';
       wrap.addEventListener('mousedown', function (e) { e.stopPropagation(); });
       const input = document.createElement('input');
       input.type = 'text';
@@ -264,12 +280,46 @@
       const listDiv = document.createElement('div');
       listDiv.className = 'autocomplete-list';
       listDiv.style.display = 'none';
-      wrap.appendChild(listDiv);
 
       let closed = false;
+      let scrollParent = null;
+      let scrollHandler = null;
+
+      function positionList() {
+        const rect = input.getBoundingClientRect();
+        listDiv.style.position = 'fixed';
+        listDiv.style.left = rect.left + 'px';
+        listDiv.style.top = (rect.bottom + 2) + 'px';
+        listDiv.style.width = Math.max(rect.width, 200) + 'px';
+        listDiv.style.right = 'auto';
+      }
+
+      function bindScroll() {
+        if (scrollHandler) return;
+        const cellEl = cell.getElement();
+        scrollParent = cellEl ? cellEl.closest('.tabulator-tableholder') : null;
+        scrollHandler = function () { positionList(); };
+        if (scrollParent) scrollParent.addEventListener('scroll', scrollHandler);
+        window.addEventListener('resize', scrollHandler);
+      }
+
+      function unbindScroll() {
+        if (scrollParent && scrollHandler) {
+          scrollParent.removeEventListener('scroll', scrollHandler);
+        }
+        if (scrollHandler) {
+          window.removeEventListener('resize', scrollHandler);
+        }
+        scrollHandler = null;
+        scrollParent = null;
+      }
 
       function removeList() {
         listDiv.style.display = 'none';
+        unbindScroll();
+        if (listDiv.parentNode === document.body) {
+          listDiv.parentNode.removeChild(listDiv);
+        }
       }
 
       function finishEdit(value) {
@@ -278,6 +328,16 @@
         removeList();
         success(value);
         onCellEditFinished(cell);
+      }
+
+      function openList() {
+        fetchAutocomplete(field, '').then(function () {
+          const q = input.value.toLowerCase();
+          const items = getCachedItems(field).filter(function (item) {
+            return !q || item.name.toLowerCase().includes(q);
+          });
+          showList(items, input.value);
+        });
       }
 
       function showList(items, inputValue) {
@@ -303,18 +363,21 @@
           };
           listDiv.appendChild(div);
         });
-        listDiv.style.display = (items.length || value) ? 'block' : 'none';
+        if (items.length || value) {
+          if (listDiv.parentNode !== document.body) {
+            document.body.appendChild(listDiv);
+          }
+          positionList();
+          bindScroll();
+          listDiv.style.display = 'block';
+        } else {
+          listDiv.style.display = 'none';
+        }
       }
 
-      input.addEventListener('focus', function () {
-        fetchAutocomplete(field, '').then(function () {
-          const q = input.value.toLowerCase();
-          const items = getCachedItems(field).filter(function (item) {
-            return !q || item.name.toLowerCase().includes(q);
-          });
-          showList(items, input.value);
-        });
-      });
+      attachDropdownButton(wrap, input, openList);
+
+      input.addEventListener('focus', openList);
 
       input.addEventListener('input', function () {
         const q = input.value.toLowerCase();
@@ -344,14 +407,14 @@
 
       onRendered(function () {
         const cellEl = cell.getElement();
-        cellEl.style.overflow = 'visible';
-        cellEl.style.position = 'relative';
-        cellEl.style.zIndex = '50';
+        if (cellEl) {
+          cellEl.style.overflow = 'visible';
+          cellEl.style.position = 'relative';
+          cellEl.style.zIndex = '50';
+        }
         input.focus();
         input.select();
-        fetchAutocomplete(field, '').then(function () {
-          showList(getCachedItems(field), input.value);
-        });
+        openList();
       });
 
       return wrap;
@@ -390,8 +453,10 @@
     const key = row.getData()._key;
     const isDelete = pendingDeleteRows.has(key);
     const isDirty = dirtyRows.has(key) && !isDelete;
+    const isSelected = row === selectedRow;
     el.classList.toggle('zt-row-pending-delete', isDelete);
     el.classList.toggle('zt-row-dirty', isDirty);
+    el.classList.toggle('zt-row-selected', isSelected);
   }
 
   function pushUndo(action) {
@@ -617,9 +682,10 @@
   function selectRow(row) {
     if (!row) return;
     if (selectedRow === row) return;
-    if (selectedRow) selectedRow.deselect();
+    const prev = selectedRow;
     selectedRow = row;
-    row.select();
+    if (prev) refreshRowStyle(prev);
+    refreshRowStyle(row);
   }
 
   function rekeyRow(row, oldKey, saved) {
@@ -1061,7 +1127,8 @@
       height: '100%',
       rowHeight: 32,
       placeholder: 'Нет данных',
-      selectable: 1,
+      selectable: false,
+      editTriggerEvent: 'click',
       columns: buildColumns(),
       rowFormatter: function (row) { refreshRowStyle(row); },
     });
@@ -1086,9 +1153,15 @@
       if (cell.getField() === '_actions') return;
       if (e.target.closest('.zt-row-btn')) return;
       const colDef = cell.getColumn().getDefinition();
-      if (!colDef.editor) {
-        selectRow(cell.getRow());
+      const row = cell.getRow();
+      if (colDef.editor) {
+        selectRow(row);
+        if (!cell.isEditing()) {
+          cell.edit();
+        }
+        return;
       }
+      selectRow(row);
     });
 
     table.on('dataFiltered', function (filters, rows) {
