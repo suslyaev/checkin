@@ -102,8 +102,8 @@ def _grid_configs():
                 {'title': 'ID', 'field': 'id', 'width': 60, 'visible': False},
                 {'title': 'Название', 'field': 'name', 'editor': 'input', 'width': 220},
                 {'title': 'Адрес', 'field': 'address', 'editor': 'input', 'width': 200},
-                {'title': 'Начало', 'field': 'date_start', 'editor': False, 'width': 150},
-                {'title': 'Окончание', 'field': 'date_end', 'editor': False, 'width': 150},
+                {'title': 'Начало', 'field': 'date_start', 'editor': 'datetime', 'width': 170},
+                {'title': 'Окончание', 'field': 'date_end', 'editor': 'datetime', 'width': 170},
                 {'title': 'Видимость', 'field': 'is_visible', 'editor': 'list', 'editorParams': {'values': ['Да', 'Нет']}, 'width': 100},
             ],
             **_filter_hint("name LIKE '%конф%'", [

@@ -1,5 +1,7 @@
 from django.db import transaction, IntegrityError
 from django.db.models import Q
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from event.models import (
     Action,
@@ -98,13 +100,35 @@ def save_contact(data, contact_id=None):
         return contact
 
 
+def _parse_event_datetime(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if ' ' in text and 'T' not in text:
+        text = text.replace(' ', 'T', 1)
+    dt = parse_datetime(text)
+    if dt is None:
+        raise ValueError(f'Неверный формат даты: {value}')
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
+def _format_event_datetime(dt):
+    if not dt:
+        return ''
+    return timezone.localtime(dt).strftime('%Y-%m-%d %H:%M')
+
+
 def serialize_event(event):
     return {
         'id': event.id,
         'name': event.name or '',
         'address': event.address or '',
-        'date_start': event.date_start.isoformat(sep=' ', timespec='minutes') if event.date_start else '',
-        'date_end': event.date_end.isoformat(sep=' ', timespec='minutes') if event.date_end else '',
+        'date_start': _format_event_datetime(event.date_start),
+        'date_end': _format_event_datetime(event.date_end),
         'is_visible': 'Да' if event.is_visible else 'Нет',
     }
 
@@ -121,6 +145,8 @@ def save_event(data, event_id=None):
             event = ModuleInstance()
         event.name = name
         event.address = (data.get('address') or '').strip() or None
+        event.date_start = _parse_event_datetime(data.get('date_start'))
+        event.date_end = _parse_event_datetime(data.get('date_end'))
         event.is_visible = (data.get('is_visible') or '').strip().lower() in ('да', '1', 'true', 'yes')
         event.save()
         return event

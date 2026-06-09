@@ -116,6 +116,67 @@
     return clearBtn;
   }
 
+  function toDateTimeLocalValue(value) {
+    if (!value) return '';
+    const s = String(value).trim();
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+    return m ? m[1] + 'T' + m[2] : s.replace(' ', 'T').substring(0, 16);
+  }
+
+  function fromDateTimeLocalValue(value) {
+    if (!value) return '';
+    return String(value).trim().replace('T', ' ');
+  }
+
+  function createDateTimeEditor() {
+    return function (cell, onRendered, success, cancel) {
+      const wrap = document.createElement('div');
+      wrap.className = 'zt-cell-editor';
+      wrap.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      const input = document.createElement('input');
+      input.type = 'datetime-local';
+      input.value = toDateTimeLocalValue(cell.getValue());
+      wrap.appendChild(input);
+      attachClearButton(wrap, input);
+
+      let closed = false;
+
+      function finish() {
+        if (closed) return;
+        closed = true;
+        success(fromDateTimeLocalValue(input.value));
+        onCellEditFinished(cell);
+      }
+
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish();
+        } else if (e.key === 'Escape') {
+          closed = true;
+          cancel();
+        }
+      });
+
+      input.addEventListener('blur', function () {
+        setTimeout(finish, 120);
+      });
+
+      input.addEventListener('change', function () {
+        finish();
+      });
+
+      onRendered(function () {
+        input.focus();
+        if (input.showPicker) {
+          try { input.showPicker(); } catch (err) { /* ignore */ }
+        }
+      });
+
+      return wrap;
+    };
+  }
+
   function createTextInputEditor() {
     return function (cell, onRendered, success, cancel) {
       const wrap = document.createElement('div');
@@ -481,6 +542,13 @@
     def.headerFilterPlaceholder = '…';
   }
 
+  function columnTitleFormatter(title) {
+    return function () {
+      if (!title) return '';
+      return '<span class="zt-col-label">' + title + '</span>';
+    };
+  }
+
   function buildColumns() {
     return cfg.gridConfig.columns.map(function (col) {
       const def = {
@@ -491,6 +559,10 @@
         frozen: col.frozen || false,
         headerSort: col.field !== '_actions',
       };
+
+      if (col.title) {
+        def.titleFormatter = columnTitleFormatter(col.title);
+      }
 
       if (col.field !== '_actions' && col.field !== 'id') {
         def.tooltip = true;
@@ -516,6 +588,8 @@
       } else if (col.editor === 'list' && col.editorParams) {
         def.editor = 'list';
         def.editorParams = normalizeListEditorParams(col.editorParams);
+      } else if (col.editor === 'datetime') {
+        def.editor = createDateTimeEditor();
       } else if (col.editor === 'input' || col.editor === true) {
         def.editor = createTextInputEditor();
       } else {

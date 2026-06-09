@@ -65,22 +65,126 @@ body.zt-body {
   font-size: 13px;
 }
 
+/* ——— Заголовки колонок (ZenTable-style) ——— */
+
 .tabulator .tabulator-header {
-  background: #f8f9fb;
-  border-bottom: 1px solid #dfe3e8;
+  background: linear-gradient(180deg, #f6f8fa 0%, #e9edf2 100%);
+  border-bottom: 2px solid #cfd5dc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
-.tabulator .tabulator-header-filter input {
-  font-size: 12px;
-  padding: 3px 6px;
-  border: 1px solid #d0d5dd;
-  border-radius: 3px;
-  width: 100%;
-  box-sizing: border-box;
+.tabulator .tabulator-headers {
+  min-height: 28px;
+}
+
+.tabulator .tabulator-col {
+  background: transparent;
+  border-right: 1px solid #d2d8e0;
+}
+
+.tabulator .tabulator-col.tabulator-col-group .tabulator-col-group-cols {
+  border-top: 1px solid #d2d8e0;
+}
+
+.tabulator .tabulator-col .tabulator-col-content {
+  padding: 0;
+}
+
+.tabulator .tabulator-col .tabulator-col-title {
+  padding: 0;
+  overflow: visible;
+}
+
+.tabulator .tabulator-col .tabulator-col-title-holder {
+  padding: 5px 22px 5px 10px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.tabulator .zt-col-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #4f5d6b;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabulator .tabulator-col .tabulator-col-sorter {
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.tabulator .tabulator-col .tabulator-col-sorter .tabulator-arrow {
+  border-bottom-color: #9aa8b6;
+  border-top-color: #9aa8b6;
+}
+
+.tabulator .tabulator-col.tabulator-sortable:hover .tabulator-col-content {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"] .tabulator-col-content,
+.tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] .tabulator-col-content {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"] .zt-col-label,
+.tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] .zt-col-label {
+  color: #2f6f9f;
+}
+
+.tabulator .tabulator-col-resize-handle {
+  width: 5px;
+  margin-right: -2px;
+}
+
+.tabulator .tabulator-col-resize-handle:hover {
+  background: rgba(61, 126, 166, 0.25);
 }
 
 .tabulator .tabulator-header-filter {
-  padding: 2px 4px;
+  padding: 4px 6px 6px;
+  background: #e4e8ee;
+  border-top: 1px solid #d2d8e0;
+}
+
+.tabulator .tabulator-header-filter input {
+  font-size: 11px;
+  padding: 2px 6px;
+  height: 22px;
+  border: 1px solid #c4cad3;
+  border-radius: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  color: #333;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.tabulator .tabulator-header-filter input::placeholder {
+  color: #a0a8b3;
+}
+
+.tabulator .tabulator-header-filter input:focus {
+  outline: none;
+  border-color: #7eb8d9;
+  box-shadow: 0 0 0 2px rgba(126, 184, 217, 0.25);
+}
+
+.tabulator .tabulator-frozen .tabulator-col,
+.tabulator .tabulator-frozen-left .tabulator-col {
+  background: transparent;
+}
+
+.tabulator .tabulator-frozen-left {
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06);
+  z-index: 12;
 }
 
 .zt-hf-ms {
@@ -89,23 +193,42 @@ body.zt-body {
 
 .zt-hf-ms-trigger {
   width: 100%;
-  padding: 3px 6px;
+  padding: 2px 18px 2px 6px;
   font-size: 11px;
-  border: 1px solid #d0d5dd;
-  border-radius: 3px;
+  height: 22px;
+  line-height: 18px;
+  border: 1px solid #c4cad3;
+  border-radius: 2px;
   background: #fff;
   cursor: pointer;
   text-align: left;
-  color: #555;
+  color: #5c6773;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.zt-hf-ms-trigger::after {
+  content: '▾';
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #9aa8b6;
+  pointer-events: none;
 }
 
 .zt-hf-ms-trigger.is-partial {
   border-color: #7eb8d9;
   background: #eef6fb;
   color: #1a5276;
+}
+
+.zt-hf-ms-trigger.is-partial::after {
+  color: #3d7ea6;
 }
 
 .zt-hf-ms-popup {
@@ -158,10 +281,6 @@ body.zt-body {
 
 .zt-hf-ms-item:hover {
   background: #f3f5f8;
-}
-
-.tabulator .tabulator-col {
-  border-right: 1px solid #e8eaed;
 }
 
 .tabulator .tabulator-row {
@@ -235,6 +354,12 @@ body.zt-body {
   outline: none;
   font: inherit;
   background: transparent;
+}
+
+.zt-cell-editor input[type="datetime-local"] {
+  padding-right: 26px;
+  cursor: pointer;
+  color-scheme: light;
 }
 
 .zt-cell-clear {
