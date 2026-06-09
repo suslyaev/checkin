@@ -23,6 +23,11 @@
     }
     .staged-import-summary .error-count { color: #ba2121; font-weight: bold; }
     .staged-import-summary .warn-count { color: #996600; }
+    .staged-import-summary .create-count { color: #1a7f37; font-weight: bold; }
+    .staged-import-summary .update-count { color: #417690; font-weight: bold; }
+    .import-action-create { color: #1a7f37; font-weight: 600; }
+    .import-action-update { color: #417690; font-weight: 600; }
+    .import-action-update a { color: #417690; }
     .staged-import-table-wrap {
       overflow-x: auto;
       margin-bottom: 16px;
@@ -128,7 +133,9 @@
     к загрузке: <strong>{{ summary.active }}</strong>,
     исключено: {{ summary.excluded }},
     с ошибками: <span class="error-count">{{ summary.error_rows }}</span>,
-    с предупреждениями: <span class="warn-count">{{ summary.warning_rows }}</span>.
+    с предупреждениями: <span class="warn-count">{{ summary.warning_rows }}</span>,
+    будет создано: <span class="create-count">{{ summary.create_count }}</span>,
+    обновлено: <span class="update-count">{{ summary.update_count }}</span>.
     {% if not summary.can_import %}
       <br><span class="error-count">Исправьте ошибки или исключите проблемные строки, чтобы загрузить данные.</span>
     {% endif %}
@@ -142,6 +149,7 @@
           <tr>
             <th>№</th>
             <th>Искл.</th>
+            <th>Действие</th>
             {% for label in column_labels %}
               <th>{{ label }}</th>
             {% endfor %}
@@ -154,6 +162,13 @@
               <td>
                 <input type="checkbox" name="row_{{ row.index }}__excluded" {% if row.excluded %}checked{% endif %}>
                 <input type="hidden" name="row_{{ row.index }}__row_number" value="{{ row.row_number }}">
+              </td>
+              <td class="{% if row.import_action == 'create' %}import-action-create{% elif row.import_action == 'update' %}import-action-update{% endif %}">
+                {% if row.import_action_url %}
+                  <a href="{{ row.import_action_url }}" target="_blank">{{ row.import_action_label }}</a>
+                {% else %}
+                  {{ row.import_action_label }}
+                {% endif %}
               </td>
               {% for cell in row.cells %}
                 <td class="{{ cell.css }}">

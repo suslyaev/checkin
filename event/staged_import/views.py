@@ -9,6 +9,7 @@ from django.urls import path, reverse
 
 from .contact_columns import CONTACT_COLUMN_LABELS, CONTACT_IMPORT_COLUMNS
 from .contact_import import import_contact_rows
+from .contact_preview import annotate_import_actions
 from .contact_validation import validate_contact_rows
 from .forms import ContactStagedUploadForm
 from .parsers import parse_spreadsheet
@@ -73,9 +74,20 @@ def _prepare_table_rows(validated_rows):
             'row_number': row.get('_row_number'),
             'excluded': row.get('excluded'),
             'has_errors': row.get('has_errors'),
+            'import_action': row.get('import_action'),
+            'import_action_label': row.get('import_action_label', '—'),
+            'import_action_url': row.get('import_action_url'),
             'cells': cells,
         })
     return table_rows
+
+
+def _validated_with_preview(rows):
+    validated, summary = validate_contact_rows(rows)
+    validated, action_summary = annotate_import_actions(validated)
+    summary['create_count'] = action_summary['create']
+    summary['update_count'] = action_summary['update']
+    return validated, summary
 
 
 def _rows_from_post(request, row_count):
@@ -98,11 +110,12 @@ def staged_contact_upload_view(request):
     if request.method == 'POST' and form.is_valid():
         try:
             rows = parse_spreadsheet(form.cleaned_data['file'])
-            validated, summary = validate_contact_rows(rows)
+            validated, summary = _validated_with_preview(rows)
             _save_rows_to_session(request, validated)
             messages.info(
                 request,
                 f'Загружено строк: {summary["total"]}. '
+                f'Создать: {summary["create_count"]}, обновить: {summary["update_count"]}. '
                 f'Ошибок: {summary["error_rows"]}, предупреждений: {summary["warning_rows"]}.',
             )
             return HttpResponseRedirect(reverse('admin:staged_import_contacts_review'))
@@ -130,7 +143,7 @@ def staged_contact_review_view(request):
     if request.method == 'POST':
         action = request.POST.get('action', 'validate')
         rows = _rows_from_post(request, row_count)
-        validated, summary = validate_contact_rows(rows)
+        validated, summary = _validated_with_preview(rows)
         _save_rows_to_session(request, validated)
 
         if action == 'import':
@@ -159,7 +172,7 @@ def staged_contact_review_view(request):
         summary = summary
 
     else:
-        validated, summary = validate_contact_rows(stored)
+        validated, summary = _validated_with_preview(stored)
         stored = validated
 
     context = {
