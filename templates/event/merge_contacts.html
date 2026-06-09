@@ -25,6 +25,9 @@
     .merge-contacts-container .inline-fields > div {
       min-width: 180px;
     }
+    .merge-contacts-container .merge-form-section {
+      padding-left: 16px;
+    }
     .merge-summary-table {
       width: 100%;
       border-collapse: collapse;
@@ -128,7 +131,7 @@
       </tbody>
     </table>
 
-    <form action="" method="post">
+    <form action="" method="post" class="merge-form-section">
       {% csrf_token %}
       {% for hidden in form.hidden_fields %}
         {{ hidden }}
