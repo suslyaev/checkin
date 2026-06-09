@@ -38,6 +38,7 @@
   let table = null;
   let selectedRow = null;
   let selectedCell = null;
+  let selectedCellKey = null;
   let openListOnEditField = null;
   let activeSidePanel = null;
   let activeFilterQuery = '';
@@ -551,10 +552,52 @@
     const key = row.getData()._key;
     const isDelete = pendingDeleteRows.has(key);
     const isDirty = dirtyRows.has(key) && !isDelete;
-    const isSelected = row === selectedRow;
     el.classList.toggle('zt-row-pending-delete', isDelete);
     el.classList.toggle('zt-row-dirty', isDirty);
-    el.classList.toggle('zt-row-selected', isSelected);
+    restoreCellSelectionForRow(row);
+  }
+
+  function makeCellKey(rowKey, field) {
+    return rowKey + '\x1f' + field;
+  }
+
+  function parseCellKey(cellKey) {
+    const idx = cellKey.indexOf('\x1f');
+    if (idx < 0) return null;
+    return { rowKey: cellKey.slice(0, idx), field: cellKey.slice(idx + 1) };
+  }
+
+  function clearSelectedCell() {
+    const root = document.getElementById('attendly-table');
+    if (root) {
+      root.querySelectorAll('.tabulator-cell.zt-cell-selected').forEach(function (el) {
+        el.classList.remove('zt-cell-selected');
+      });
+    }
+    selectedCell = null;
+    selectedCellKey = null;
+  }
+
+  function restoreCellSelectionForRow(row) {
+    if (!selectedCellKey || !table) return;
+    const parsed = parseCellKey(selectedCellKey);
+    if (!parsed || parsed.rowKey !== row.getData()._key) return;
+    const root = document.getElementById('attendly-table');
+    if (root) {
+      root.querySelectorAll('.tabulator-cell.zt-cell-selected').forEach(function (el) {
+        el.classList.remove('zt-cell-selected');
+      });
+    }
+    const cell = row.getCell(parsed.field);
+    if (!cell) return;
+    const el = cell.getElement();
+    if (el) el.classList.add('zt-cell-selected');
+    selectedCell = cell;
+  }
+
+  function setActiveRow(row) {
+    if (!row) return;
+    selectedRow = row;
   }
 
   function pushUndo(action) {
@@ -585,7 +628,8 @@
 
   function onCellEditFinished(cell) {
     const row = cell.getRow();
-    selectRow(row);
+    setActiveRow(row);
+    selectCell(cell);
     if (pendingDeleteRows.has(row.getData()._key)) return;
     if (rowHasChanges(row)) {
       markDirty(row);
@@ -778,27 +822,19 @@
     return table.getRows().find(function (r) { return r.getData()._key === key; }) || null;
   }
 
-  function selectRow(row) {
-    if (!row) return;
-    if (selectedRow === row) return;
-    const prev = selectedRow;
-    selectedRow = row;
-    if (prev) refreshRowStyle(prev);
-    refreshRowStyle(row);
-  }
-
-  function clearSelectedCell() {
-    if (!selectedCell) return;
-    const el = selectedCell.getElement();
-    if (el) el.classList.remove('zt-cell-selected');
-    selectedCell = null;
-  }
-
   function selectCell(cell) {
-    if (!cell) return;
-    if (selectedCell === cell) return;
+    if (!cell || !cell.getField()) return;
+    const rowKey = cell.getRow().getData()._key;
+    const field = cell.getField();
+    const cellKey = makeCellKey(rowKey, field);
+    if (selectedCellKey === cellKey) {
+      restoreCellSelectionForRow(cell.getRow());
+      return;
+    }
     clearSelectedCell();
+    selectedCellKey = cellKey;
     selectedCell = cell;
+    setActiveRow(cell.getRow());
     const el = cell.getElement();
     if (el) el.classList.add('zt-cell-selected');
   }
@@ -1076,7 +1112,7 @@
       dirtyRows.add(key);
       pushUndo({ type: 'add', key: key });
       refreshRowStyle(row);
-      selectRow(row);
+      setActiveRow(row);
       updateToolbar();
     });
   }
@@ -1280,7 +1316,7 @@
         window.AttendlyHeaderFilters.closeActivePopup();
       }
       const row = cell.getRow();
-      selectRow(row);
+      selectCell(cell);
       if (!dirtyRows.has(row.getData()._key) && !pendingDeleteRows.has(row.getData()._key)) {
         storeSnapshot(row);
       }
@@ -1296,7 +1332,6 @@
       if (cell.getField() === '_actions') return;
       if (e.target.closest('.zt-row-btn')) return;
       if (e.target.closest('.zt-ref-cell-caret')) return;
-      selectRow(cell.getRow());
       selectCell(cell);
     });
 
