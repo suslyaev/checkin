@@ -17,7 +17,21 @@ from .models import (
     Community,
     CommunityMember,
 )
-from .forms import CheckinOrCancelForm, ModuleInstanceForm, CustomUserForm, CustomUserChangeForm
+from .forms import (
+    CheckinOrCancelForm,
+    ModuleInstanceForm,
+    CustomUserForm,
+    CustomUserChangeForm,
+    ContactMergeForm,
+)
+from .contact_merge import format_contact_merge_label, merge_contacts
+from .contact_duplicates import (
+    build_duplicate_candidates_q,
+    duplicate_candidates_queryset,
+    get_duplicate_match_reasons,
+    get_global_duplicate_reasons,
+    presumed_duplicates_queryset,
+)
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
@@ -43,8 +57,11 @@ from django.contrib.admin.widgets import AutocompleteSelect
 # Импорт миксина для интерактивной таблицы гостей
 from .admin_guests_table_mixin import GuestsTableMixin
 
-
 class CustomAdminSite(admin.AdminSite):
+
+    def get_urls(self):
+        from event.staged_import.views import staged_import_urls
+        return staged_import_urls(self) + super().get_urls()
 
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
@@ -85,6 +102,25 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
+        # 4. Пошаговая загрузка (временно скрыто в меню)
+        STAGED_IMPORT_MENU_ENABLED = False
+        upload_group = None
+        if STAGED_IMPORT_MENU_ENABLED and request.user.has_perm('event.add_contact'):
+            upload_group = {
+                'name': 'Загрузка',
+                'app_label': 'event_upload',
+                'app_url': reverse('admin:staged_import_contacts'),
+                'has_module_perms': True,
+                'models': [{
+                    'name': 'Люди',
+                    'object_name': 'StagedContactImport',
+                    'admin_url': reverse('admin:staged_import_contacts'),
+                    'add_url': None,
+                    'view_only': True,
+                    'perms': {'view': True},
+                }],
+            }
+
         # Распределяем модели по группам
         for app in app_list:
             if app["app_label"] == "event":
@@ -107,8 +143,8 @@ class CustomAdminSite(admin.AdminSite):
                         access_group['models'].append(model_dict[model_name])
 
         # Добавляем только непустые группы
-        for group in [events_group, reference_group, access_group]:
-            if group['models']:
+        for group in [events_group, reference_group, upload_group, access_group]:
+            if group and group.get('models'):
                 custom_apps.append(group)
 
         return custom_apps
@@ -263,6 +299,50 @@ class ProducerContactFilter(AutocompleteFilterMultiple):
     title = 'Продюсер'
     field_name = 'producer'
 
+
+class DuplicateOfContactFilter(admin.SimpleListFilter):
+    """Фильтр списка по предположительным дублям выбранной карточки."""
+    title = 'Предположительные дубли'
+    parameter_name = 'duplicate_of'
+
+    def lookups(self, request, model_admin):
+        value = request.GET.get(self.parameter_name)
+        if not value:
+            return ()
+        try:
+            contact = Contact.objects.get(pk=int(value))
+        except (Contact.DoesNotExist, ValueError, TypeError):
+            return ()
+        return [(value, contact.get_fio())]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        try:
+            anchor = Contact.objects.get(pk=int(value))
+        except (Contact.DoesNotExist, ValueError, TypeError):
+            return queryset.none()
+        return queryset.filter(build_duplicate_candidates_q(anchor)).distinct()
+
+
+class PresumedDuplicatesOnlyFilter(admin.SimpleListFilter):
+    """Глобальный список всех карточек с возможными дублями."""
+    title = 'Возможные дубли'
+    parameter_name = 'presumed_duplicates'
+
+    def lookups(self, request, model_admin):
+        if self.value() == 'yes':
+            return [('yes', 'Только с возможными дублями')]
+        return ()
+
+    def queryset(self, request, queryset):
+        if self.value() != 'yes' or request.GET.get('duplicate_of'):
+            return queryset
+        pks = presumed_duplicates_queryset().values_list('pk', flat=True)
+        return queryset.filter(pk__in=pks)
+
+
 class CopyInvitationsForm(forms.Form):
     _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)
     source_event = forms.ModelChoiceField(
@@ -343,16 +423,39 @@ class CommunityMemberForContactInline(admin.TabularInline):
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
+    change_list_template = 'admin/event/contact_change_list.html'
+    import_export_change_list_template = 'admin/event/contact_change_list_import_export.html'
+    actions = ['merge_duplicates_action', 'delete_selected']
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'producer', 'photo_preview')
     list_editable = ('company', 'category', 'type_guest', 'producer')
-    list_filter = (CompanyContactFilter, CategoryContactFilter, TypeGuestContactFilter, ProducerContactFilter)
-    readonly_fields = ('get_fio', 'photo_preview', 'registered_events_list', 'checkin_events_list')
+    list_filter = (
+        PresumedDuplicatesOnlyFilter,
+        DuplicateOfContactFilter,
+        CompanyContactFilter,
+        CategoryContactFilter,
+        TypeGuestContactFilter,
+        ProducerContactFilter,
+    )
+    readonly_fields = (
+        'find_duplicates_button',
+        'get_fio',
+        'photo_preview',
+        'registered_events_list',
+        'checkin_events_list',
+    )
     autocomplete_fields = ['company', 'category', 'type_guest', 'producer']
     search_fields = ['last_name', 'first_name', 'middle_name', 'nickname']
     inlines = [InfoContactInline, CommunityMemberForContactInline]
     show_change_form_export = False
     list_max_show_all = 10000
     fieldsets = (
+        ('Возможные дубли', {
+            'fields': ['find_duplicates_button'],
+            'description': (
+                'Поиск других карточек с похожими ФИО, ником или контактами в соцсетях. '
+                'Из найденного списка отметьте записи и выполните действие «Объединить дубли».'
+            ),
+        }),
         (None, {
             'fields': [('last_name', 'first_name', 'middle_name', 'nickname')]
         }),
@@ -389,6 +492,23 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
         from .resources import ContactExport
         return ContactExport
 
+    def _has_presumed_duplicates(self, obj):
+        if not obj or not obj.pk:
+            return False
+        return duplicate_candidates_queryset(obj).exclude(pk=obj.pk).exists()
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = list(self.fieldsets)
+        if not self._has_presumed_duplicates(obj):
+            fieldsets = [fs for fs in fieldsets if fs[0] != 'Возможные дубли']
+        return fieldsets
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not self._has_presumed_duplicates(obj):
+            fields = [f for f in fields if f != 'find_duplicates_button']
+        return fields
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -399,6 +519,195 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     def download_template_import_cont(self, request):
         file_path = os.path.join(os.path.dirname(__file__), "templates", "import_cont.xlsx")
         return FileResponse(open(file_path, 'rb'), as_attachment=True, filename="import_cont.xlsx")
+
+    def changelist_view(self, request, extra_context=None):
+        # Старые ссылки с possible_duplicates_of → duplicate_of
+        legacy_pk = request.GET.get('possible_duplicates_of')
+        if legacy_pk and not request.GET.get('duplicate_of'):
+            params = request.GET.copy()
+            params['duplicate_of'] = legacy_pk
+            if 'possible_duplicates_of' in params:
+                del params['possible_duplicates_of']
+            return HttpResponseRedirect(f'{request.path}?{params.urlencode()}')
+
+        anchor_pk = request.GET.get('duplicate_of')
+        global_duplicates = request.GET.get('presumed_duplicates') == 'yes'
+        if anchor_pk:
+            try:
+                anchor_pk_int = int(anchor_pk)
+                anchor = Contact.objects.get(pk=anchor_pk_int)
+                count = duplicate_candidates_queryset(anchor).count()
+                clear_url = reverse('admin:event_contact_changelist')
+                change_url = reverse('admin:event_contact_change', args=[anchor.pk])
+                self.message_user(
+                    request,
+                    format_html(
+                        'Показаны <strong>предположительные дубли</strong> для '
+                        '<a href="{}">{}</a> ({} {}). '
+                        'Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
+                        'Отметьте нужные строки → «Объединить дубли». '
+                        '<a href="{}">Показать весь справочник</a>.',
+                        change_url,
+                        anchor.get_fio(),
+                        count,
+                        self.model._meta.verbose_name_plural,
+                        clear_url,
+                    ),
+                    level=messages.INFO,
+                )
+            except (Contact.DoesNotExist, ValueError, TypeError):
+                self.message_user(request, 'Карточка для поиска дублей не найдена.', level=messages.WARNING)
+        elif global_duplicates:
+            count = presumed_duplicates_queryset().count()
+            clear_url = reverse('admin:event_contact_changelist')
+            self.message_user(
+                request,
+                format_html(
+                    'Показаны все карточки с <strong>возможными дублями</strong> '
+                    '({} {}). Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
+                    'Отметьте нужные строки → «Объединить дубли». '
+                    '<a href="{}">Показать весь справочник</a>.',
+                    count,
+                    self.model._meta.verbose_name_plural,
+                    clear_url,
+                ),
+                level=messages.INFO,
+            )
+        return super().changelist_view(request, extra_context)
+
+    def _duplicate_match_hint_column(self, anchor=None, *, global_mode=False):
+        def column(obj):
+            if global_mode:
+                reasons = get_global_duplicate_reasons(obj)
+            elif anchor is not None:
+                reasons = get_duplicate_match_reasons(anchor, obj)
+            else:
+                return '—'
+            return ', '.join(reasons) if reasons else '—'
+
+        column.short_description = 'Совпадение'
+        return column
+
+    def get_list_display(self, request):
+        display = list(super().get_list_display(request))
+        duplicate_of = request.GET.get('duplicate_of')
+        if duplicate_of:
+            try:
+                anchor = Contact.objects.get(pk=int(duplicate_of))
+            except (Contact.DoesNotExist, ValueError, TypeError):
+                anchor = None
+            if anchor is not None:
+                display.insert(1, self._duplicate_match_hint_column(anchor))
+        elif request.GET.get('presumed_duplicates') == 'yes':
+            display.insert(1, self._duplicate_match_hint_column(global_mode=True))
+        return display
+
+    def find_duplicates_button(self, obj):
+        if not obj.pk:
+            return 'Сохраните карточку, затем можно искать дубли.'
+        count = duplicate_candidates_queryset(obj).count()
+        others = max(count - 1, 0)
+        url = reverse('admin:event_contact_changelist') + f'?duplicate_of={obj.pk}'
+        label = f'Найти возможные дубли ({others})' if others else 'Найти возможные дубли'
+        return format_html(
+            '<a href="{}" style="display:inline-block;background:none;color:gray;border:2px solid gray;'
+            'padding:6px 14px;border-radius:3px;font-size:12px;text-decoration:none;">{}</a>',
+            url,
+            label,
+        )
+
+    find_duplicates_button.short_description = 'Поиск дублей'
+
+    @admin.action(description='Объединить дубли')
+    def merge_duplicates_action(self, request, queryset):
+        selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)
+        if not selected_ids:
+            selected_ids = [str(pk) for pk in queryset.values_list('pk', flat=True)]
+        if len(selected_ids) < 2:
+            self.message_user(
+                request,
+                'Не выбраны записи для объединения: отметьте минимум двух человек.',
+                level=messages.ERROR,
+            )
+            return
+
+        contacts = list(
+            Contact.objects.filter(pk__in=selected_ids)
+            .select_related('company', 'category', 'type_guest', 'producer')
+            .order_by('last_name', 'first_name')
+        )
+        if len(contacts) < 2:
+            self.message_user(
+                request,
+                'Не выбраны записи для объединения: отметьте минимум двух человек.',
+                level=messages.ERROR,
+            )
+            return
+
+        form = None
+        if 'apply' in request.POST:
+            form = ContactMergeForm(request.POST, contacts=contacts)
+            if form.is_valid():
+                primary = form.cleaned_data['primary_contact']
+                duplicates = [c for c in contacts if c.pk != primary.pk]
+                field_values = {
+                    'last_name': form.cleaned_data['last_name'],
+                    'first_name': form.cleaned_data['first_name'],
+                    'middle_name': form.cleaned_data['middle_name'],
+                    'nickname': form.cleaned_data['nickname'],
+                    'company': form.cleaned_data['company'],
+                    'category': form.cleaned_data['category'],
+                    'type_guest': form.cleaned_data['type_guest'],
+                    'producer': form.cleaned_data['producer'],
+                    'comment': form.cleaned_data['comment'],
+                }
+                try:
+                    removed = merge_contacts(
+                        primary,
+                        duplicates,
+                        field_values,
+                        photo_from_contact_id=form.cleaned_data['photo_source'],
+                    )
+                except ValueError as exc:
+                    self.message_user(request, str(exc), level=messages.ERROR)
+                else:
+                    change_url = reverse('admin:event_contact_change', args=[primary.pk])
+                    self.message_user(
+                        request,
+                        format_html(
+                            'Объединение выполнено: карточка «<a href="{}">{}</a>» сохранена, '
+                            'удалено дубликатов: {}.',
+                            change_url,
+                            primary.get_fio(),
+                            removed,
+                        ),
+                    )
+                    return HttpResponseRedirect(change_url)
+
+        if not form:
+            form = ContactMergeForm(
+                initial={'_selected_action': selected_ids},
+                contacts=contacts,
+            )
+
+        contact_stats = []
+        for contact in contacts:
+            contact_stats.append({
+                'contact': contact,
+                'label': format_contact_merge_label(contact),
+                'actions_count': Action.objects.filter(contact=contact).count(),
+                'info_count': InfoContact.objects.filter(contact=contact).count(),
+                'communities_count': CommunityMember.objects.filter(contact=contact).count(),
+            })
+
+        context = {
+            'title': 'Объединение дублей',
+            'contact_stats': contact_stats,
+            'form': form,
+            'action_name': 'merge_duplicates_action',
+            'opts': self.model._meta,
+        }
+        return render(request, 'event/merge_contacts.html', context)
 
     def registered_events_list(self, obj):
         """

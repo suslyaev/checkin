@@ -1,0 +1,90 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .staged-import-steps {
+      margin: 0 0 20px;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      gap: 16px;
+    }
+    .staged-import-steps li {
+      color: #666;
+    }
+    .staged-import-steps li.active {
+      color: #111;
+      font-weight: bold;
+    }
+    .staged-import-card {
+      max-width: 640px;
+      padding: 20px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    .staged-import-card .form-row {
+      margin-bottom: 16px;
+    }
+    .staged-import-card label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .staged-import-hint {
+      color: #666;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .staged-import-actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .staged-import-actions button {
+      padding: 10px 16px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #417690;
+      color: #fff;
+      font-size: 13px;
+    }
+    .staged-import-actions a.template-link {
+      font-size: 13px;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <ol class="staged-import-steps">
+    <li class="active">1. Загрузка файла</li>
+    <li>2. Проверка и правка</li>
+    <li>3. Импорт в базу</li>
+  </ol>
+
+  <div class="staged-import-card">
+    <p>Загрузите файл в правильном формате (шаблон <code>import_cont.xlsx</code>).</p>
+    <p class="staged-import-hint">
+      На следующем шаге данные отобразятся в таблице: можно исправить ошибки,
+      исключить строки и только потом загрузить в базу.
+    </p>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="form-row">
+        {{ form.file.errors }}
+        <label for="id_file">{{ form.file.label }}</label>
+        {{ form.file }}
+        <p class="staged-import-hint">{{ form.file.help_text }}</p>
+      </div>
+      <div class="staged-import-actions">
+        <button type="submit">Далее — проверить данные</button>
+        <a href="{{ template_url }}" class="template-link">Скачать шаблон</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

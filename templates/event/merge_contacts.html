@@ -1,0 +1,227 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .merge-contacts-container .form-row {
+      margin-bottom: 16px;
+    }
+    .merge-contacts-container .form-row label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+    .merge-contacts-container ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+    .merge-contacts-container .inline-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .merge-contacts-container .inline-fields > div {
+      min-width: 180px;
+    }
+    .merge-contacts-container .merge-form-inner {
+      padding: 0 16px 16px;
+    }
+    .merge-summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+    .merge-summary-table th,
+    .merge-summary-table td {
+      border: 1px solid #ddd;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .merge-summary-table th {
+      background: #f8f8f8;
+    }
+    .merge-photo-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .merge-photo-preview label {
+      font-weight: normal;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .merge-photo-preview img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    .submit-row {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      margin: 24px 0 15px;
+      background: #f8f8f8;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    .submit-row button,
+    .submit-row a {
+      padding: 10px 15px;
+      font-size: 13px;
+      line-height: 1;
+      border-radius: 4px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      display: inline-block;
+    }
+    .submit-row button.default {
+      background: #417690;
+      color: #fff;
+    }
+    .submit-row a.cancel-link {
+      background: #ba2121;
+      color: #fff;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="module merge-contacts-container">
+    <h2>{{ title }}</h2>
+    <p>Выбранные карточки будут объединены в одну. Связанные действия, контакты и участия в сообществах перейдут на основную запись.</p>
+    <p>Если у двух карточек есть действие на одно мероприятие, останется запись с более «продвинутым» статусом (например, чекин важнее заявки).</p>
+
+    <table class="merge-summary-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>ФИО</th>
+          <th>Компания / категория</th>
+          <th>Действий</th>
+          <th>Контактов</th>
+          <th>Сообществ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in contact_stats %}
+          <tr>
+            <td>{{ row.contact.pk }}</td>
+            <td>
+              <a href="{% url 'admin:event_contact_change' row.contact.pk %}">{{ row.label }}</a>
+            </td>
+            <td>
+              {{ row.contact.company|default:"—" }}<br>
+              {{ row.contact.category|default:"—" }}
+            </td>
+            <td>{{ row.actions_count }}</td>
+            <td>{{ row.info_count }}</td>
+            <td>{{ row.communities_count }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <form action="" method="post">
+      {% csrf_token %}
+      {% for hidden in form.hidden_fields %}
+        {{ hidden }}
+      {% endfor %}
+      <input type="hidden" name="action" value="{{ action_name }}">
+
+      <fieldset class="module aligned">
+        <h3>Основная запись и итоговые данные</h3>
+        <div class="merge-form-inner">
+
+        <div class="form-row">
+          {{ form.primary_contact.errors }}
+          <label>{{ form.primary_contact.label }}</label>
+          <ul>
+            {% for radio in form.primary_contact %}
+              <li>{{ radio }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="form-row inline-fields">
+          <div>
+            {{ form.last_name.errors }}
+            {{ form.last_name.label_tag }} {{ form.last_name }}
+          </div>
+          <div>
+            {{ form.first_name.errors }}
+            {{ form.first_name.label_tag }} {{ form.first_name }}
+          </div>
+          <div>
+            {{ form.middle_name.errors }}
+            {{ form.middle_name.label_tag }} {{ form.middle_name }}
+          </div>
+          <div>
+            {{ form.nickname.errors }}
+            {{ form.nickname.label_tag }} {{ form.nickname }}
+          </div>
+        </div>
+
+        <div class="form-row inline-fields">
+          <div>
+            {{ form.company.errors }}
+            {{ form.company.label_tag }} {{ form.company }}
+          </div>
+          <div>
+            {{ form.category.errors }}
+            {{ form.category.label_tag }} {{ form.category }}
+          </div>
+          <div>
+            {{ form.type_guest.errors }}
+            {{ form.type_guest.label_tag }} {{ form.type_guest }}
+          </div>
+          <div>
+            {{ form.producer.errors }}
+            {{ form.producer.label_tag }} {{ form.producer }}
+          </div>
+        </div>
+
+        <div class="form-row">
+          {{ form.comment.errors }}
+          {{ form.comment.label_tag }} {{ form.comment }}
+        </div>
+
+        <div class="form-row">
+          {{ form.photo_source.errors }}
+          <label>{{ form.photo_source.label }}</label>
+          <p style="color:#666; margin: 0 0 8px;">Какое фото сохранить у объединённой карточки (можно взять с любой из выбранных или оставить без фото).</p>
+          <div class="merge-photo-preview">
+            {% for radio in form.photo_source %}
+              <label>
+                {{ radio.tag }}
+                <span>{{ radio.choice_label }}</span>
+                {% if radio.choice_value %}
+                  {% for row in contact_stats %}
+                    {% if row.contact.pk|stringformat:"s" == radio.choice_value and row.contact.photo %}
+                      <img src="{{ row.contact.photo.url }}" alt="">
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        </div>
+      </fieldset>
+
+      <div class="submit-row">
+        <button type="submit" name="apply" class="default">Объединить</button>
+        <a href="{% url 'admin:event_contact_changelist' %}" class="cancel-link">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
