@@ -330,39 +330,68 @@
         onCellEditFinished(cell);
       }
 
-      function openList() {
-        fetchAutocomplete(field, '').then(function () {
-          const q = input.value.toLowerCase();
-          const items = getCachedItems(field).filter(function (item) {
-            return !q || item.name.toLowerCase().includes(q);
-          });
-          showList(items, input.value);
+      function filterItems(items, query) {
+        const q = (query || '').trim().toLowerCase();
+        if (!q) return items.slice();
+        return items.filter(function (item) {
+          return item.name.toLowerCase().includes(q);
         });
       }
 
-      function showList(items, inputValue) {
+      function openList(browseAll) {
+        fetchAutocomplete(field, '').then(function () {
+          const all = getCachedItems(field);
+          const items = browseAll ? all.slice() : filterItems(all, input.value);
+          showList(items, input.value, { browseAll: !!browseAll });
+        });
+      }
+
+      function showList(items, inputValue, options) {
+        options = options || {};
         listDiv.innerHTML = '';
         const value = (inputValue || '').trim();
+        const valueLower = value.toLowerCase();
+        const hasExactMatch = items.some(function (item) {
+          return item.name === value || item.name.toLowerCase() === valueLower;
+        });
+
         if (value) {
+          const clearItem = document.createElement('div');
+          clearItem.className = 'autocomplete-list-clear';
+          clearItem.textContent = '× Очистить';
+          clearItem.onmousedown = function (e) {
+            e.preventDefault();
+            finishEdit('');
+          };
+          listDiv.appendChild(clearItem);
+        }
+
+        if (value && !hasExactMatch && !options.browseAll) {
           const createItem = document.createElement('div');
+          createItem.className = 'autocomplete-list-create';
           createItem.textContent = '➕ Создать «' + value + '»';
-          createItem.style.background = '#e8f4f8';
-          createItem.style.fontWeight = 'bold';
           createItem.onmousedown = function (e) {
             e.preventDefault();
             finishEdit(value);
           };
           listDiv.appendChild(createItem);
         }
+
+        let selectedEl = null;
         items.forEach(function (item) {
           const div = document.createElement('div');
           div.textContent = item.name;
+          if (value && (item.name === value || item.name.toLowerCase() === valueLower)) {
+            div.className = 'is-selected';
+            selectedEl = div;
+          }
           div.onmousedown = function (e) {
             e.preventDefault();
             finishEdit(item.name);
           };
           listDiv.appendChild(div);
         });
+
         if (items.length || value) {
           if (listDiv.parentNode !== document.body) {
             document.body.appendChild(listDiv);
@@ -370,21 +399,20 @@
           positionList();
           bindScroll();
           listDiv.style.display = 'block';
+          if (selectedEl) {
+            selectedEl.scrollIntoView({ block: 'nearest' });
+          }
         } else {
           listDiv.style.display = 'none';
         }
       }
 
-      attachDropdownButton(wrap, input, openList);
+      attachDropdownButton(wrap, input, function () { openList(true); });
 
-      input.addEventListener('focus', openList);
+      input.addEventListener('focus', function () { openList(true); });
 
       input.addEventListener('input', function () {
-        const q = input.value.toLowerCase();
-        const items = getCachedItems(field).filter(function (item) {
-          return !q || item.name.toLowerCase().includes(q);
-        });
-        showList(items, input.value);
+        showList(filterItems(getCachedItems(field), input.value), input.value);
       });
 
       input.addEventListener('keydown', function (e) {
@@ -420,8 +448,13 @@
           cellEl.style.zIndex = '50';
         }
         input.focus();
-        input.select();
-        openList();
+        if (input.value) {
+          const len = input.value.length;
+          input.setSelectionRange(len, len);
+        } else {
+          input.select();
+        }
+        openList(true);
       });
 
       return wrap;

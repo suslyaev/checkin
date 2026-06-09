@@ -817,6 +817,30 @@ body.zt-body {
   background: #e8f0fe;
 }
 
+.autocomplete-list > div.is-selected {
+  background: #ddeef8;
+  font-weight: 500;
+}
+
+.autocomplete-list > div.is-selected:hover {
+  background: #cce5f3;
+}
+
+.autocomplete-list-clear {
+  color: #b42318;
+  border-bottom: 1px solid #e8eaed;
+  font-weight: 500;
+}
+
+.autocomplete-list-clear:hover {
+  background: #fde8e8 !important;
+}
+
+.autocomplete-list-create {
+  background: #e8f4f8;
+  font-weight: 600;
+}
+
 .tabulator-edit-list {
   z-index: 10000 !important;
   max-height: 280px !important;
