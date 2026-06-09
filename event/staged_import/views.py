@@ -1,8 +1,9 @@
 import json
+import os
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseRedirect
+from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 
@@ -111,7 +112,7 @@ def staged_contact_upload_view(request):
     context = {
         'title': 'Пошаговая загрузка людей',
         'form': form,
-        'template_url': reverse('admin:event_contact_template_import_cont'),
+        'template_url': reverse('admin:staged_import_contacts_template'),
         'step': 1,
     }
     return render(request, 'admin/event/staged_import/contact_upload.html', context)
@@ -179,6 +180,12 @@ def staged_contact_cancel_view(request):
     return HttpResponseRedirect(reverse('admin:staged_import_contacts'))
 
 
+def staged_contact_template_view(request):
+    _require_contact_import_perm(request)
+    file_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'import_cont.xlsx')
+    return FileResponse(open(file_path, 'rb'), as_attachment=True, filename='import_cont.xlsx')
+
+
 def staged_import_urls(admin_site):
     wrap = admin_site.admin_view
     return [
@@ -186,6 +193,11 @@ def staged_import_urls(admin_site):
             'staged-import/contacts/',
             wrap(staged_contact_upload_view),
             name='staged_import_contacts',
+        ),
+        path(
+            'staged-import/contacts/template/',
+            wrap(staged_contact_template_view),
+            name='staged_import_contacts_template',
         ),
         path(
             'staged-import/contacts/review/',
