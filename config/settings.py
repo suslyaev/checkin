@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'admin_auto_filters',
     'colorfield',
     'event',
+    'table',
     'corsheaders',
 ]
 
@@ -176,3 +177,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 BASE_URL = env('BASE_URL')
 TELEGRAM_AUTH_TOKEN_EXPIRE_MINUTES = 5
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+# Табличный интерфейс /table/ (ZenTable-подобный UI)
+ATTENDLY_TABLE_ENABLED = env.bool('ATTENDLY_TABLE_ENABLED', default=True)

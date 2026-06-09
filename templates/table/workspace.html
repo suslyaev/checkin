@@ -1,0 +1,53 @@
+{% extends "table/base.html" %}
+{% load static %}
+
+{% block title %}Attendly Table — {{ active_tab.label }}{% endblock %}
+
+{% block body %}
+<div class="zt-shell">
+  <div class="zt-main">
+    <div class="zt-grid-wrap">
+      <div id="status-bar" class="zt-status-bar"></div>
+      <div id="attendly-table"></div>
+    </div>
+    <aside class="zt-toolbar" aria-label="Панель действий">
+      <a class="zt-logo" href="{% url 'table:workspace_root' %}" title="Attendly Table">AT</a>
+      <button type="button" class="zt-tool" id="btn-refresh" title="Обновить">↻</button>
+      <button type="button" class="zt-tool" id="btn-add-row" title="Добавить строку">+</button>
+      <button type="button" class="zt-tool" id="btn-save-all" title="Сохранить изменения">💾</button>
+      <button type="button" class="zt-tool zt-tool-export" id="btn-export" title="Экспорт" hidden>⬇</button>
+      <a class="zt-tool" href="/admin/" title="Админка">⚙</a>
+    </aside>
+  </div>
+  <footer class="zt-footer">
+    <nav class="zt-tabs" aria-label="Таблицы">
+      {% for tab in tabs %}
+        <a href="{% url 'table:workspace' tab.id %}"
+           class="zt-tab{% if tab.id == active_tab.id %} is-active{% endif %}">
+          {{ tab.label }}
+        </a>
+      {% endfor %}
+    </nav>
+    <div class="zt-footer-meta">
+      <span class="zt-user">{{ user_label }}</span>
+      <span id="footer-stats" class="zt-stats">Записей: —</span>
+    </div>
+  </footer>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  window.ATTENDLY_TABLE = {
+    dataset: "{{ active_tab.dataset }}",
+    tabId: "{{ active_tab.id }}",
+    gridConfig: {{ grid_config_json|safe }},
+    csrfToken: "{{ csrf_token }}",
+    adminUrls: {
+      contact: "/admin/event/contact/{id}/change/",
+      event: "/admin/event/moduleinstance/{id}/change/",
+    },
+  };
+</script>
+<script src="{% static 'table/workspace.js' %}"></script>
+{% endblock %}

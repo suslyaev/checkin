@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin, messages
 import event.services as service
 from .models import (
@@ -102,7 +103,25 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
-        # 4. Пошаговая загрузка (временно скрыто в меню)
+        # 4. Табличный интерфейс /table/
+        table_group = None
+        if getattr(settings, 'ATTENDLY_TABLE_ENABLED', True):
+            table_group = {
+                'name': 'Таблицы',
+                'app_label': 'attendly_table',
+                'app_url': reverse('table:workspace_root'),
+                'has_module_perms': True,
+                'models': [{
+                    'name': 'Таблицы',
+                    'object_name': 'AttendlyTable',
+                    'admin_url': reverse('table:workspace_root'),
+                    'add_url': None,
+                    'view_only': True,
+                    'perms': {'view': True},
+                }],
+            }
+
+        # 5. Пошаговая загрузка (временно скрыто в меню)
         STAGED_IMPORT_MENU_ENABLED = False
         upload_group = None
         if STAGED_IMPORT_MENU_ENABLED and request.user.has_perm('event.add_contact'):
@@ -143,7 +162,7 @@ class CustomAdminSite(admin.AdminSite):
                         access_group['models'].append(model_dict[model_name])
 
         # Добавляем только непустые группы
-        for group in [events_group, reference_group, upload_group, access_group]:
+        for group in [events_group, reference_group, table_group, upload_group, access_group]:
             if group and group.get('models'):
                 custom_apps.append(group)
 

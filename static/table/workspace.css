@@ -1,0 +1,235 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body.zt-body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: #222;
+  background: #f4f5f7;
+}
+
+.zt-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+.zt-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+}
+
+.zt-grid-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e2e4e8;
+}
+
+.zt-status-bar {
+  min-height: 28px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #555;
+  background: #fafbfc;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.zt-status-bar.is-error {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.zt-status-bar.is-ok {
+  color: #027a48;
+  background: #ecfdf3;
+}
+
+#attendly-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.tabulator {
+  border: none;
+  font-size: 13px;
+}
+
+.tabulator .tabulator-header {
+  background: #f8f9fb;
+  border-bottom: 1px solid #dfe3e8;
+}
+
+.tabulator .tabulator-col {
+  border-right: 1px solid #e8eaed;
+}
+
+.tabulator .tabulator-row {
+  border-bottom: 1px solid #eef0f3;
+  min-height: 32px;
+}
+
+.tabulator .tabulator-row.tabulator-row-even {
+  background: #fcfcfd;
+}
+
+.tabulator .tabulator-cell {
+  border-right: 1px solid #f0f2f5;
+  padding: 4px 8px;
+}
+
+.tabulator .tabulator-cell.tabulator-editing {
+  padding: 0;
+}
+
+.zt-row-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.zt-row-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #555;
+}
+
+.zt-row-btn:hover {
+  background: #eef1f5;
+}
+
+.zt-row-btn.is-dirty {
+  color: #b54708;
+}
+
+.zt-row-btn.is-delete {
+  color: #b42318;
+}
+
+.zt-toolbar {
+  width: 44px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  background: #f0f2f5;
+  border-left: 1px solid #e2e4e8;
+}
+
+.zt-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #417690;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 11px;
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+
+.zt-tool {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  color: #444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.zt-tool:hover {
+  background: #e4e7ec;
+}
+
+.zt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 12px;
+  background: #2f3b45;
+  color: #e8edf2;
+  flex-shrink: 0;
+}
+
+.zt-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.zt-tab {
+  padding: 8px 16px;
+  color: #c5d0db;
+  text-decoration: none;
+  white-space: nowrap;
+  border-top: 2px solid transparent;
+  font-size: 13px;
+}
+
+.zt-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.zt-tab.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-top-color: #5dade2;
+}
+
+.zt-footer-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #b8c5d0;
+  flex-shrink: 0;
+}
+
+.autocomplete-list {
+  position: absolute;
+  z-index: 10000;
+  background: #fff;
+  border: 1px solid #ccc;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  min-width: 160px;
+}
+
+.autocomplete-list > div {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.autocomplete-list > div:hover,
+.autocomplete-list > div.is-highlighted {
+  background: #e8f0fe;
+}

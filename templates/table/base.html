@@ -1,0 +1,17 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Attendly Table{% endblock %}</title>
+  <link href="https://unpkg.com/tabulator-tables@5.5/dist/css/tabulator.min.css" rel="stylesheet">
+  <link href="{% static 'table/workspace.css' %}" rel="stylesheet">
+  {% block extrahead %}{% endblock %}
+</head>
+<body class="zt-body">
+  {% block body %}{% endblock %}
+  <script src="https://unpkg.com/tabulator-tables@5.5/dist/js/tabulator.min.js"></script>
+  {% block extrajs %}{% endblock %}
+</body>
+</html>
