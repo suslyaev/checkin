@@ -60,6 +60,30 @@ def dataset_list(request, dataset):
 
 
 @table_staff_required
+@require_http_methods(['GET'])
+def dataset_detail(request, dataset, pk):
+    if dataset == 'contacts' and request.user.has_perm('event.view_contact'):
+        contact = get_object_or_404(
+            Contact.objects.select_related('company', 'category', 'type_guest', 'producer'),
+            pk=pk,
+        )
+        return JsonResponse({'row': serialize_contact(contact)})
+
+    if dataset == 'events' and request.user.has_perm('event.view_moduleinstance'):
+        event = get_object_or_404(ModuleInstance, pk=pk)
+        return JsonResponse({'row': serialize_event(event)})
+
+    if dataset in REFERENCE_MODELS and request.user.has_perm(
+        f'event.view_{REFERENCE_MODELS[dataset]._meta.model_name}'
+    ):
+        model = REFERENCE_MODELS[dataset]
+        item = get_object_or_404(model, pk=pk)
+        return JsonResponse({'row': serialize_reference(item)})
+
+    return JsonResponse({'error': 'Not found'}, status=404)
+
+
+@table_staff_required
 @require_http_methods(['POST'])
 def dataset_save(request, dataset):
     data = _parse_json(request)

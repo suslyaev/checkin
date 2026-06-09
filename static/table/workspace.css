@@ -86,10 +86,32 @@ body.zt-body {
 .tabulator .tabulator-cell {
   border-right: 1px solid #f0f2f5;
   padding: 4px 8px;
+  overflow: visible !important;
+}
+
+.tabulator .tabulator-row {
+  overflow: visible !important;
+}
+
+.tabulator .tabulator-tableholder {
+  overflow: auto !important;
 }
 
 .tabulator .tabulator-cell.tabulator-editing {
   padding: 0;
+  overflow: visible !important;
+}
+
+.tabulator-row.zt-row-dirty .tabulator-cell {
+  background-color: #fff8e6 !important;
+}
+
+.tabulator-row.tabulator-selected .tabulator-cell {
+  background-color: #e8f0fe !important;
+}
+
+.tabulator-row.zt-row-dirty.tabulator-selected .tabulator-cell {
+  background-color: #fff0c2 !important;
 }
 
 .zt-row-actions {
@@ -164,8 +186,26 @@ body.zt-body {
   text-decoration: none;
 }
 
-.zt-tool:hover {
+.zt-tool:hover:not(:disabled) {
   background: #e4e7ec;
+}
+
+.zt-tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.zt-tool.is-active {
+  background: #d4e8f7;
+  color: #1a5276;
+  box-shadow: inset 0 0 0 1px #7eb8d9;
+}
+
+.zt-toolbar-sep {
+  width: 24px;
+  height: 1px;
+  background: #d0d5dd;
+  margin: 4px 0;
 }
 
 .zt-footer {
@@ -232,4 +272,11 @@ body.zt-body {
 .autocomplete-list > div:hover,
 .autocomplete-list > div.is-highlighted {
   background: #e8f0fe;
+}
+
+.tabulator-edit-list {
+  z-index: 10000 !important;
+  max-height: 280px !important;
+  overflow-y: auto !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
 }

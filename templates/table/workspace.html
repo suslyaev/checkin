@@ -12,9 +12,14 @@
     </div>
     <aside class="zt-toolbar" aria-label="Панель действий">
       <a class="zt-logo" href="{% url 'table:workspace_root' %}" title="Attendly Table">AT</a>
-      <button type="button" class="zt-tool" id="btn-refresh" title="Обновить">↻</button>
+      <div class="zt-toolbar-sep" aria-hidden="true"></div>
+      <button type="button" class="zt-tool" id="btn-apply-row" title="Применить изменения" disabled>✓</button>
+      <button type="button" class="zt-tool" id="btn-cancel-row" title="Отменить изменения" disabled>↩</button>
+      <button type="button" class="zt-tool" id="btn-reload-row" title="Подтянуть с сервера" disabled>⤓</button>
+      <div class="zt-toolbar-sep" aria-hidden="true"></div>
+      <button type="button" class="zt-tool" id="btn-refresh" title="Обновить таблицу">↻</button>
       <button type="button" class="zt-tool" id="btn-add-row" title="Добавить строку">+</button>
-      <button type="button" class="zt-tool" id="btn-save-all" title="Сохранить изменения">💾</button>
+      <button type="button" class="zt-tool" id="btn-save-all" title="Сохранить все изменения">💾</button>
       <button type="button" class="zt-tool zt-tool-export" id="btn-export" title="Экспорт" hidden>⬇</button>
       <a class="zt-tool" href="/admin/" title="Админка">⚙</a>
     </aside>
