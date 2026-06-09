@@ -37,6 +37,8 @@
   const undoStack = [];
   let table = null;
   let selectedRow = null;
+  let selectedCell = null;
+  let openListOnEditField = null;
   let activeSidePanel = null;
   let activeFilterQuery = '';
   const DEBUG = localStorage.getItem('attendly_table_debug') === '1';
@@ -55,6 +57,26 @@
       target.closest('.zt-cell-dropdown') ||
       target.closest('.zt-cell-clear')
     );
+  }
+
+  function isRefColumn(field) {
+    return (cfg.gridConfig.columns || []).some(function (col) {
+      return col.field === field && col.editor === 'autocomplete' && col.ref;
+    });
+  }
+
+  function installRefDblClickOpen() {
+    const el = document.getElementById('attendly-table');
+    if (!el || el.dataset.ztDblClickOpen) return;
+    el.dataset.ztDblClickOpen = '1';
+    el.addEventListener('dblclick', function (e) {
+      if (e.target.closest('.zt-ref-cell-caret') || e.target.closest('.zt-row-btn')) return;
+      const cellEl = e.target.closest('.tabulator-cell');
+      if (!cellEl) return;
+      const field = cellEl.getAttribute('tabulator-field');
+      if (!field || !isRefColumn(field)) return;
+      openListOnEditField = field;
+    }, true);
   }
 
   function setStatus(msg, type) {
@@ -479,6 +501,8 @@
           cellEl.style.position = 'relative';
           cellEl.style.zIndex = '50';
         }
+        const openListNow = openListOnEditField === field;
+        if (openListNow) openListOnEditField = null;
         setTimeout(function () {
           input.focus();
           if (input.value) {
@@ -487,7 +511,7 @@
           } else {
             input.select();
           }
-          openList(true);
+          if (openListNow) openList(true);
         }, 0);
       });
 
@@ -716,6 +740,7 @@
 
       if (col.editor === 'autocomplete' && col.ref) {
         def.editor = createAutocompleteEditor(col.ref);
+        def.formatter = refCellFormatter;
       } else if (col.editor === 'status') {
         const values = cfg.gridConfig.statusValues || {};
         def.editor = 'list';
@@ -762,6 +787,44 @@
     refreshRowStyle(row);
   }
 
+  function clearSelectedCell() {
+    if (!selectedCell) return;
+    const el = selectedCell.getElement();
+    if (el) el.classList.remove('zt-cell-selected');
+    selectedCell = null;
+  }
+
+  function selectCell(cell) {
+    if (!cell) return;
+    if (selectedCell === cell) return;
+    clearSelectedCell();
+    selectedCell = cell;
+    const el = cell.getElement();
+    if (el) el.classList.add('zt-cell-selected');
+  }
+
+  function refCellFormatter(cell) {
+    const wrap = document.createElement('div');
+    wrap.className = 'zt-ref-cell';
+    const value = document.createElement('span');
+    value.className = 'zt-ref-cell-value';
+    value.textContent = cell.getValue() || '';
+    const caret = document.createElement('button');
+    caret.type = 'button';
+    caret.className = 'zt-ref-cell-caret';
+    caret.textContent = '▾';
+    caret.title = 'Открыть список';
+    caret.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      openListOnEditField = cell.getField();
+      cell.edit();
+    });
+    wrap.appendChild(value);
+    wrap.appendChild(caret);
+    return wrap;
+  }
+
   function rekeyRow(row, oldKey, saved) {
     saved._key = 'id:' + saved.id;
     dirtyRows.delete(oldKey);
@@ -788,6 +851,8 @@
     pendingDeleteRows.clear();
     undoStack.length = 0;
     selectedRow = null;
+    clearSelectedCell();
+    openListOnEditField = null;
     activeFilterQuery = '';
     if (filterQuery) filterQuery.value = '';
     const rows = prepareRows(payload.data || []);
@@ -1203,7 +1268,7 @@
       virtualDom: false,
       placeholder: 'Нет данных',
       selectable: false,
-      editTriggerEvent: 'click',
+      editTriggerEvent: 'dblclick',
       columns: buildColumns(),
       rowFormatter: function (row) { refreshRowStyle(row); },
     });
@@ -1225,13 +1290,14 @@
       onCellEditFinished(cell);
     });
 
+    installRefDblClickOpen();
+
     table.on('cellClick', function (e, cell) {
       if (cell.getField() === '_actions') return;
       if (e.target.closest('.zt-row-btn')) return;
-      const colDef = cell.getColumn().getDefinition();
-      if (!colDef.editor) {
-        selectRow(cell.getRow());
-      }
+      if (e.target.closest('.zt-ref-cell-caret')) return;
+      selectRow(cell.getRow());
+      selectCell(cell);
     });
 
     table.on('dataFiltered', function (filters, rows) {
