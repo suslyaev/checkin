@@ -70,22 +70,115 @@ body.zt-body {
   border-bottom: 1px solid #dfe3e8;
 }
 
+.tabulator .tabulator-header-filter input {
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 3px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tabulator .tabulator-header-filter {
+  padding: 2px 4px;
+}
+
+.zt-hf-ms {
+  width: 100%;
+}
+
+.zt-hf-ms-trigger {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid #d0d5dd;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zt-hf-ms-trigger.is-partial {
+  border-color: #7eb8d9;
+  background: #eef6fb;
+  color: #1a5276;
+}
+
+.zt-hf-ms-popup {
+  position: fixed;
+  z-index: 10001;
+  background: #fff;
+  border: 1px solid #c8ced6;
+  border-radius: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.zt-hf-ms-tools {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e8eaed;
+  flex-shrink: 0;
+}
+
+.zt-hf-ms-tools button {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 11px;
+  border: 1px solid #d0d5dd;
+  border-radius: 3px;
+  background: #f7f8fa;
+  cursor: pointer;
+}
+
+.zt-hf-ms-tools button:hover {
+  background: #fff;
+}
+
+.zt-hf-ms-list {
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.zt-hf-ms-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zt-hf-ms-item:hover {
+  background: #f3f5f8;
+}
+
 .tabulator .tabulator-col {
   border-right: 1px solid #e8eaed;
 }
 
 .tabulator .tabulator-row {
   border-bottom: 1px solid #eef0f3;
-  min-height: 32px;
+  height: 32px;
+  max-height: 32px;
 }
 
-.tabulator .tabulator-row.tabulator-row-even {
-  background: #fcfcfd;
+.tabulator .tabulator-row.tabulator-row-even .tabulator-cell:not(.tabulator-editing) {
+  background-color: #fcfcfd;
 }
 
 .tabulator .tabulator-cell {
   border-right: 1px solid #f0f2f5;
   padding: 4px 8px;
+  height: 32px;
+  max-height: 32px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -95,9 +188,15 @@ body.zt-body {
   overflow: auto;
 }
 
+.tabulator .tabulator-row:has(.tabulator-editing) {
+  z-index: 10 !important;
+}
+
 .tabulator .tabulator-cell.tabulator-editing {
   padding: 0;
-  overflow: hidden;
+  overflow: visible !important;
+  position: relative;
+  z-index: 50;
 }
 
 .tabulator .tabulator-cell.tabulator-editing input {
@@ -124,6 +223,7 @@ body.zt-body {
   height: 100%;
   display: flex;
   align-items: center;
+  overflow: visible;
 }
 
 .zt-cell-editor input {
@@ -524,7 +624,10 @@ body.zt-body {
 }
 
 .autocomplete-list {
-  position: fixed;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   z-index: 10000;
   background: #fff;
   border: 1px solid #7eb8d9;

@@ -95,6 +95,12 @@
     return refs;
   }
 
+  function cleanupOrphanAutocompleteLists() {
+    document.querySelectorAll('body > .autocomplete-list').forEach(function (el) {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
+
   function attachClearButton(wrap, input) {
     const clearBtn = document.createElement('button');
     clearBtn.type = 'button';
@@ -114,6 +120,7 @@
     return function (cell, onRendered, success, cancel) {
       const wrap = document.createElement('div');
       wrap.className = 'zt-cell-editor';
+      wrap.addEventListener('mousedown', function (e) { e.stopPropagation(); });
       const input = document.createElement('input');
       input.type = 'text';
       input.value = cell.getValue() || '';
@@ -186,6 +193,7 @@
     return function (cell, onRendered, success, cancel) {
       const wrap = document.createElement('div');
       wrap.className = 'zt-cell-editor';
+      wrap.addEventListener('mousedown', function (e) { e.stopPropagation(); });
       const input = document.createElement('input');
       input.type = 'text';
       input.value = cell.getValue() || '';
@@ -195,24 +203,12 @@
       const listDiv = document.createElement('div');
       listDiv.className = 'autocomplete-list';
       listDiv.style.display = 'none';
+      wrap.appendChild(listDiv);
 
       let closed = false;
-      let scrollHandler = null;
-
-      function positionList() {
-        const rect = input.getBoundingClientRect();
-        listDiv.style.left = rect.left + 'px';
-        listDiv.style.top = (rect.bottom + 2) + 'px';
-        listDiv.style.width = Math.max(rect.width, 180) + 'px';
-      }
 
       function removeList() {
         listDiv.style.display = 'none';
-        if (listDiv.parentNode) listDiv.parentNode.removeChild(listDiv);
-        if (scrollHandler) {
-          window.removeEventListener('scroll', scrollHandler, true);
-          scrollHandler = null;
-        }
       }
 
       function finishEdit(value) {
@@ -246,12 +242,7 @@
           };
           listDiv.appendChild(div);
         });
-        if (items.length || value) {
-          positionList();
-          listDiv.style.display = 'block';
-        } else {
-          listDiv.style.display = 'none';
-        }
+        listDiv.style.display = (items.length || value) ? 'block' : 'none';
       }
 
       input.addEventListener('focus', function () {
@@ -291,11 +282,12 @@
       });
 
       onRendered(function () {
+        const cellEl = cell.getElement();
+        cellEl.style.overflow = 'visible';
+        cellEl.style.position = 'relative';
+        cellEl.style.zIndex = '50';
         input.focus();
         input.select();
-        document.body.appendChild(listDiv);
-        scrollHandler = function () { positionList(); };
-        window.addEventListener('scroll', scrollHandler, true);
         fetchAutocomplete(field, '').then(function () {
           showList(getCachedItems(field), input.value);
         });
@@ -425,6 +417,70 @@
     return wrap;
   }
 
+  function getRefFilterOptions(field, ref) {
+    const names = new Set();
+    getCachedItems(ref).forEach(function (item) {
+      if (item.name) names.add(item.name);
+    });
+    if (table) {
+      table.getData().forEach(function (row) {
+        if (row[field]) names.add(row[field]);
+      });
+    }
+    return Array.from(names).sort(function (a, b) {
+      return a.localeCompare(b, 'ru');
+    });
+  }
+
+  function getStatusFilterOptions() {
+    const sv = cfg.gridConfig.statusValues || {};
+    return Object.keys(sv).map(function (key) {
+      return { value: key, label: sv[key] };
+    });
+  }
+
+  function applyHeaderFilter(def, col) {
+    if (!col.field || col.field === '_actions' || col.field === 'id') return;
+    const HF = window.AttendlyHeaderFilters;
+    if (!HF) return;
+
+    if (col.editor === 'autocomplete' && col.ref) {
+      const field = col.field;
+      const ref = col.ref;
+      def.headerFilter = HF.createMultiSelect(function () {
+        return getRefFilterOptions(field, ref);
+      });
+      def.headerFilterFunc = HF.multiSelect;
+      return;
+    }
+
+    if (col.editor === 'status') {
+      def.headerFilter = HF.createMultiSelect(getStatusFilterOptions);
+      def.headerFilterFunc = HF.multiSelect;
+      return;
+    }
+
+    if (col.editor === 'list' && col.editorParams) {
+      def.headerFilter = HF.createMultiSelect(function () {
+        const vals = col.editorParams.values;
+        if (Array.isArray(vals)) return vals;
+        if (vals && typeof vals === 'object') {
+          return Object.keys(vals).map(function (k) {
+            return { value: k, label: vals[k] };
+          });
+        }
+        return [];
+      });
+      def.headerFilterFunc = HF.multiSelect;
+      return;
+    }
+
+    def.headerFilter = 'input';
+    def.headerFilterFunc = HF.textContains;
+    def.headerFilterLiveFilter = true;
+    def.headerFilterPlaceholder = '…';
+  }
+
   function buildColumns() {
     return cfg.gridConfig.columns.map(function (col) {
       const def = {
@@ -466,6 +522,8 @@
         def.editor = false;
       }
 
+      applyHeaderFilter(def, col);
+
       return def;
     });
   }
@@ -483,9 +541,11 @@
   }
 
   function selectRow(row) {
-    if (selectedRow && selectedRow !== row) selectedRow.deselect();
+    if (!row) return;
+    if (selectedRow === row) return;
+    if (selectedRow) selectedRow.deselect();
     selectedRow = row;
-    if (row) row.select();
+    row.select();
   }
 
   function rekeyRow(row, oldKey, saved) {
@@ -879,7 +939,8 @@
       eye.innerHTML = col.isVisible()
         ? '<svg viewBox="0 0 24 24"><path d="M12 5C7 5 2.7 8.1 1 12c1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></svg>'
         : '<svg viewBox="0 0 24 24"><path d="M12 6c3 0 5.6 1.6 7.4 4-1 1.4-2.2 2.5-3.6 3.2l1.5 1.5c2-1.1 3.6-2.7 4.8-4.7C19.3 7.1 16 4 12 4c-1 0-2 .2-2.9.5l1.6 1.6C11.4 6 11.7 6 12 6zM2.7 2.7 1.3 4.1l2.2 2.2C2.7 7.7 1.7 9.7 1 12c1.7 3.9 6 7 11 7 1.6 0 3.1-.3 4.5-.9l2.7 2.7 1.4-1.4L2.7 2.7zM7.5 9.9l1.6 1.6c.1-.3.2-.6.2-1 0-1.1.9-2 2-2 .4 0 .7.1 1 .2l1.5 1.5c-.3-.8-1-1.4-1.9-1.4-1.1 0-2 .9-2 2 0 .2 0 .4.1.5z"/></svg>';
-      eye.addEventListener('click', function () {
+      eye.addEventListener('click', function (e) {
+        e.stopPropagation();
         if (col.isVisible()) col.hide(); else col.show();
         buildColumnsPanel();
       });
@@ -924,6 +985,7 @@
       data: [],
       layout: 'fitDataStretch',
       height: '100%',
+      rowHeight: 32,
       placeholder: 'Нет данных',
       selectable: 1,
       columns: buildColumns(),
@@ -931,6 +993,10 @@
     });
 
     table.on('cellEditing', function (cell) {
+      cleanupOrphanAutocompleteLists();
+      if (window.AttendlyHeaderFilters && window.AttendlyHeaderFilters.closeActivePopup) {
+        window.AttendlyHeaderFilters.closeActivePopup();
+      }
       const row = cell.getRow();
       selectRow(row);
       if (!dirtyRows.has(row.getData()._key) && !pendingDeleteRows.has(row.getData()._key)) {
@@ -942,9 +1008,13 @@
       onCellEditFinished(cell);
     });
 
-    table.on('rowClick', function (e, row) {
+    table.on('cellClick', function (e, cell) {
+      if (cell.getField() === '_actions') return;
       if (e.target.closest('.zt-row-btn')) return;
-      selectRow(row);
+      const colDef = cell.getColumn().getDefinition();
+      if (!colDef.editor) {
+        selectRow(cell.getRow());
+      }
     });
 
     table.on('dataFiltered', function (filters, rows) {
@@ -962,8 +1032,14 @@
     e.stopPropagation();
     toggleColumnsPanel();
   });
+  sideDrawer.addEventListener('click', function (e) {
+    e.stopPropagation();
+  });
   sideDrawer.querySelectorAll('[data-close-drawer]').forEach(function (btn) {
-    btn.addEventListener('click', closeSidePanel);
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      closeSidePanel();
+    });
   });
   if (columnsSearch) {
     columnsSearch.addEventListener('input', buildColumnsPanel);
