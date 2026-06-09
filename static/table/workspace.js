@@ -39,7 +39,6 @@
   let selectedRow = null;
   let activeSidePanel = null;
   let activeFilterQuery = '';
-  let switchingCell = false;
   const DEBUG = localStorage.getItem('attendly_table_debug') === '1';
 
   function dbg() {
@@ -49,53 +48,13 @@
     console.log.apply(console, args);
   }
 
-  function cellIsEditing(cell) {
-    const el = cell.getElement();
-    return !!(el && el.classList.contains('tabulator-editing'));
-  }
-
-  function installCellSwitchTracker() {
-    const el = document.getElementById('attendly-table');
-    if (!el || el.dataset.ztSwitchTracker) return;
-    el.dataset.ztSwitchTracker = '1';
-    el.addEventListener('mousedown', function (e) {
-      const targetCell = e.target.closest('.tabulator-cell');
-      const editing = el.querySelector('.tabulator-cell.tabulator-editing');
-      if (!editing || !targetCell) {
-        switchingCell = false;
-        dbg('mousedown: no switch', { hasEditing: !!editing, targetCell: !!targetCell });
-        return;
-      }
-      if (editing === targetCell || editing.contains(e.target)) {
-        switchingCell = false;
-        dbg('mousedown: same cell');
-        return;
-      }
-      switchingCell = true;
-      dbg('mousedown: switching cell', editing.getAttribute('tabulator-field'), '->', targetCell.getAttribute('tabulator-field'));
-    }, true);
-  }
-
-  function createEditorBlurHandler(opts) {
-    const getClosed = opts.getClosed;
-    const onCommit = opts.onCommit;
-    const onCleanup = opts.onCleanup || function () {};
-    const shouldDefer = opts.shouldDefer || function () { return false; };
-
-    return function () {
-      const wasSwitching = switchingCell;
-      switchingCell = false;
-      setTimeout(function () {
-        if (getClosed()) return;
-        if (shouldDefer()) {
-          dbg('blur: deferred');
-          return;
-        }
-        dbg(wasSwitching ? 'blur: switching commit' : 'blur: commit');
-        onCleanup();
-        onCommit();
-      }, 0);
-    };
+  function shouldSkipBlurCommit(target) {
+    if (!target) return false;
+    return !!(
+      target.closest('.autocomplete-list') ||
+      target.closest('.zt-cell-dropdown') ||
+      target.closest('.zt-cell-clear')
+    );
   }
 
   function setStatus(msg, type) {
@@ -199,12 +158,6 @@
 
       let closed = false;
 
-      function abort() {
-        closed = true;
-      }
-
-      cancel = wrapEditorCancel(cancel, abort);
-
       function finish() {
         if (closed) return;
         closed = true;
@@ -216,18 +169,21 @@
           e.preventDefault();
           finish();
         } else if (e.key === 'Escape') {
-          abort();
+          closed = true;
           cancel();
         }
       });
 
-      input.addEventListener('blur', createEditorBlurHandler({
-        getClosed: function () { return closed; },
-        onCommit: function () {
-          closed = true;
-          success(fromDateTimeLocalValue(input.value));
-        },
-      }));
+      input.addEventListener('blur', function (e) {
+        const related = e.relatedTarget;
+        setTimeout(function () {
+          if (closed) return;
+          if (shouldSkipBlurCommit(related) || shouldSkipBlurCommit(document.activeElement)) {
+            return;
+          }
+          finish();
+        }, 150);
+      });
 
       input.addEventListener('change', function () {
         finish();
@@ -257,12 +213,6 @@
 
       let closed = false;
 
-      function abort() {
-        closed = true;
-      }
-
-      cancel = wrapEditorCancel(cancel, abort);
-
       function finish() {
         if (closed) return;
         closed = true;
@@ -274,18 +224,21 @@
           e.preventDefault();
           finish();
         } else if (e.key === 'Escape') {
-          abort();
+          closed = true;
           cancel();
         }
       });
 
-      input.addEventListener('blur', createEditorBlurHandler({
-        getClosed: function () { return closed; },
-        onCommit: function () {
-          closed = true;
-          success(input.value);
-        },
-      }));
+      input.addEventListener('blur', function (e) {
+        const related = e.relatedTarget;
+        setTimeout(function () {
+          if (closed) return;
+          if (shouldSkipBlurCommit(related) || shouldSkipBlurCommit(document.activeElement)) {
+            return;
+          }
+          finish();
+        }, 150);
+      });
 
       onRendered(function () {
         input.focus();
@@ -342,13 +295,6 @@
     return dropBtn;
   }
 
-  function wrapEditorCancel(cancel, abort) {
-    return function () {
-      abort();
-      cancel();
-    };
-  }
-
   function createAutocompleteEditor(field) {
     return function (cell, onRendered, success, cancel) {
       const wrap = document.createElement('div');
@@ -365,17 +311,10 @@
       listDiv.style.display = 'none';
 
       let closed = false;
+      let openedAt = 0;
       let scrollParent = null;
       let scrollHandler = null;
 
-      function abort() {
-        if (closed) return;
-        closed = true;
-        removeList();
-        dbg('abort editor', field);
-      }
-
-      cancel = wrapEditorCancel(cancel, abort);
       function positionList() {
         const rect = input.getBoundingClientRect();
         listDiv.style.position = 'fixed';
@@ -486,6 +425,7 @@
         if (items.length || value) {
           if (listDiv.parentNode !== document.body) {
             document.body.appendChild(listDiv);
+            listDiv.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
           }
           positionList();
           bindScroll();
@@ -500,8 +440,6 @@
 
       attachDropdownButton(wrap, input, function () { openList(true); });
 
-      input.addEventListener('focus', function () { openList(true); });
-
       input.addEventListener('input', function () {
         showList(filterItems(getCachedItems(field), input.value), input.value);
       });
@@ -511,36 +449,46 @@
           e.preventDefault();
           finishEdit(input.value);
         } else if (e.key === 'Escape') {
+          closed = true;
+          removeList();
           cancel();
         }
       });
 
-      input.addEventListener('blur', createEditorBlurHandler({
-        getClosed: function () { return closed; },
-        onCommit: function () { finishEdit(input.value); },
-        onCleanup: function () { if (!closed) removeList(); },
-        shouldDefer: function () {
-          const ae = document.activeElement;
-          if (!ae) return false;
-          return !!(ae.closest('.autocomplete-list') || ae.closest('.zt-cell-dropdown'));
-        },
-      }));
+      input.addEventListener('blur', function (e) {
+        const related = e.relatedTarget;
+        setTimeout(function () {
+          if (closed) return;
+          if (Date.now() - openedAt < 50) {
+            dbg('blur: skip — just opened');
+            return;
+          }
+          if (shouldSkipBlurCommit(related) || shouldSkipBlurCommit(document.activeElement)) {
+            dbg('blur: skip — focus in list');
+            return;
+          }
+          finishEdit(input.value);
+        }, 150);
+      });
 
       onRendered(function () {
+        openedAt = Date.now();
         const cellEl = cell.getElement();
         if (cellEl) {
           cellEl.style.overflow = 'visible';
           cellEl.style.position = 'relative';
           cellEl.style.zIndex = '50';
         }
-        input.focus();
-        if (input.value) {
-          const len = input.value.length;
-          input.setSelectionRange(len, len);
-        } else {
-          input.select();
-        }
-        openList(true);
+        setTimeout(function () {
+          input.focus();
+          if (input.value) {
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+          } else {
+            input.select();
+          }
+          openList(true);
+        }, 0);
       });
 
       return wrap;
@@ -1255,12 +1203,10 @@
       virtualDom: false,
       placeholder: 'Нет данных',
       selectable: false,
-      editTriggerEvent: 'dblclick',
+      editTriggerEvent: 'click',
       columns: buildColumns(),
       rowFormatter: function (row) { refreshRowStyle(row); },
     });
-
-    installCellSwitchTracker();
 
     table.on('cellEditing', function (cell) {
       dbg('cellEditing', cell.getField(), cell.getRow().getPosition());
@@ -1279,19 +1225,12 @@
       onCellEditFinished(cell);
     });
 
-    table.on('cellMouseDown', function (e, cell) {
+    table.on('cellClick', function (e, cell) {
       if (cell.getField() === '_actions') return;
       if (e.target.closest('.zt-row-btn')) return;
       const colDef = cell.getColumn().getDefinition();
-      const row = cell.getRow();
       if (!colDef.editor) {
-        selectRow(row);
-        return;
-      }
-      selectRow(row);
-      if (!cellIsEditing(cell)) {
-        dbg('cellMouseDown -> edit', cell.getField(), row.getPosition());
-        cell.edit();
+        selectRow(cell.getRow());
       }
     });
 
