@@ -59,6 +59,10 @@ from .admin_guests_table_mixin import GuestsTableMixin
 
 class CustomAdminSite(admin.AdminSite):
 
+    def get_urls(self):
+        from event.staged_import.views import staged_import_urls
+        return staged_import_urls(self) + super().get_urls()
+
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
 
@@ -98,6 +102,24 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
+        # 4. Пошаговая загрузка
+        upload_group = None
+        if request.user.has_perm('event.add_contact'):
+            upload_group = {
+                'name': 'Загрузка',
+                'app_label': 'event_upload',
+                'app_url': reverse('admin:staged_import_contacts'),
+                'has_module_perms': True,
+                'models': [{
+                    'name': 'Люди',
+                    'object_name': 'StagedContactImport',
+                    'admin_url': reverse('admin:staged_import_contacts'),
+                    'add_url': None,
+                    'view_only': True,
+                    'perms': {'view': True},
+                }],
+            }
+
         # Распределяем модели по группам
         for app in app_list:
             if app["app_label"] == "event":
@@ -120,8 +142,8 @@ class CustomAdminSite(admin.AdminSite):
                         access_group['models'].append(model_dict[model_name])
 
         # Добавляем только непустые группы
-        for group in [events_group, reference_group, access_group]:
-            if group['models']:
+        for group in [upload_group, events_group, reference_group, access_group]:
+            if group and group.get('models'):
                 custom_apps.append(group)
 
         return custom_apps

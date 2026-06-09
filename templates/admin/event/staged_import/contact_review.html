@@ -1,0 +1,192 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .staged-import-steps {
+      margin: 0 0 20px;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      gap: 16px;
+    }
+    .staged-import-steps li.active {
+      font-weight: bold;
+    }
+    .staged-import-summary {
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: #f8f8f8;
+      border: 1px solid #eee;
+      border-radius: 6px;
+    }
+    .staged-import-summary .error-count { color: #ba2121; font-weight: bold; }
+    .staged-import-summary .warn-count { color: #996600; }
+    .staged-import-table-wrap {
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    .staged-import-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .staged-import-table th,
+    .staged-import-table td {
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+      vertical-align: top;
+    }
+    .staged-import-table th {
+      background: #f5f5f5;
+    }
+    .staged-import-table tr.row-excluded {
+      opacity: 0.45;
+      background: #f0f0f0;
+    }
+    .staged-import-table tr.row-error td {
+      background: #fff5f5;
+    }
+    .staged-import-table input[type="text"],
+    .staged-import-table textarea {
+      width: 140px;
+      max-width: 100%;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    .staged-import-table textarea {
+      min-height: 48px;
+      resize: vertical;
+    }
+    .cell-error input,
+    .cell-error textarea {
+      border: 2px solid #ba2121;
+      background: #fffafa;
+    }
+    .cell-warning input,
+    .cell-warning textarea {
+      border: 2px solid #d4a017;
+      background: #fffdf5;
+    }
+    .cell-messages {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .cell-messages .err { color: #ba2121; }
+    .cell-messages .warn { color: #996600; }
+    .staged-import-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .staged-import-actions button,
+    .staged-import-actions a.btn {
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      text-decoration: none;
+      display: inline-block;
+      border: none;
+      cursor: pointer;
+    }
+    .staged-import-actions .btn-primary {
+      background: #417690;
+      color: #fff;
+    }
+    .staged-import-actions .btn-primary:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    .staged-import-actions .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+    .staged-import-actions .btn-danger {
+      background: #ba2121;
+      color: #fff;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <ol class="staged-import-steps">
+    <li>1. Загрузка файла</li>
+    <li class="active">2. Проверка и правка</li>
+    <li>3. Импорт в базу</li>
+  </ol>
+
+  <div class="staged-import-summary">
+    Всего строк: <strong>{{ summary.total }}</strong>,
+    к загрузке: <strong>{{ summary.active }}</strong>,
+    исключено: {{ summary.excluded }},
+    с ошибками: <span class="error-count">{{ summary.error_rows }}</span>,
+    с предупреждениями: <span class="warn-count">{{ summary.warning_rows }}</span>.
+    {% if not summary.can_import %}
+      <br><span class="error-count">Исправьте ошибки или исключите проблемные строки, чтобы загрузить данные.</span>
+    {% endif %}
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="staged-import-table-wrap">
+      <table class="staged-import-table">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Искл.</th>
+            {% for label in column_labels %}
+              <th>{{ label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in table_rows %}
+            <tr class="{% if row.excluded %}row-excluded{% elif row.has_errors %}row-error{% endif %}">
+              <td>{{ row.row_number }}</td>
+              <td>
+                <input type="checkbox" name="row_{{ row.index }}__excluded" {% if row.excluded %}checked{% endif %}>
+                <input type="hidden" name="row_{{ row.index }}__row_number" value="{{ row.row_number }}">
+              </td>
+              {% for cell in row.cells %}
+                <td class="{{ cell.css }}">
+                  {% if cell.is_comment %}
+                    <textarea name="row_{{ row.index }}__{{ cell.field }}">{{ cell.value }}</textarea>
+                  {% else %}
+                    <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}">
+                  {% endif %}
+                  {% if cell.errors or cell.warnings %}
+                    <div class="cell-messages">
+                      {% for msg in cell.errors %}
+                        <div class="err">{{ msg }}</div>
+                      {% endfor %}
+                      {% for msg in cell.warnings %}
+                        <div class="warn">{{ msg }}</div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="staged-import-actions">
+      <button type="submit" name="action" value="validate" class="btn-secondary">Применить правки</button>
+      <button type="submit" name="action" value="import" class="btn-primary" {% if not summary.can_import %}disabled{% endif %}>
+        Загрузить в базу
+      </button>
+      <a href="{% url 'admin:staged_import_contacts_cancel' %}" class="btn btn-danger">Отменить</a>
+      <a href="{{ upload_url }}" class="btn-secondary">Загрузить другой файл</a>
+    </div>
+  </form>
+{% endblock %}
