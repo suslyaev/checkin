@@ -786,8 +786,8 @@
 
   function initFilterPanel() {
     if (!filterQuery) return;
-    if (!filterQuery.value && cfg.gridConfig.filterExample) {
-      filterQuery.placeholder = cfg.gridConfig.filterExample;
+    if (!filterQuery.value && cfg.gridConfig.filterExampleWhere) {
+      filterQuery.placeholder = cfg.gridConfig.filterExampleWhere;
     }
     if (filterFieldsHint && cfg.gridConfig.filterFields) {
       filterFieldsHint.textContent = 'Поля: ' + cfg.gridConfig.filterFields.join(', ');
@@ -820,9 +820,9 @@
   }
 
   function applyQueryFilter() {
-    const query = filterQuery ? filterQuery.value.trim() : '';
-    activeFilterQuery = query;
-    if (!query) {
+    const conditions = filterQuery ? filterQuery.value.trim() : '';
+    activeFilterQuery = conditions;
+    if (!conditions) {
       table.clearFilter();
       updateFilterStats(table.getDataCount());
       updateToolbar();
@@ -831,7 +831,7 @@
       return;
     }
     const compiled = window.AttendlyQueryFilter.compile(
-      normalizeFilterQuery(query),
+      normalizeFilterQuery(conditions),
       resolveFilterField
     );
     if (!compiled) {
@@ -994,5 +994,6 @@
     closeSidePanel();
   });
 
+  closeSidePanel();
   initTable();
 })();

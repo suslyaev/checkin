@@ -32,8 +32,11 @@
           <span id="zt-filter-count" class="zt-drawer-badge">Найдено: —</span>
         </div>
         <div class="zt-drawer-body zt-filter-body">
-          <label class="zt-filter-label" for="zt-filter-query">SELECT-запрос</label>
-          <textarea id="zt-filter-query" class="zt-filter-query" rows="8" spellcheck="false"></textarea>
+          <div class="zt-filter-label">ФИЛЬТР</div>
+          <div class="zt-filter-sql">
+            <div class="zt-filter-prefix">SELECT * FROM rows WHERE</div>
+            <textarea id="zt-filter-query" class="zt-filter-query" rows="6" spellcheck="false"></textarea>
+          </div>
           <p id="zt-filter-fields" class="zt-filter-hint"></p>
         </div>
         <div class="zt-drawer-foot">

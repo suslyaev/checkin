@@ -48,7 +48,7 @@ def _filter_hint(example_where, columns):
         if c.get('field') and c['field'] not in ('_actions',)
     ]
     return {
-        'filterExample': f'SELECT * FROM rows WHERE {example_where}',
+        'filterExampleWhere': example_where,
         'filterFields': fields,
     }
 

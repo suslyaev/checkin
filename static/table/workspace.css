@@ -277,6 +277,10 @@ body.zt-body {
   margin: 4px 0;
 }
 
+#zt-side-drawer[hidden] {
+  display: none !important;
+}
+
 .zt-drawer {
   width: 300px;
   flex-shrink: 0;
@@ -292,6 +296,10 @@ body.zt-body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+.zt-drawer-panel[hidden] {
+  display: none !important;
 }
 
 .zt-drawer-head {
@@ -432,16 +440,35 @@ body.zt-body {
   color: #666;
 }
 
-.zt-filter-query {
-  width: 100%;
-  min-height: 140px;
-  padding: 10px;
+.zt-filter-sql {
   border: 1px solid #d0d5dd;
   border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.zt-filter-prefix {
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #555;
+  background: #f3f5f8;
+  border-bottom: 1px solid #e8eaed;
+  user-select: none;
+}
+
+.zt-filter-query {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  border: none;
+  border-radius: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.45;
   resize: vertical;
+  outline: none;
+  display: block;
 }
 
 .zt-filter-hint {
