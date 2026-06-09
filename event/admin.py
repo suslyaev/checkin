@@ -406,6 +406,7 @@ class CommunityMemberForContactInline(admin.TabularInline):
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
     change_list_template = 'admin/event/contact_change_list.html'
+    import_export_change_list_template = 'admin/event/contact_change_list_import_export.html'
     actions = ['merge_duplicates_action', 'delete_selected']
     list_display = ('get_fio', 'company', 'category', 'type_guest', 'producer', 'photo_preview')
     list_editable = ('company', 'category', 'type_guest', 'producer')

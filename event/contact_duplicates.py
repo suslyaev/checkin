@@ -2,7 +2,7 @@
 Поиск предположительных дублей контакта для списка в админке.
 """
 from django.db.models import Count, Q
-from django.db.models.functions import Lower
+from django.db.models.functions import Length, Lower
 
 from .models import Contact, InfoContact
 
@@ -68,12 +68,22 @@ def duplicate_candidates_queryset(contact, *, weak_last_name=False):
     ).distinct()
 
 
+def _annotate_group_fields(qs, group_fields, *, min_field_length=None):
+    annotations = {f'{f}_l': Lower(f) for f in group_fields}
+    if min_field_length is not None and len(group_fields) == 1:
+        field = group_fields[0]
+        annotations[f'{field}_len'] = Length(field)
+    qs = qs.annotate(**annotations)
+    if min_field_length is not None and len(group_fields) == 1:
+        field = group_fields[0]
+        qs = qs.filter(**{f'{field}_len__gte': min_field_length})
+    return qs
+
+
 def _ids_from_grouped_contacts(group_fields, *, min_field_length=None):
     """Контакты из групп, где по group_fields больше одной записи."""
     ids = set()
-    base_qs = Contact.objects.annotate(**{f'{f}_l': Lower(f) for f in group_fields})
-    if min_field_length is not None and len(group_fields) == 1:
-        base_qs = base_qs.filter(**{f'{group_fields[0]}__length__gte': min_field_length})
+    base_qs = _annotate_group_fields(Contact.objects.all(), group_fields, min_field_length=min_field_length)
 
     groups = (
         base_qs
@@ -85,9 +95,7 @@ def _ids_from_grouped_contacts(group_fields, *, min_field_length=None):
         filters = {f'{f}_l': group[f'{f}_l'] for f in group_fields}
         for empty_field in group_fields:
             filters[f'{empty_field}_l__gt'] = ''
-        chunk_qs = Contact.objects.annotate(**{f'{f}_l': Lower(f) for f in group_fields})
-        if min_field_length is not None and len(group_fields) == 1:
-            chunk_qs = chunk_qs.filter(**{f'{group_fields[0]}__length__gte': min_field_length})
+        chunk_qs = _annotate_group_fields(Contact.objects.all(), group_fields, min_field_length=min_field_length)
         ids.update(chunk_qs.filter(**filters).values_list('pk', flat=True))
     return ids
 

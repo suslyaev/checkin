@@ -1,0 +1,15 @@
+{% extends "admin/import_export/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+  <li>
+    {% if request.GET.presumed_duplicates == 'yes' %}
+      <a href="{% url 'admin:event_contact_changelist' %}">Весь справочник</a>
+    {% else %}
+      <a href="?presumed_duplicates=yes">Возможные дубли</a>
+    {% endif %}
+  </li>
+  {% include "admin/import_export/change_list_import_item.html" %}
+  {% include "admin/import_export/change_list_export_item.html" %}
+  {{ block.super }}
+{% endblock %}

@@ -1,18 +1,1 @@
 {% extends "admin/change_list.html" %}
-
-{% block object-tools-items %}
-  <li>
-    {% if request.GET.presumed_duplicates == 'yes' %}
-      <a href="{% url 'admin:event_contact_changelist' %}"
-         style="background:none;color:gray;border:2px solid gray;padding:5px 12px;border-radius:3px;font-size:12px;">
-        Весь справочник
-      </a>
-    {% else %}
-      <a href="?presumed_duplicates=yes"
-         style="background:none;color:gray;border:2px solid gray;padding:5px 12px;border-radius:3px;font-size:12px;">
-        Возможные дубли
-      </a>
-    {% endif %}
-  </li>
-  {{ block.super }}
-{% endblock %}
