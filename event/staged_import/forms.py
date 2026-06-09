@@ -4,7 +4,7 @@ from django import forms
 class ContactStagedUploadForm(forms.Form):
     file = forms.FileField(
         label='Файл',
-        help_text='Формат как в шаблоне import_cont.xlsx (.xlsx или .csv)',
+        help_text='Формат из шаблона import_cont.xlsx (.xlsx или .csv)',
     )
 
     def clean_file(self):
