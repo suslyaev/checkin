@@ -292,14 +292,12 @@ body.zt-body {
 }
 
 .tabulator .tabulator-row {
-  border-bottom: 1px solid #eef0f3;
-  height: 32px;
-  max-height: 32px;
-  pointer-events: none;
-}
-
-.tabulator .tabulator-row .tabulator-cell {
-  pointer-events: auto;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  box-sizing: border-box;
+  border-bottom: none;
+  overflow: hidden;
 }
 
 .tabulator .tabulator-row.tabulator-row-even .tabulator-cell:not(.tabulator-editing) {
@@ -308,9 +306,13 @@ body.zt-body {
 
 .tabulator .tabulator-cell {
   border-right: 1px solid #f0f2f5;
+  border-bottom: 1px solid #eef0f3;
   padding: 4px 8px;
-  height: 32px;
-  max-height: 32px;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  box-sizing: border-box;
+  line-height: 24px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

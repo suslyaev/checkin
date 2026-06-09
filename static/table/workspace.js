@@ -398,11 +398,18 @@
         }
       });
 
+      function shouldDeferBlurFinish() {
+        const ae = document.activeElement;
+        if (!ae) return false;
+        return !!(ae.closest('.autocomplete-list') || ae.closest('.zt-cell-dropdown'));
+      }
+
       input.addEventListener('blur', function () {
         setTimeout(function () {
           if (closed) return;
+          if (shouldDeferBlurFinish()) return;
           finishEdit(input.value);
-        }, 200);
+        }, 120);
       });
 
       onRendered(function () {
@@ -1126,9 +1133,10 @@
       layout: 'fitDataStretch',
       height: '100%',
       rowHeight: 32,
+      virtualDom: false,
       placeholder: 'Нет данных',
       selectable: false,
-      editTriggerEvent: 'click',
+      editTriggerEvent: 'dblclick',
       columns: buildColumns(),
       rowFormatter: function (row) { refreshRowStyle(row); },
     });
@@ -1149,19 +1157,21 @@
       onCellEditFinished(cell);
     });
 
-    table.on('cellClick', function (e, cell) {
+    table.on('cellMouseDown', function (e, cell) {
       if (cell.getField() === '_actions') return;
       if (e.target.closest('.zt-row-btn')) return;
       const colDef = cell.getColumn().getDefinition();
       const row = cell.getRow();
-      if (colDef.editor) {
+      if (!colDef.editor) {
         selectRow(row);
-        if (!cell.isEditing()) {
-          cell.edit();
-        }
         return;
       }
       selectRow(row);
+      setTimeout(function () {
+        if (!cell.isEditing()) {
+          cell.edit();
+        }
+      }, 0);
     });
 
     table.on('dataFiltered', function (filters, rows) {
