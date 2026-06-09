@@ -60,10 +60,55 @@
     );
   }
 
+  function getColumnConfig(field) {
+    return (cfg.gridConfig.columns || []).find(function (col) {
+      return col.field === field;
+    }) || null;
+  }
+
   function isRefColumn(field) {
-    return (cfg.gridConfig.columns || []).some(function (col) {
-      return col.field === field && col.editor === 'autocomplete' && col.ref;
-    });
+    const col = getColumnConfig(field);
+    return !!(col && col.editor === 'autocomplete' && col.ref);
+  }
+
+  function shouldEditOnSingleClick(field) {
+    const col = getColumnConfig(field);
+    if (!col || !col.editor || col.editor === false) return false;
+    return !isRefColumn(field);
+  }
+
+  function cellIsEditing(cell) {
+    const el = cell.getElement();
+    return !!(el && el.classList.contains('tabulator-editing'));
+  }
+
+  function bindEditorCancel(cancel, markClosed) {
+    const tabulatorCancel = cancel;
+    return function () {
+      markClosed();
+      tabulatorCancel();
+    };
+  }
+
+  function bindEditorSuccess(success, markClosed) {
+    const tabulatorSuccess = success;
+    return function (value) {
+      markClosed();
+      tabulatorSuccess(value);
+    };
+  }
+
+  function attachEditorBlur(getClosed, commit, shouldDefer) {
+    return function (e) {
+      const related = e.relatedTarget;
+      setTimeout(function () {
+        if (getClosed()) return;
+        if (shouldDefer && (shouldDefer(related) || shouldDefer(document.activeElement))) {
+          return;
+        }
+        commit();
+      }, 150);
+    };
   }
 
   function installRefDblClickOpen() {
@@ -180,10 +225,12 @@
       attachClearButton(wrap, input);
 
       let closed = false;
+      const markClosed = function () { closed = true; };
+      success = bindEditorSuccess(success, markClosed);
+      cancel = bindEditorCancel(cancel, markClosed);
 
       function finish() {
         if (closed) return;
-        closed = true;
         success(fromDateTimeLocalValue(input.value));
       }
 
@@ -192,21 +239,15 @@
           e.preventDefault();
           finish();
         } else if (e.key === 'Escape') {
-          closed = true;
           cancel();
         }
       });
 
-      input.addEventListener('blur', function (e) {
-        const related = e.relatedTarget;
-        setTimeout(function () {
-          if (closed) return;
-          if (shouldSkipBlurCommit(related) || shouldSkipBlurCommit(document.activeElement)) {
-            return;
-          }
-          finish();
-        }, 150);
-      });
+      input.addEventListener('blur', attachEditorBlur(
+        function () { return closed; },
+        finish,
+        shouldSkipBlurCommit
+      ));
 
       input.addEventListener('change', function () {
         finish();
@@ -235,10 +276,12 @@
       attachClearButton(wrap, input);
 
       let closed = false;
+      const markClosed = function () { closed = true; };
+      success = bindEditorSuccess(success, markClosed);
+      cancel = bindEditorCancel(cancel, markClosed);
 
       function finish() {
         if (closed) return;
-        closed = true;
         success(input.value);
       }
 
@@ -247,21 +290,15 @@
           e.preventDefault();
           finish();
         } else if (e.key === 'Escape') {
-          closed = true;
           cancel();
         }
       });
 
-      input.addEventListener('blur', function (e) {
-        const related = e.relatedTarget;
-        setTimeout(function () {
-          if (closed) return;
-          if (shouldSkipBlurCommit(related) || shouldSkipBlurCommit(document.activeElement)) {
-            return;
-          }
-          finish();
-        }, 150);
-      });
+      input.addEventListener('blur', attachEditorBlur(
+        function () { return closed; },
+        finish,
+        shouldSkipBlurCommit
+      ));
 
       onRendered(function () {
         input.focus();
@@ -334,9 +371,15 @@
       listDiv.style.display = 'none';
 
       let closed = false;
-      let openedAt = 0;
       let scrollParent = null;
       let scrollHandler = null;
+      const markClosed = function () {
+        closed = true;
+        removeList();
+      };
+
+      success = bindEditorSuccess(success, markClosed);
+      cancel = bindEditorCancel(cancel, markClosed);
 
       function positionList() {
         const rect = input.getBoundingClientRect();
@@ -377,8 +420,6 @@
 
       function finishEdit(value) {
         if (closed) return;
-        closed = true;
-        removeList();
         dbg('finishEdit', field, value);
         success(value);
       }
@@ -472,30 +513,17 @@
           e.preventDefault();
           finishEdit(input.value);
         } else if (e.key === 'Escape') {
-          closed = true;
-          removeList();
           cancel();
         }
       });
 
-      input.addEventListener('blur', function (e) {
-        const related = e.relatedTarget;
-        setTimeout(function () {
-          if (closed) return;
-          if (Date.now() - openedAt < 50) {
-            dbg('blur: skip — just opened');
-            return;
-          }
-          if (shouldSkipBlurCommit(related) || shouldSkipBlurCommit(document.activeElement)) {
-            dbg('blur: skip — focus in list');
-            return;
-          }
-          finishEdit(input.value);
-        }, 150);
-      });
+      input.addEventListener('blur', attachEditorBlur(
+        function () { return closed; },
+        function () { finishEdit(input.value); },
+        shouldSkipBlurCommit
+      ));
 
       onRendered(function () {
-        openedAt = Date.now();
         const cellEl = cell.getElement();
         if (cellEl) {
           cellEl.style.overflow = 'visible';
@@ -1333,6 +1361,9 @@
       if (e.target.closest('.zt-row-btn')) return;
       if (e.target.closest('.zt-ref-cell-caret')) return;
       selectCell(cell);
+      if (shouldEditOnSingleClick(cell.getField()) && !cellIsEditing(cell)) {
+        cell.edit();
+      }
     });
 
     table.on('dataFiltered', function (filters, rows) {
