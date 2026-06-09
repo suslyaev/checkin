@@ -4,8 +4,8 @@ from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from event.models import Contact, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact
-from event.resources import ContactExport
+from event.models import Action, Contact, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact
+from event.resources import ContactExport, ActionExport
 
 from .decorators import table_staff_required
 from .services import (
@@ -15,8 +15,11 @@ from .services import (
     save_event,
     serialize_reference,
     save_reference,
+    serialize_action,
+    save_action,
     autocomplete_reference,
     autocomplete_producers,
+    autocomplete_events,
 )
 
 REFERENCE_MODELS = {
@@ -36,6 +39,18 @@ def _parse_json(request):
 @table_staff_required
 @require_http_methods(['GET'])
 def dataset_list(request, dataset):
+    if dataset == 'actions' and request.user.has_perm('event.view_action'):
+        qs = Action.objects.select_related(
+            'contact',
+            'contact__company',
+            'contact__category',
+            'contact__type_guest',
+            'contact__producer',
+            'event',
+        ).order_by('-event__date_start', 'contact__last_name', 'contact__first_name')
+        data = [serialize_action(a) for a in qs[:10000]]
+        return JsonResponse({'data': data, 'total': qs.count()})
+
     if dataset == 'contacts' and request.user.has_perm('event.view_contact'):
         qs = Contact.objects.select_related(
             'company', 'category', 'type_guest', 'producer'
@@ -62,6 +77,20 @@ def dataset_list(request, dataset):
 @table_staff_required
 @require_http_methods(['GET'])
 def dataset_detail(request, dataset, pk):
+    if dataset == 'actions' and request.user.has_perm('event.view_action'):
+        action = get_object_or_404(
+            Action.objects.select_related(
+                'contact',
+                'contact__company',
+                'contact__category',
+                'contact__type_guest',
+                'contact__producer',
+                'event',
+            ),
+            pk=pk,
+        )
+        return JsonResponse({'row': serialize_action(action)})
+
     if dataset == 'contacts' and request.user.has_perm('event.view_contact'):
         contact = get_object_or_404(
             Contact.objects.select_related('company', 'category', 'type_guest', 'producer'),
@@ -93,6 +122,12 @@ def dataset_save(request, dataset):
     item_id = data.get('id')
 
     try:
+        if dataset == 'actions':
+            if not request.user.has_perm('event.change_action'):
+                return JsonResponse({'error': 'Forbidden'}, status=403)
+            action = save_action(data, action_id=item_id, user=request.user)
+            return JsonResponse({'success': True, 'row': serialize_action(action)})
+
         if dataset == 'contacts':
             if not request.user.has_perm('event.change_contact'):
                 return JsonResponse({'error': 'Forbidden'}, status=403)
@@ -113,6 +148,8 @@ def dataset_save(request, dataset):
             return JsonResponse({'success': True, 'row': serialize_reference(item)})
 
         return JsonResponse({'error': 'Not found'}, status=404)
+    except Action.DoesNotExist:
+        return JsonResponse({'error': 'Запись не найдена'}, status=404)
     except Contact.DoesNotExist:
         return JsonResponse({'error': 'Запись не найдена'}, status=404)
     except ModuleInstance.DoesNotExist:
@@ -131,6 +168,10 @@ def dataset_delete(request, dataset):
         return JsonResponse({'error': 'id required'}, status=400)
 
     item_id = data['id']
+
+    if dataset == 'actions' and request.user.has_perm('event.delete_action'):
+        get_object_or_404(Action, pk=item_id).delete()
+        return JsonResponse({'success': True})
 
     if dataset == 'contacts' and request.user.has_perm('event.delete_contact'):
         get_object_or_404(Contact, pk=item_id).delete()
@@ -162,6 +203,8 @@ def autocomplete(request, field):
         return JsonResponse({'results': autocomplete_reference(model_map[field], term)})
     if field == 'producer':
         return JsonResponse({'results': autocomplete_producers(term)})
+    if field == 'event':
+        return JsonResponse({'results': autocomplete_events(term)})
     return JsonResponse({'error': 'Invalid field'}, status=400)
 
 
@@ -177,4 +220,24 @@ def export_contacts(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
     response['Content-Disposition'] = 'attachment; filename="contacts.xlsx"'
+    return response
+
+
+@table_staff_required
+@require_http_methods(['GET'])
+def export_actions(request):
+    if not request.user.has_perm('event.view_action'):
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+    resource = ActionExport()
+    dataset = resource.export(
+        Action.objects.select_related(
+            'contact', 'contact__company', 'contact__category',
+            'contact__type_guest', 'contact__producer', 'event',
+        ).all()
+    )
+    response = HttpResponse(
+        dataset.xlsx,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="actions.xlsx"'
     return response

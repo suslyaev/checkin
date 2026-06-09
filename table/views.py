@@ -5,6 +5,8 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 
+from event.models import STATUS_MODEL
+
 from .decorators import table_staff_required
 from .tabs import DEFAULT_TAB, get_tab, get_visible_tabs
 
@@ -41,7 +43,28 @@ def workspace_root(request):
 
 
 def _grid_configs():
+    status_values = {key: label for key, label in STATUS_MODEL}
     return {
+        'actions': {
+            'statusValues': status_values,
+            'columns': [
+                {'title': '', 'field': '_actions', 'width': 72, 'frozen': True},
+                {'title': 'ID', 'field': 'id', 'width': 60, 'visible': False},
+                {'title': 'Мероприятие', 'field': 'event', 'editor': 'autocomplete', 'ref': 'event', 'width': 180},
+                {'title': 'Фамилия', 'field': 'last_name', 'editor': 'input', 'width': 130},
+                {'title': 'Имя', 'field': 'first_name', 'editor': 'input', 'width': 110},
+                {'title': 'Отчество', 'field': 'middle_name', 'editor': 'input', 'width': 120},
+                {'title': 'Никнейм', 'field': 'nickname', 'editor': 'input', 'width': 110},
+                {'title': 'Компания', 'field': 'company', 'editor': 'autocomplete', 'ref': 'company', 'width': 140},
+                {'title': 'Категория', 'field': 'category', 'editor': 'autocomplete', 'ref': 'category', 'width': 120},
+                {'title': 'Тип гостя', 'field': 'type_guest', 'editor': 'autocomplete', 'ref': 'type_guest', 'width': 120},
+                {'title': 'Продюсер', 'field': 'producer', 'editor': 'autocomplete', 'ref': 'producer', 'width': 130},
+                {'title': 'Статус', 'field': 'action_type', 'editor': 'status', 'width': 130},
+                {'title': 'Комментарий', 'field': 'comment', 'editor': 'input', 'width': 180},
+                {'title': 'Обновлено', 'field': 'update_date', 'editor': False, 'width': 130},
+            ],
+            'exportUrl': '/table/api/actions/export/',
+        },
         'contacts': {
             'columns': [
                 {'title': '', 'field': '_actions', 'width': 72, 'frozen': True},

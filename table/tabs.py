@@ -2,6 +2,12 @@
 
 TABS = [
     {
+        'id': 'actions',
+        'label': 'Действия',
+        'permission': 'event.view_action',
+        'dataset': 'actions',
+    },
+    {
         'id': 'contacts',
         'label': 'Люди',
         'permission': 'event.view_contact',
@@ -33,7 +39,7 @@ TABS = [
     },
 ]
 
-DEFAULT_TAB = 'contacts'
+DEFAULT_TAB = 'actions'
 
 
 def get_visible_tabs(user):

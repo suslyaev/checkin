@@ -12,18 +12,54 @@
     </div>
     <aside class="zt-toolbar" aria-label="Панель действий">
       <a class="zt-logo" href="{% url 'table:workspace_root' %}" title="Attendly Table">AT</a>
+
+      <button type="button" class="zt-btn" id="btn-filter" title="Фильтр" aria-label="Фильтр">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+      </button>
+      <button type="button" class="zt-btn" id="btn-columns" title="Колонки" aria-label="Колонки">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v16H4V4zm10 0h6v16h-6V4z"/></svg>
+      </button>
+      <button type="button" class="zt-btn" id="btn-sync" title="Синхронизировать с сервером" aria-label="Синхронизировать">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.96-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.96.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+      </button>
+      <button type="button" class="zt-btn" id="btn-add-row" title="Добавить запись" aria-label="Добавить">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+      </button>
+      <button type="button" class="zt-btn" id="btn-undo" title="Отменить последнее действие" aria-label="Отменить последнее" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 8c-2.65 0-5.05 1.1-6.8 2.85L3 7v9h9l-2.85-2.85A7.96 7.96 0 0 1 12.5 10c1.77 0 3.4.58 4.73 1.55l1.46-1.46A9.96 9.96 0 0 0 12.5 8z"/></svg>
+      </button>
+
       <div class="zt-toolbar-sep" aria-hidden="true"></div>
-      <button type="button" class="zt-tool" id="btn-apply-row" title="Применить изменения" disabled>✓</button>
-      <button type="button" class="zt-tool" id="btn-cancel-row" title="Отменить изменения" disabled>↩</button>
-      <button type="button" class="zt-tool" id="btn-reload-row" title="Подтянуть с сервера" disabled>⤓</button>
+
+      <button type="button" class="zt-btn zt-btn-primary" id="btn-apply" title="Применить изменения" aria-label="Применить" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+      </button>
+      <button type="button" class="zt-btn" id="btn-cancel" title="Отменить все изменения" aria-label="Отменить изменения" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+      </button>
+
       <div class="zt-toolbar-sep" aria-hidden="true"></div>
-      <button type="button" class="zt-tool" id="btn-refresh" title="Обновить таблицу">↻</button>
-      <button type="button" class="zt-tool" id="btn-add-row" title="Добавить строку">+</button>
-      <button type="button" class="zt-tool" id="btn-save-all" title="Сохранить все изменения">💾</button>
-      <button type="button" class="zt-tool zt-tool-export" id="btn-export" title="Экспорт" hidden>⬇</button>
-      <a class="zt-tool" href="/admin/" title="Админка">⚙</a>
+
+      <button type="button" class="zt-btn" id="btn-export" title="Экспорт" aria-label="Экспорт" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67 2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+      </button>
+      <button type="button" class="zt-btn" id="btn-settings" title="Настройки таблицы" aria-label="Настройки">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.07 7.07 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96a.49.49 0 0 0-.59.22L2.71 8.04a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.13.22.39.3.59.22l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54A.49.49 0 0 0 10 22h4c.24 0 .45-.17.49-.42l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.22.09.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+      </button>
+      <a class="zt-btn" href="/admin/" title="Перейти в админку" aria-label="Админка">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+      </a>
     </aside>
   </div>
+
+  <div id="zt-columns-panel" class="zt-panel" hidden>
+    <div class="zt-panel-head">
+      <span>Колонки</span>
+      <button type="button" id="zt-columns-close" class="zt-panel-close" aria-label="Закрыть">×</button>
+    </div>
+    <div id="zt-columns-list" class="zt-panel-body"></div>
+  </div>
+
   <footer class="zt-footer">
     <nav class="zt-tabs" aria-label="Таблицы">
       {% for tab in tabs %}
@@ -36,6 +72,7 @@
     <div class="zt-footer-meta">
       <span class="zt-user">{{ user_label }}</span>
       <span id="footer-stats" class="zt-stats">Записей: —</span>
+      <span id="footer-dirty" class="zt-stats"></span>
     </div>
   </footer>
 </div>
@@ -49,8 +86,12 @@
     gridConfig: {{ grid_config_json|safe }},
     csrfToken: "{{ csrf_token }}",
     adminUrls: {
+      action: "/admin/event/action/{id}/change/",
       contact: "/admin/event/contact/{id}/change/",
       event: "/admin/event/moduleinstance/{id}/change/",
+      company: "/admin/event/companycontact/{id}/change/",
+      category: "/admin/event/categorycontact/{id}/change/",
+      type_guest: "/admin/event/typeguestcontact/{id}/change/",
     },
   };
 </script>
