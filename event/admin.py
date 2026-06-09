@@ -142,7 +142,7 @@ class CustomAdminSite(admin.AdminSite):
                         access_group['models'].append(model_dict[model_name])
 
         # Добавляем только непустые группы
-        for group in [upload_group, events_group, reference_group, access_group]:
+        for group in [events_group, reference_group, upload_group, access_group]:
             if group and group.get('models'):
                 custom_apps.append(group)
 

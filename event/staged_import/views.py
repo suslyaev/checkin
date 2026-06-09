@@ -111,7 +111,7 @@ def staged_contact_upload_view(request):
     context = {
         'title': 'Пошаговая загрузка людей',
         'form': form,
-        'template_url': reverse('admin:event_template_import_cont'),
+        'template_url': reverse('admin:event_contact_template_import_cont'),
         'step': 1,
     }
     return render(request, 'admin/event/staged_import/contact_upload.html', context)
