@@ -39,6 +39,59 @@
   let selectedRow = null;
   let activeSidePanel = null;
   let activeFilterQuery = '';
+  let switchingCell = false;
+  const DEBUG = localStorage.getItem('attendly_table_debug') === '1';
+
+  function dbg() {
+    if (!DEBUG) return;
+    const args = Array.prototype.slice.call(arguments);
+    args.unshift('[attendly-table]');
+    console.log.apply(console, args);
+  }
+
+  function installCellSwitchTracker() {
+    const el = document.getElementById('attendly-table');
+    if (!el || el.dataset.ztSwitchTracker) return;
+    el.dataset.ztSwitchTracker = '1';
+    el.addEventListener('mousedown', function (e) {
+      const targetCell = e.target.closest('.tabulator-cell');
+      const editing = el.querySelector('.tabulator-cell.tabulator-editing');
+      if (!editing || !targetCell) {
+        switchingCell = false;
+        dbg('mousedown: no switch', { hasEditing: !!editing, targetCell: !!targetCell });
+        return;
+      }
+      if (editing === targetCell || editing.contains(e.target)) {
+        switchingCell = false;
+        dbg('mousedown: same cell');
+        return;
+      }
+      switchingCell = true;
+      dbg('mousedown: switching cell', editing.getAttribute('tabulator-field'), '->', targetCell.getAttribute('tabulator-field'));
+    }, true);
+  }
+
+  function createEditorBlurHandler(opts) {
+    const getClosed = opts.getClosed;
+    const onCommit = opts.onCommit;
+    const onCleanup = opts.onCleanup || function () {};
+    const shouldDefer = opts.shouldDefer || function () { return false; };
+
+    return function () {
+      const wasSwitching = switchingCell;
+      switchingCell = false;
+      setTimeout(function () {
+        if (getClosed()) return;
+        if (shouldDefer()) {
+          dbg('blur: deferred');
+          return;
+        }
+        dbg(wasSwitching ? 'blur: switching commit' : 'blur: commit');
+        onCleanup();
+        onCommit();
+      }, 0);
+    };
+  }
 
   function setStatus(msg, type) {
     statusBar.textContent = msg || '';
@@ -141,11 +194,16 @@
 
       let closed = false;
 
+      function abort() {
+        closed = true;
+      }
+
+      cancel = wrapEditorCancel(cancel, abort);
+
       function finish() {
         if (closed) return;
         closed = true;
         success(fromDateTimeLocalValue(input.value));
-        onCellEditFinished(cell);
       }
 
       input.addEventListener('keydown', function (e) {
@@ -153,14 +211,18 @@
           e.preventDefault();
           finish();
         } else if (e.key === 'Escape') {
-          closed = true;
+          abort();
           cancel();
         }
       });
 
-      input.addEventListener('blur', function () {
-        setTimeout(finish, 120);
-      });
+      input.addEventListener('blur', createEditorBlurHandler({
+        getClosed: function () { return closed; },
+        onCommit: function () {
+          closed = true;
+          success(fromDateTimeLocalValue(input.value));
+        },
+      }));
 
       input.addEventListener('change', function () {
         finish();
@@ -190,11 +252,16 @@
 
       let closed = false;
 
+      function abort() {
+        closed = true;
+      }
+
+      cancel = wrapEditorCancel(cancel, abort);
+
       function finish() {
         if (closed) return;
         closed = true;
         success(input.value);
-        onCellEditFinished(cell);
       }
 
       input.addEventListener('keydown', function (e) {
@@ -202,14 +269,18 @@
           e.preventDefault();
           finish();
         } else if (e.key === 'Escape') {
-          closed = true;
+          abort();
           cancel();
         }
       });
 
-      input.addEventListener('blur', function () {
-        setTimeout(finish, 120);
-      });
+      input.addEventListener('blur', createEditorBlurHandler({
+        getClosed: function () { return closed; },
+        onCommit: function () {
+          closed = true;
+          success(input.value);
+        },
+      }));
 
       onRendered(function () {
         input.focus();
@@ -266,6 +337,13 @@
     return dropBtn;
   }
 
+  function wrapEditorCancel(cancel, abort) {
+    return function () {
+      abort();
+      cancel();
+    };
+  }
+
   function createAutocompleteEditor(field) {
     return function (cell, onRendered, success, cancel) {
       const wrap = document.createElement('div');
@@ -285,6 +363,14 @@
       let scrollParent = null;
       let scrollHandler = null;
 
+      function abort() {
+        if (closed) return;
+        closed = true;
+        removeList();
+        dbg('abort editor', field);
+      }
+
+      cancel = wrapEditorCancel(cancel, abort);
       function positionList() {
         const rect = input.getBoundingClientRect();
         listDiv.style.position = 'fixed';
@@ -326,8 +412,8 @@
         if (closed) return;
         closed = true;
         removeList();
+        dbg('finishEdit', field, value);
         success(value);
-        onCellEditFinished(cell);
       }
 
       function filterItems(items, query) {
@@ -420,25 +506,20 @@
           e.preventDefault();
           finishEdit(input.value);
         } else if (e.key === 'Escape') {
-          closed = true;
-          removeList();
           cancel();
         }
       });
 
-      function shouldDeferBlurFinish() {
-        const ae = document.activeElement;
-        if (!ae) return false;
-        return !!(ae.closest('.autocomplete-list') || ae.closest('.zt-cell-dropdown'));
-      }
-
-      input.addEventListener('blur', function () {
-        setTimeout(function () {
-          if (closed) return;
-          if (shouldDeferBlurFinish()) return;
-          finishEdit(input.value);
-        }, 120);
-      });
+      input.addEventListener('blur', createEditorBlurHandler({
+        getClosed: function () { return closed; },
+        onCommit: function () { finishEdit(input.value); },
+        onCleanup: function () { if (!closed) removeList(); },
+        shouldDefer: function () {
+          const ae = document.activeElement;
+          if (!ae) return false;
+          return !!(ae.closest('.autocomplete-list') || ae.closest('.zt-cell-dropdown'));
+        },
+      }));
 
       onRendered(function () {
         const cellEl = cell.getElement();
@@ -1174,7 +1255,10 @@
       rowFormatter: function (row) { refreshRowStyle(row); },
     });
 
+    installCellSwitchTracker();
+
     table.on('cellEditing', function (cell) {
+      dbg('cellEditing', cell.getField(), cell.getRow().getPosition());
       cleanupOrphanAutocompleteLists();
       if (window.AttendlyHeaderFilters && window.AttendlyHeaderFilters.closeActivePopup) {
         window.AttendlyHeaderFilters.closeActivePopup();
@@ -1200,11 +1284,10 @@
         return;
       }
       selectRow(row);
-      setTimeout(function () {
-        if (!cell.isEditing()) {
-          cell.edit();
-        }
-      }, 0);
+      if (!cell.isEditing()) {
+        dbg('cellMouseDown -> edit', cell.getField(), row.getPosition());
+        cell.edit();
+      }
     });
 
     table.on('dataFiltered', function (filters, rows) {
