@@ -1,4 +1,3 @@
-from contextvars import ContextVar
 from django.contrib import admin, messages
 import event.services as service
 from .models import (
@@ -57,10 +56,6 @@ from django.contrib.admin.widgets import AutocompleteSelect
 
 # Импорт миксина для интерактивной таблицы гостей
 from .admin_guests_table_mixin import GuestsTableMixin
-
-_contact_duplicate_anchor_pk: ContextVar = ContextVar('contact_duplicate_anchor_pk', default=None)
-_presumed_duplicates_list_mode: ContextVar = ContextVar('presumed_duplicates_list_mode', default=False)
-
 
 class CustomAdminSite(admin.AdminSite):
 
@@ -514,12 +509,9 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
 
         anchor_pk = request.GET.get('duplicate_of')
         global_duplicates = request.GET.get('presumed_duplicates') == 'yes'
-        token = None
-        list_token = None
         if anchor_pk:
             try:
                 anchor_pk_int = int(anchor_pk)
-                token = _contact_duplicate_anchor_pk.set(anchor_pk_int)
                 anchor = Contact.objects.get(pk=anchor_pk_int)
                 count = duplicate_candidates_queryset(anchor).count()
                 clear_url = reverse('admin:event_contact_changelist')
@@ -543,7 +535,6 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
             except (Contact.DoesNotExist, ValueError, TypeError):
                 self.message_user(request, 'Карточка для поиска дублей не найдена.', level=messages.WARNING)
         elif global_duplicates:
-            list_token = _presumed_duplicates_list_mode.set(True)
             count = presumed_duplicates_queryset().count()
             clear_url = reverse('admin:event_contact_changelist')
             self.message_user(
@@ -559,19 +550,33 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 ),
                 level=messages.INFO,
             )
-        try:
-            return super().changelist_view(request, extra_context)
-        finally:
-            if token is not None:
-                _contact_duplicate_anchor_pk.reset(token)
-            if list_token is not None:
-                _presumed_duplicates_list_mode.reset(list_token)
+        return super().changelist_view(request, extra_context)
+
+    def _duplicate_match_hint_column(self, anchor=None, *, global_mode=False):
+        def column(obj):
+            if global_mode:
+                reasons = get_global_duplicate_reasons(obj)
+            elif anchor is not None:
+                reasons = get_duplicate_match_reasons(anchor, obj)
+            else:
+                return '—'
+            return ', '.join(reasons) if reasons else '—'
+
+        column.short_description = 'Совпадение'
+        return column
 
     def get_list_display(self, request):
         display = list(super().get_list_display(request))
-        if request.GET.get('duplicate_of') or request.GET.get('presumed_duplicates') == 'yes':
-            if 'duplicate_match_hint' not in display:
-                display.insert(1, 'duplicate_match_hint')
+        duplicate_of = request.GET.get('duplicate_of')
+        if duplicate_of:
+            try:
+                anchor = Contact.objects.get(pk=int(duplicate_of))
+            except (Contact.DoesNotExist, ValueError, TypeError):
+                anchor = None
+            if anchor is not None:
+                display.insert(1, self._duplicate_match_hint_column(anchor))
+        elif request.GET.get('presumed_duplicates') == 'yes':
+            display.insert(1, self._duplicate_match_hint_column(global_mode=True))
         return display
 
     def find_duplicates_button(self, obj):
@@ -589,22 +594,6 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
         )
 
     find_duplicates_button.short_description = 'Поиск дублей'
-
-    def duplicate_match_hint(self, obj):
-        anchor_pk = _contact_duplicate_anchor_pk.get()
-        if anchor_pk:
-            try:
-                anchor = Contact.objects.get(pk=anchor_pk)
-            except Contact.DoesNotExist:
-                return '—'
-            reasons = get_duplicate_match_reasons(anchor, obj)
-            return ', '.join(reasons) if reasons else '—'
-        if _presumed_duplicates_list_mode.get():
-            reasons = get_global_duplicate_reasons(obj)
-            return ', '.join(reasons) if reasons else '—'
-        return '—'
-
-    duplicate_match_hint.short_description = 'Совпадение'
 
     @admin.action(description='Объединить дубли')
     def merge_duplicates_action(self, request, queryset):
