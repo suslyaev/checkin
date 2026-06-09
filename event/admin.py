@@ -102,9 +102,10 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
-        # 4. Пошаговая загрузка
+        # 4. Пошаговая загрузка (временно скрыто в меню)
+        STAGED_IMPORT_MENU_ENABLED = False
         upload_group = None
-        if request.user.has_perm('event.add_contact'):
+        if STAGED_IMPORT_MENU_ENABLED and request.user.has_perm('event.add_contact'):
             upload_group = {
                 'name': 'Загрузка',
                 'app_label': 'event_upload',
