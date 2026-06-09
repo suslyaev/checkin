@@ -42,43 +42,58 @@ def workspace_root(request):
     return workspace(request, tab_id=None)
 
 
+def _filter_hint(example_where, columns):
+    fields = [
+        c['field'] for c in columns
+        if c.get('field') and c['field'] not in ('_actions',)
+    ]
+    return {
+        'filterExample': f'SELECT * FROM rows WHERE {example_where}',
+        'filterFields': fields,
+    }
+
+
 def _grid_configs():
     status_values = {key: label for key, label in STATUS_MODEL}
+    actions_columns = [
+        {'title': '', 'field': '_actions', 'width': 72, 'frozen': True},
+        {'title': 'ID', 'field': 'id', 'width': 60, 'visible': False},
+        {'title': 'Мероприятие', 'field': 'event', 'editor': 'autocomplete', 'ref': 'event', 'width': 180},
+        {'title': 'Фамилия', 'field': 'last_name', 'editor': 'input', 'width': 130},
+        {'title': 'Имя', 'field': 'first_name', 'editor': 'input', 'width': 110},
+        {'title': 'Отчество', 'field': 'middle_name', 'editor': 'input', 'width': 120},
+        {'title': 'Никнейм', 'field': 'nickname', 'editor': 'input', 'width': 110},
+        {'title': 'Компания', 'field': 'company', 'editor': 'autocomplete', 'ref': 'company', 'width': 140},
+        {'title': 'Категория', 'field': 'category', 'editor': 'autocomplete', 'ref': 'category', 'width': 120},
+        {'title': 'Тип гостя', 'field': 'type_guest', 'editor': 'autocomplete', 'ref': 'type_guest', 'width': 120},
+        {'title': 'Продюсер', 'field': 'producer', 'editor': 'autocomplete', 'ref': 'producer', 'width': 130},
+        {'title': 'Статус', 'field': 'action_type', 'editor': 'status', 'width': 130},
+        {'title': 'Комментарий', 'field': 'comment', 'editor': 'input', 'width': 180},
+        {'title': 'Обновлено', 'field': 'update_date', 'editor': False, 'width': 130},
+    ]
+    contacts_columns = [
+        {'title': '', 'field': '_actions', 'width': 72, 'frozen': True},
+        {'title': 'ID', 'field': 'id', 'width': 60, 'visible': False},
+        {'title': 'Фамилия', 'field': 'last_name', 'editor': 'input', 'width': 140},
+        {'title': 'Имя', 'field': 'first_name', 'editor': 'input', 'width': 120},
+        {'title': 'Отчество', 'field': 'middle_name', 'editor': 'input', 'width': 130},
+        {'title': 'Никнейм', 'field': 'nickname', 'editor': 'input', 'width': 120},
+        {'title': 'Компания', 'field': 'company', 'editor': 'autocomplete', 'ref': 'company', 'width': 150},
+        {'title': 'Категория', 'field': 'category', 'editor': 'autocomplete', 'ref': 'category', 'width': 130},
+        {'title': 'Тип гостя', 'field': 'type_guest', 'editor': 'autocomplete', 'ref': 'type_guest', 'width': 130},
+        {'title': 'Продюсер', 'field': 'producer', 'editor': 'autocomplete', 'ref': 'producer', 'width': 150},
+        {'title': 'Комментарий', 'field': 'comment', 'editor': 'input', 'width': 200},
+    ]
     return {
         'actions': {
             'statusValues': status_values,
-            'columns': [
-                {'title': '', 'field': '_actions', 'width': 72, 'frozen': True},
-                {'title': 'ID', 'field': 'id', 'width': 60, 'visible': False},
-                {'title': 'Мероприятие', 'field': 'event', 'editor': 'autocomplete', 'ref': 'event', 'width': 180},
-                {'title': 'Фамилия', 'field': 'last_name', 'editor': 'input', 'width': 130},
-                {'title': 'Имя', 'field': 'first_name', 'editor': 'input', 'width': 110},
-                {'title': 'Отчество', 'field': 'middle_name', 'editor': 'input', 'width': 120},
-                {'title': 'Никнейм', 'field': 'nickname', 'editor': 'input', 'width': 110},
-                {'title': 'Компания', 'field': 'company', 'editor': 'autocomplete', 'ref': 'company', 'width': 140},
-                {'title': 'Категория', 'field': 'category', 'editor': 'autocomplete', 'ref': 'category', 'width': 120},
-                {'title': 'Тип гостя', 'field': 'type_guest', 'editor': 'autocomplete', 'ref': 'type_guest', 'width': 120},
-                {'title': 'Продюсер', 'field': 'producer', 'editor': 'autocomplete', 'ref': 'producer', 'width': 130},
-                {'title': 'Статус', 'field': 'action_type', 'editor': 'status', 'width': 130},
-                {'title': 'Комментарий', 'field': 'comment', 'editor': 'input', 'width': 180},
-                {'title': 'Обновлено', 'field': 'update_date', 'editor': False, 'width': 130},
-            ],
+            'columns': actions_columns,
+            **_filter_hint("last_name LIKE '%Иванов%' AND action_type = 'registered'", actions_columns),
             'exportUrl': '/table/api/actions/export/',
         },
         'contacts': {
-            'columns': [
-                {'title': '', 'field': '_actions', 'width': 72, 'frozen': True},
-                {'title': 'ID', 'field': 'id', 'width': 60, 'visible': False},
-                {'title': 'Фамилия', 'field': 'last_name', 'editor': 'input', 'width': 140},
-                {'title': 'Имя', 'field': 'first_name', 'editor': 'input', 'width': 120},
-                {'title': 'Отчество', 'field': 'middle_name', 'editor': 'input', 'width': 130},
-                {'title': 'Никнейм', 'field': 'nickname', 'editor': 'input', 'width': 120},
-                {'title': 'Компания', 'field': 'company', 'editor': 'autocomplete', 'ref': 'company', 'width': 150},
-                {'title': 'Категория', 'field': 'category', 'editor': 'autocomplete', 'ref': 'category', 'width': 130},
-                {'title': 'Тип гостя', 'field': 'type_guest', 'editor': 'autocomplete', 'ref': 'type_guest', 'width': 130},
-                {'title': 'Продюсер', 'field': 'producer', 'editor': 'autocomplete', 'ref': 'producer', 'width': 150},
-                {'title': 'Комментарий', 'field': 'comment', 'editor': 'input', 'width': 200},
-            ],
+            'columns': contacts_columns,
+            **_filter_hint("last_name LIKE '%Иванов%' AND company LIKE '%Яндекс%'", contacts_columns),
             'exportUrl': '/table/api/contacts/export/',
         },
         'events': {
@@ -91,6 +106,9 @@ def _grid_configs():
                 {'title': 'Окончание', 'field': 'date_end', 'editor': False, 'width': 150},
                 {'title': 'Видимость', 'field': 'is_visible', 'editor': 'list', 'editorParams': {'values': ['Да', 'Нет']}, 'width': 100},
             ],
+            **_filter_hint("name LIKE '%конф%'", [
+                {'field': 'name'}, {'field': 'address'}, {'field': 'is_visible'},
+            ]),
         },
         'companies': {
             'columns': [
@@ -99,6 +117,7 @@ def _grid_configs():
                 {'title': 'Название', 'field': 'name', 'editor': 'input', 'width': 220},
                 {'title': 'Описание', 'field': 'comment', 'editor': 'input', 'width': 260},
             ],
+            **_filter_hint("name LIKE '%ООО%'", [{'field': 'name'}, {'field': 'comment'}]),
         },
         'categories': {
             'columns': [
@@ -107,6 +126,7 @@ def _grid_configs():
                 {'title': 'Название', 'field': 'name', 'editor': 'input', 'width': 220},
                 {'title': 'Описание', 'field': 'comment', 'editor': 'input', 'width': 260},
             ],
+            **_filter_hint("name LIKE '%VIP%'", [{'field': 'name'}, {'field': 'comment'}]),
         },
         'type_guests': {
             'columns': [
@@ -115,5 +135,6 @@ def _grid_configs():
                 {'title': 'Название', 'field': 'name', 'editor': 'input', 'width': 220},
                 {'title': 'Описание', 'field': 'comment', 'editor': 'input', 'width': 260},
             ],
+            **_filter_hint("name LIKE '%спикер%'", [{'field': 'name'}, {'field': 'comment'}]),
         },
     }

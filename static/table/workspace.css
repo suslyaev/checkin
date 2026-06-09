@@ -110,6 +110,58 @@ body.zt-body {
   background-color: #fff8e6 !important;
 }
 
+.tabulator-row.zt-row-pending-delete .tabulator-cell {
+  background-color: #fde8e8 !important;
+}
+
+.tabulator-row.zt-row-pending-delete.tabulator-selected .tabulator-cell {
+  background-color: #f9d4d4 !important;
+}
+
+.zt-cell-editor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.zt-cell-editor input {
+  width: 100%;
+  height: 100%;
+  padding: 4px 22px 4px 6px;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  font: inherit;
+  background: transparent;
+}
+
+.zt-cell-clear {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zt-cell-clear:hover {
+  background: #eef1f5;
+  color: #333;
+}
+
 .tabulator-row.tabulator-selected:not(.zt-row-dirty) .tabulator-cell {
   background-color: #eef4fb !important;
 }
@@ -225,50 +277,178 @@ body.zt-body {
   margin: 4px 0;
 }
 
-.zt-panel {
-  position: absolute;
-  top: 56px;
-  right: 60px;
-  width: 220px;
-  background: #fff;
-  border: 1px solid #d0d5dd;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: 200;
+.zt-drawer {
+  width: 300px;
+  flex-shrink: 0;
+  background: #f7f8fa;
+  border-left: 1px solid #d8dce2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.zt-panel-head {
+.zt-drawer-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.zt-drawer-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid #e8eaed;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e5ea;
   font-weight: 600;
   font-size: 13px;
+  background: #fff;
+  flex-shrink: 0;
 }
 
-.zt-panel-close {
+.zt-drawer-badge {
+  font-weight: 500;
+  font-size: 12px;
+  color: #666;
+}
+
+.zt-drawer-close {
   border: none;
   background: none;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   color: #666;
   line-height: 1;
+  padding: 0 4px;
 }
 
-.zt-panel-body {
+.zt-drawer-search-wrap {
   padding: 8px 12px;
-  max-height: 320px;
-  overflow-y: auto;
+  background: #fff;
+  border-bottom: 1px solid #e8eaed;
+  flex-shrink: 0;
 }
 
-.zt-col-toggle {
+.zt-drawer-search {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.zt-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  background: #fff;
+}
+
+.zt-drawer-foot {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid #e2e5ea;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.zt-drawer-foot button {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  background: #f7f8fa;
+  cursor: pointer;
+}
+
+.zt-drawer-foot button:hover {
+  background: #fff;
+}
+
+.zt-drawer-foot .zt-btn-accent {
+  background: #3d7ea6;
+  border-color: #3d7ea6;
+  color: #fff;
+}
+
+.zt-drawer-foot .zt-btn-accent:hover {
+  background: #356d91;
+}
+
+.zt-col-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
-  font-size: 13px;
+  padding: 6px 12px;
+  cursor: default;
+}
+
+.zt-col-item:hover {
+  background: #f3f5f8;
+}
+
+.zt-col-eye {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+  color: #3d7ea6;
+}
+
+.zt-col-eye.is-hidden {
+  color: #aaa;
+}
+
+.zt-col-eye svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.zt-col-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zt-filter-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zt-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+
+.zt-filter-query {
+  width: 100%;
+  min-height: 140px;
+  padding: 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.zt-filter-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
 }
 
 .zt-footer {

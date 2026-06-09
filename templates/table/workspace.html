@@ -10,6 +10,39 @@
       <div id="status-bar" class="zt-status-bar"></div>
       <div id="attendly-table"></div>
     </div>
+    <aside class="zt-drawer" id="zt-side-drawer" hidden>
+      <div id="zt-panel-columns" class="zt-drawer-panel" hidden>
+        <div class="zt-drawer-head">
+          <span>Колонки</span>
+          <button type="button" class="zt-drawer-close" data-close-drawer aria-label="Закрыть">×</button>
+        </div>
+        <div class="zt-drawer-search-wrap">
+          <input type="search" id="zt-columns-search" class="zt-drawer-search" placeholder="Поиск колонок…">
+        </div>
+        <div id="zt-columns-list" class="zt-drawer-body"></div>
+        <div class="zt-drawer-foot">
+          <button type="button" id="zt-columns-show-all">Показать все</button>
+          <button type="button" id="zt-columns-hide-all">Скрыть все</button>
+          <button type="button" id="zt-columns-reset">Сбросить</button>
+        </div>
+      </div>
+      <div id="zt-panel-filter" class="zt-drawer-panel" hidden>
+        <div class="zt-drawer-head">
+          <span>Фильтр</span>
+          <span id="zt-filter-count" class="zt-drawer-badge">Найдено: —</span>
+        </div>
+        <div class="zt-drawer-body zt-filter-body">
+          <label class="zt-filter-label" for="zt-filter-query">SELECT-запрос</label>
+          <textarea id="zt-filter-query" class="zt-filter-query" rows="8" spellcheck="false"></textarea>
+          <p id="zt-filter-fields" class="zt-filter-hint"></p>
+        </div>
+        <div class="zt-drawer-foot">
+          <button type="button" id="zt-filter-reset">Сбросить</button>
+          <button type="button" id="zt-filter-apply" class="zt-btn-accent">Применить</button>
+        </div>
+      </div>
+    </aside>
+
     <aside class="zt-toolbar" aria-label="Панель действий">
       <a class="zt-logo" href="{% url 'table:workspace_root' %}" title="Attendly Table">AT</a>
 
@@ -52,14 +85,6 @@
     </aside>
   </div>
 
-  <div id="zt-columns-panel" class="zt-panel" hidden>
-    <div class="zt-panel-head">
-      <span>Колонки</span>
-      <button type="button" id="zt-columns-close" class="zt-panel-close" aria-label="Закрыть">×</button>
-    </div>
-    <div id="zt-columns-list" class="zt-panel-body"></div>
-  </div>
-
   <footer class="zt-footer">
     <nav class="zt-tabs" aria-label="Таблицы">
       {% for tab in tabs %}
@@ -72,6 +97,7 @@
     <div class="zt-footer-meta">
       <span class="zt-user">{{ user_label }}</span>
       <span id="footer-stats" class="zt-stats">Записей: —</span>
+      <span id="footer-filtered" class="zt-stats"></span>
       <span id="footer-dirty" class="zt-stats"></span>
     </div>
   </footer>
@@ -95,5 +121,6 @@
     },
   };
 </script>
+<script src="{% static 'table/query_filter.js' %}"></script>
 <script src="{% static 'table/workspace.js' %}"></script>
 {% endblock %}

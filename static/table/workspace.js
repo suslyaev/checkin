@@ -14,17 +14,31 @@
   const btnCancel = document.getElementById('btn-cancel');
   const btnExport = document.getElementById('btn-export');
   const btnSettings = document.getElementById('btn-settings');
-  const columnsPanel = document.getElementById('zt-columns-panel');
+  const sideDrawer = document.getElementById('zt-side-drawer');
+  const panelColumns = document.getElementById('zt-panel-columns');
+  const panelFilter = document.getElementById('zt-panel-filter');
   const columnsList = document.getElementById('zt-columns-list');
-  const columnsClose = document.getElementById('zt-columns-close');
+  const columnsSearch = document.getElementById('zt-columns-search');
+  const btnColumnsShowAll = document.getElementById('zt-columns-show-all');
+  const btnColumnsHideAll = document.getElementById('zt-columns-hide-all');
+  const btnColumnsReset = document.getElementById('zt-columns-reset');
+  const filterQuery = document.getElementById('zt-filter-query');
+  const filterFieldsHint = document.getElementById('zt-filter-fields');
+  const filterCount = document.getElementById('zt-filter-count');
+  const footerFiltered = document.getElementById('footer-filtered');
+  const btnFilterApply = document.getElementById('zt-filter-apply');
+  const btnFilterReset = document.getElementById('zt-filter-reset');
 
   const dirtyRows = new Set();
+  const pendingDeleteRows = new Set();
   const rowSnapshots = new Map();
+  const columnDefaults = new Map();
   const autocompleteCache = {};
   const undoStack = [];
   let table = null;
   let selectedRow = null;
-  let filtersEnabled = false;
+  let activeSidePanel = null;
+  let activeFilterQuery = '';
 
   function setStatus(msg, type) {
     statusBar.textContent = msg || '';
@@ -61,9 +75,16 @@
 
   function rowHasChanges(row) {
     const key = row.getData()._key;
+    if (pendingDeleteRows.has(key)) return true;
     const snap = rowSnapshots.get(key);
     if (!snap) return false;
     return JSON.stringify(cleanRowData(row.getData())) !== JSON.stringify(snap);
+  }
+
+  function pendingChangeCount() {
+    const keys = new Set(dirtyRows);
+    pendingDeleteRows.forEach(function (k) { keys.add(k); });
+    return keys.size;
   }
 
   function getRefFields() {
@@ -72,6 +93,63 @@
       if (col.ref) refs.push(col.ref);
     });
     return refs;
+  }
+
+  function attachClearButton(wrap, input) {
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'zt-cell-clear';
+    clearBtn.textContent = '×';
+    clearBtn.title = 'Очистить';
+    clearBtn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      input.value = '';
+      input.focus();
+    });
+    wrap.appendChild(clearBtn);
+    return clearBtn;
+  }
+
+  function createTextInputEditor() {
+    return function (cell, onRendered, success, cancel) {
+      const wrap = document.createElement('div');
+      wrap.className = 'zt-cell-editor';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = cell.getValue() || '';
+      wrap.appendChild(input);
+      attachClearButton(wrap, input);
+
+      let closed = false;
+
+      function finish() {
+        if (closed) return;
+        closed = true;
+        success(input.value);
+        onCellEditFinished(cell);
+      }
+
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish();
+        } else if (e.key === 'Escape') {
+          closed = true;
+          cancel();
+        }
+      });
+
+      input.addEventListener('blur', function () {
+        setTimeout(finish, 120);
+      });
+
+      onRendered(function () {
+        input.focus();
+        input.select();
+      });
+
+      return wrap;
+    };
   }
 
   async function fetchAutocomplete(field, term) {
@@ -106,14 +184,13 @@
 
   function createAutocompleteEditor(field) {
     return function (cell, onRendered, success, cancel) {
+      const wrap = document.createElement('div');
+      wrap.className = 'zt-cell-editor';
       const input = document.createElement('input');
       input.type = 'text';
       input.value = cell.getValue() || '';
-      input.style.width = '100%';
-      input.style.padding = '4px 6px';
-      input.style.boxSizing = 'border-box';
-      input.style.border = 'none';
-      input.style.outline = 'none';
+      wrap.appendChild(input);
+      attachClearButton(wrap, input);
 
       const listDiv = document.createElement('div');
       listDiv.className = 'autocomplete-list';
@@ -224,7 +301,7 @@
         });
       });
 
-      return input;
+      return wrap;
     };
   }
 
@@ -239,20 +316,29 @@
   }
 
   function updateToolbar() {
-    const hasDirty = dirtyRows.size > 0;
-    btnApply.disabled = !hasDirty;
-    btnCancel.disabled = !hasDirty;
+    const count = pendingChangeCount();
+    const hasPending = count > 0;
+    btnApply.disabled = !hasPending;
+    btnCancel.disabled = !hasPending;
     btnUndo.disabled = undoStack.length === 0;
-    btnApply.classList.toggle('is-active', hasDirty);
-    btnCancel.classList.toggle('is-active', hasDirty);
-    btnFilter.classList.toggle('is-active', filtersEnabled);
-    footerDirty.textContent = hasDirty ? ('Изменено: ' + dirtyRows.size) : '';
+    btnApply.classList.toggle('is-active', hasPending);
+    btnCancel.classList.toggle('is-active', hasPending);
+    btnFilter.classList.toggle('is-active', activeSidePanel === 'filter' || !!activeFilterQuery);
+    btnColumns.classList.toggle('is-active', activeSidePanel === 'columns');
+    const parts = [];
+    if (dirtyRows.size) parts.push('изменено: ' + dirtyRows.size);
+    if (pendingDeleteRows.size) parts.push('к удалению: ' + pendingDeleteRows.size);
+    footerDirty.textContent = parts.length ? parts.join(', ') : '';
   }
 
   function refreshRowStyle(row) {
     const el = row.getElement();
     if (!el) return;
-    el.classList.toggle('zt-row-dirty', dirtyRows.has(row.getData()._key));
+    const key = row.getData()._key;
+    const isDelete = pendingDeleteRows.has(key);
+    const isDirty = dirtyRows.has(key) && !isDelete;
+    el.classList.toggle('zt-row-pending-delete', isDelete);
+    el.classList.toggle('zt-row-dirty', isDirty);
   }
 
   function pushUndo(action) {
@@ -263,6 +349,7 @@
 
   function markDirty(row) {
     const key = row.getData()._key;
+    if (pendingDeleteRows.has(key)) return;
     if (!dirtyRows.has(key)) {
       pushUndo({ type: 'row', key: key, snapshot: Object.assign({}, rowSnapshots.get(key)) });
     }
@@ -272,7 +359,9 @@
   }
 
   function clearDirty(row) {
-    dirtyRows.delete(row.getData()._key);
+    const key = row.getData()._key;
+    dirtyRows.delete(key);
+    pendingDeleteRows.delete(key);
     storeSnapshot(row);
     refreshRowStyle(row);
     updateToolbar();
@@ -281,6 +370,7 @@
   function onCellEditFinished(cell) {
     const row = cell.getRow();
     selectRow(row);
+    if (pendingDeleteRows.has(row.getData()._key)) return;
     if (rowHasChanges(row)) {
       markDirty(row);
     } else if (dirtyRows.has(row.getData()._key)) {
@@ -302,6 +392,7 @@
   function actionsFormatter(cell) {
     const row = cell.getRow();
     const data = row.getData();
+    const key = data._key;
     const wrap = document.createElement('div');
     wrap.className = 'zt-row-actions';
 
@@ -322,11 +413,11 @@
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'zt-row-btn is-delete';
-    delBtn.title = 'Удалить';
+    delBtn.title = pendingDeleteRows.has(key) ? 'Снять пометку удаления' : 'Пометить к удалению';
     delBtn.textContent = '✕';
     delBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      deleteRow(row);
+      toggleDeleteRow(row);
     });
 
     wrap.appendChild(adminBtn);
@@ -370,7 +461,7 @@
         def.editor = 'list';
         def.editorParams = normalizeListEditorParams(col.editorParams);
       } else if (col.editor === 'input' || col.editor === true) {
-        def.editor = 'input';
+        def.editor = createTextInputEditor();
       } else {
         def.editor = false;
       }
@@ -397,8 +488,18 @@
     if (row) row.select();
   }
 
+  function rekeyRow(row, oldKey, saved) {
+    saved._key = 'id:' + saved.id;
+    dirtyRows.delete(oldKey);
+    pendingDeleteRows.delete(oldKey);
+    rowSnapshots.delete(oldKey);
+    row.update(saved);
+    rowSnapshots.set(saved._key, cleanRowData(saved));
+    return saved._key;
+  }
+
   async function loadData() {
-    if (dirtyRows.size && !confirm('Есть несохранённые изменения. Синхронизировать и потерять их?')) {
+    if (pendingChangeCount() && !confirm('Есть несохранённые изменения. Синхронизировать и потерять их?')) {
       return;
     }
     setStatus('Синхронизация…');
@@ -410,12 +511,18 @@
       return;
     }
     dirtyRows.clear();
+    pendingDeleteRows.clear();
     undoStack.length = 0;
     selectedRow = null;
+    activeFilterQuery = '';
+    if (filterQuery) filterQuery.value = '';
     const rows = prepareRows(payload.data || []);
     await table.setData(rows);
+    table.clearFilter();
     snapshotAllRows();
+    captureColumnDefaults();
     table.getRows().forEach(refreshRowStyle);
+    updateFilterStats(table.getDataCount('active'));
     footerStats.textContent = 'Записей: ' + (payload.total ?? rows.length);
     setStatus('Синхронизировано', 'ok');
     setTimeout(function () { setStatus(''); }, 1500);
@@ -424,7 +531,7 @@
 
   async function saveRow(row) {
     const data = cleanRowData(row.getData());
-    const key = row.getData()._key;
+    const oldKey = row.getData()._key;
     setStatus('Сохранение…');
     const res = await fetch(apiUrl(cfg.dataset + '/save/'), {
       method: 'POST',
@@ -436,27 +543,71 @@
       setStatus(payload.error || 'Ошибка сохранения', 'error');
       return false;
     }
-    const saved = payload.row;
-    saved._key = 'id:' + saved.id;
-    if (key !== saved._key) {
-      dirtyRows.delete(key);
-      rowSnapshots.delete(key);
-    }
-    row.update(saved);
+    rekeyRow(row, oldKey, payload.row);
     clearDirty(row);
+    row.reformat();
+    return true;
+  }
+
+  async function executeDelete(row) {
+    const data = row.getData();
+    const key = data._key;
+
+    if (!data.id) {
+      dirtyRows.delete(key);
+      pendingDeleteRows.delete(key);
+      rowSnapshots.delete(key);
+      if (selectedRow === row) selectedRow = null;
+      row.delete();
+      return true;
+    }
+
+    const res = await fetch(apiUrl(cfg.dataset + '/delete/'), {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({ id: data.id }),
+    });
+    if (!res.ok) {
+      const payload = await res.json();
+      setStatus(payload.error || 'Ошибка удаления', 'error');
+      return false;
+    }
+    dirtyRows.delete(key);
+    pendingDeleteRows.delete(key);
+    rowSnapshots.delete(key);
+    if (selectedRow === row) selectedRow = null;
+    row.delete();
     return true;
   }
 
   async function applyAllChanges() {
-    const rows = table.getRows().filter(function (r) { return dirtyRows.has(r.getData()._key); });
+    const rows = table.getRows().filter(function (r) {
+      const key = r.getData()._key;
+      return dirtyRows.has(key) || pendingDeleteRows.has(key);
+    });
     if (!rows.length) {
       setStatus('Нет несохранённых изменений');
       return;
     }
+
+    const deleteCount = rows.filter(function (r) {
+      return pendingDeleteRows.has(r.getData()._key);
+    }).length;
+    if (deleteCount && !confirm('Применить изменения? Будет удалено записей: ' + deleteCount)) {
+      return;
+    }
+
     for (const row of rows) {
-      const ok = await saveRow(row);
+      const key = row.getData()._key;
+      let ok;
+      if (pendingDeleteRows.has(key)) {
+        ok = await executeDelete(row);
+      } else {
+        ok = await saveRow(row);
+      }
       if (!ok) return;
     }
+
     undoStack.length = 0;
     updateToolbar();
     setStatus('Изменения применены', 'ok');
@@ -465,25 +616,44 @@
 
   function cancelRow(row) {
     const data = row.getData();
-    const snap = rowSnapshots.get(data._key);
+    const key = data._key;
+    const snap = rowSnapshots.get(key);
+
+    if (pendingDeleteRows.has(key)) {
+      pendingDeleteRows.delete(key);
+      if (snap && rowHasChanges(row)) {
+        dirtyRows.add(key);
+      } else {
+        dirtyRows.delete(key);
+      }
+      refreshRowStyle(row);
+      row.reformat();
+      updateToolbar();
+      return;
+    }
+
     if (!data.id) {
-      dirtyRows.delete(data._key);
-      rowSnapshots.delete(data._key);
+      dirtyRows.delete(key);
+      pendingDeleteRows.delete(key);
+      rowSnapshots.delete(key);
       if (selectedRow === row) selectedRow = null;
       row.delete();
       updateToolbar();
       return;
     }
-    if (snap) row.update(Object.assign({}, snap, { _key: data._key }));
+
+    if (snap) row.update(Object.assign({}, snap, { _key: key }));
     clearDirty(row);
+    row.reformat();
   }
 
   function cancelAllChanges() {
-    if (!dirtyRows.size) return;
-    if (dirtyRows.size > 1 && !confirm('Отменить все несохранённые изменения (' + dirtyRows.size + ')?')) {
+    if (!pendingChangeCount()) return;
+    if (pendingChangeCount() > 1 && !confirm('Отменить все несохранённые изменения?')) {
       return;
     }
-    const keys = Array.from(dirtyRows);
+    const keys = new Set(dirtyRows);
+    pendingDeleteRows.forEach(function (k) { keys.add(k); });
     keys.forEach(function (key) {
       const row = findRowByKey(key);
       if (row) cancelRow(row);
@@ -502,46 +672,56 @@
       if (!row) { updateToolbar(); return; }
       if (!action.snapshot || !action.snapshot.id) {
         dirtyRows.delete(action.key);
+        pendingDeleteRows.delete(action.key);
         rowSnapshots.delete(action.key);
         if (selectedRow === row) selectedRow = null;
         row.delete();
       } else {
         row.update(Object.assign({}, action.snapshot, { _key: action.key }));
         clearDirty(row);
+        row.reformat();
       }
     } else if (action.type === 'add') {
       const row = findRowByKey(action.key);
       if (row) cancelRow(row);
+    } else if (action.type === 'delete') {
+      const row = findRowByKey(action.key);
+      if (row) {
+        pendingDeleteRows.delete(action.key);
+        dirtyRows.delete(action.key);
+        refreshRowStyle(row);
+        row.reformat();
+      }
     }
     updateToolbar();
     setStatus('Действие отменено');
     setTimeout(function () { setStatus(''); }, 1500);
   }
 
-  async function deleteRow(row) {
-    const data = row.getData();
-    if (!data.id) {
-      row.delete();
+  function toggleDeleteRow(row) {
+    const key = row.getData()._key;
+
+    if (pendingDeleteRows.has(key)) {
+      pendingDeleteRows.delete(key);
+      dirtyRows.delete(key);
+      refreshRowStyle(row);
+      row.reformat();
+      updateToolbar();
       return;
     }
-    if (!confirm('Удалить запись #' + data.id + '?')) return;
-    const res = await fetch(apiUrl(cfg.dataset + '/delete/'), {
-      method: 'POST',
-      headers: csrfHeaders(),
-      body: JSON.stringify({ id: data.id }),
-    });
-    if (!res.ok) {
-      const payload = await res.json();
-      setStatus(payload.error || 'Ошибка удаления', 'error');
-      return;
+
+    if (!dirtyRows.has(key)) {
+      pushUndo({ type: 'delete', key: key, snapshot: Object.assign({}, rowSnapshots.get(key)) });
+      if (!rowSnapshots.has(key)) storeSnapshot(row);
     }
-    dirtyRows.delete(data._key);
-    rowSnapshots.delete(data._key);
-    if (selectedRow === row) selectedRow = null;
-    row.delete();
+
+    pendingDeleteRows.add(key);
+    dirtyRows.add(key);
+    refreshRowStyle(row);
+    row.reformat();
     updateToolbar();
-    setStatus('Удалено', 'ok');
-    setTimeout(function () { setStatus(''); }, 2000);
+    setStatus('Строка помечена к удалению — нажмите «Применить»');
+    setTimeout(function () { setStatus(''); }, 2500);
   }
 
   function addEmptyRow() {
@@ -562,46 +742,178 @@
     });
   }
 
-  function toggleFilters() {
-    filtersEnabled = !filtersEnabled;
+  function captureColumnDefaults() {
+    columnDefaults.clear();
     table.getColumns().forEach(function (col) {
       const field = col.getField();
-      if (!field || field === '_actions' || field === 'id') return;
-      col.updateDefinition({ headerFilter: filtersEnabled ? 'input' : false });
+      if (!field) return;
+      columnDefaults.set(field, {
+        visible: col.getDefinition().visible !== false,
+        title: col.getDefinition().title || field,
+      });
     });
+  }
+
+  function closeSidePanel() {
+    activeSidePanel = null;
+    sideDrawer.hidden = true;
+    panelColumns.hidden = true;
+    panelFilter.hidden = true;
     updateToolbar();
   }
 
+  function openSidePanel(name) {
+    if (activeSidePanel === name) {
+      closeSidePanel();
+      return;
+    }
+    activeSidePanel = name;
+    sideDrawer.hidden = false;
+    panelColumns.hidden = name !== 'columns';
+    panelFilter.hidden = name !== 'filter';
+    if (name === 'columns') buildColumnsPanel();
+    if (name === 'filter') initFilterPanel();
+    updateToolbar();
+  }
+
+  function toggleColumnsPanel() {
+    openSidePanel('columns');
+  }
+
+  function toggleFilterPanel() {
+    openSidePanel('filter');
+  }
+
+  function initFilterPanel() {
+    if (!filterQuery) return;
+    if (!filterQuery.value && cfg.gridConfig.filterExample) {
+      filterQuery.placeholder = cfg.gridConfig.filterExample;
+    }
+    if (filterFieldsHint && cfg.gridConfig.filterFields) {
+      filterFieldsHint.textContent = 'Поля: ' + cfg.gridConfig.filterFields.join(', ');
+    }
+    updateFilterStats(table ? table.getDataCount('active') : 0);
+  }
+
+  function resolveFilterField(data, field) {
+    return data[field];
+  }
+
+  function updateFilterStats(visibleCount) {
+    const total = table ? table.getDataCount() : 0;
+    const text = 'Найдено: ' + visibleCount;
+    if (filterCount) filterCount.textContent = text;
+    if (footerFiltered) {
+      footerFiltered.textContent = activeFilterQuery ? text + ' / ' + total : '';
+    }
+  }
+
+  function normalizeFilterQuery(query) {
+    let q = query;
+    const labels = cfg.gridConfig.statusValues || {};
+    Object.keys(labels).forEach(function (key) {
+      const label = labels[key];
+      q = q.split("'" + label + "'").join("'" + key + "'");
+      q = q.split('"' + label + '"').join("'" + key + "'");
+    });
+    return q;
+  }
+
+  function applyQueryFilter() {
+    const query = filterQuery ? filterQuery.value.trim() : '';
+    activeFilterQuery = query;
+    if (!query) {
+      table.clearFilter();
+      updateFilterStats(table.getDataCount());
+      updateToolbar();
+      setStatus('Фильтр сброшен');
+      setTimeout(function () { setStatus(''); }, 1200);
+      return;
+    }
+    const compiled = window.AttendlyQueryFilter.compile(
+      normalizeFilterQuery(query),
+      resolveFilterField
+    );
+    if (!compiled) {
+      setStatus('Не удалось разобрать запрос. Используйте WHERE …', 'error');
+      return;
+    }
+    table.setFilter(function (data) {
+      return compiled(data);
+    });
+    updateFilterStats(table.getDataCount('active'));
+    updateToolbar();
+    setStatus('Фильтр применён', 'ok');
+    setTimeout(function () { setStatus(''); }, 1500);
+  }
+
+  function resetQueryFilter() {
+    activeFilterQuery = '';
+    if (filterQuery) filterQuery.value = '';
+    if (table) {
+      table.clearFilter();
+      updateFilterStats(table.getDataCount());
+    }
+    updateToolbar();
+    setStatus('Фильтр сброшен');
+    setTimeout(function () { setStatus(''); }, 1200);
+  }
+
   function buildColumnsPanel() {
+    if (!columnsList || !table) return;
+    const term = (columnsSearch && columnsSearch.value || '').toLowerCase();
     columnsList.innerHTML = '';
     table.getColumns().forEach(function (col) {
       const field = col.getField();
       if (!field || field === '_actions') return;
-      const label = document.createElement('label');
-      label.className = 'zt-col-toggle';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = col.isVisible();
-      cb.addEventListener('change', function () {
-        if (cb.checked) col.show(); else col.hide();
+      const title = col.getDefinition().title || field;
+      if (term && title.toLowerCase().indexOf(term) === -1 && field.toLowerCase().indexOf(term) === -1) {
+        return;
+      }
+      const item = document.createElement('div');
+      item.className = 'zt-col-item';
+      const eye = document.createElement('button');
+      eye.type = 'button';
+      eye.className = 'zt-col-eye' + (col.isVisible() ? ' is-visible' : ' is-hidden');
+      eye.title = col.isVisible() ? 'Скрыть колонку' : 'Показать колонку';
+      eye.innerHTML = col.isVisible()
+        ? '<svg viewBox="0 0 24 24"><path d="M12 5C7 5 2.7 8.1 1 12c1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M12 6c3 0 5.6 1.6 7.4 4-1 1.4-2.2 2.5-3.6 3.2l1.5 1.5c2-1.1 3.6-2.7 4.8-4.7C19.3 7.1 16 4 12 4c-1 0-2 .2-2.9.5l1.6 1.6C11.4 6 11.7 6 12 6zM2.7 2.7 1.3 4.1l2.2 2.2C2.7 7.7 1.7 9.7 1 12c1.7 3.9 6 7 11 7 1.6 0 3.1-.3 4.5-.9l2.7 2.7 1.4-1.4L2.7 2.7zM7.5 9.9l1.6 1.6c.1-.3.2-.6.2-1 0-1.1.9-2 2-2 .4 0 .7.1 1 .2l1.5 1.5c-.3-.8-1-1.4-1.9-1.4-1.1 0-2 .9-2 2 0 .2 0 .4.1.5z"/></svg>';
+      eye.addEventListener('click', function () {
+        if (col.isVisible()) col.hide(); else col.show();
+        buildColumnsPanel();
       });
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(col.getDefinition().title || field));
-      columnsList.appendChild(label);
+      const name = document.createElement('span');
+      name.className = 'zt-col-name';
+      name.textContent = title;
+      item.appendChild(eye);
+      item.appendChild(name);
+      columnsList.appendChild(item);
     });
   }
 
-  function toggleColumnsPanel() {
-    if (columnsPanel.hidden) {
-      buildColumnsPanel();
-      columnsPanel.hidden = false;
-    } else {
-      columnsPanel.hidden = true;
-    }
+  function setAllColumnsVisible(visible) {
+    table.getColumns().forEach(function (col) {
+      const field = col.getField();
+      if (!field || field === '_actions') return;
+      if (visible) col.show(); else col.hide();
+    });
+    buildColumnsPanel();
+  }
+
+  function resetColumnsVisibility() {
+    table.getColumns().forEach(function (col) {
+      const field = col.getField();
+      if (!field) return;
+      const def = columnDefaults.get(field);
+      if (!def) return;
+      if (def.visible) col.show(); else col.hide();
+    });
+    buildColumnsPanel();
   }
 
   function resetTableLayout() {
-    table.getColumns().forEach(function (col) { col.show(); });
+    resetColumnsVisibility();
     table.setLayout('fitDataStretch');
     setStatus('Настройки сброшены');
     setTimeout(function () { setStatus(''); }, 1500);
@@ -621,7 +933,7 @@
     table.on('cellEditing', function (cell) {
       const row = cell.getRow();
       selectRow(row);
-      if (!dirtyRows.has(row.getData()._key)) {
+      if (!dirtyRows.has(row.getData()._key) && !pendingDeleteRows.has(row.getData()._key)) {
         storeSnapshot(row);
       }
     });
@@ -635,12 +947,32 @@
       selectRow(row);
     });
 
+    table.on('dataFiltered', function (filters, rows) {
+      updateFilterStats(rows.length);
+    });
+
     loadData();
   }
 
-  btnFilter.addEventListener('click', toggleFilters);
-  btnColumns.addEventListener('click', toggleColumnsPanel);
-  columnsClose.addEventListener('click', function () { columnsPanel.hidden = true; });
+  btnFilter.addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggleFilterPanel();
+  });
+  btnColumns.addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggleColumnsPanel();
+  });
+  sideDrawer.querySelectorAll('[data-close-drawer]').forEach(function (btn) {
+    btn.addEventListener('click', closeSidePanel);
+  });
+  if (columnsSearch) {
+    columnsSearch.addEventListener('input', buildColumnsPanel);
+  }
+  btnColumnsShowAll.addEventListener('click', function () { setAllColumnsVisible(true); });
+  btnColumnsHideAll.addEventListener('click', function () { setAllColumnsVisible(false); });
+  btnColumnsReset.addEventListener('click', resetColumnsVisibility);
+  btnFilterApply.addEventListener('click', applyQueryFilter);
+  btnFilterReset.addEventListener('click', resetQueryFilter);
   btnSync.addEventListener('click', loadData);
   btnAdd.addEventListener('click', addEmptyRow);
   btnUndo.addEventListener('click', undoLastAction);
@@ -656,9 +988,10 @@
   }
 
   document.addEventListener('click', function (e) {
-    if (!columnsPanel.hidden && !columnsPanel.contains(e.target) && e.target !== btnColumns) {
-      columnsPanel.hidden = true;
-    }
+    if (!activeSidePanel) return;
+    if (sideDrawer.contains(e.target)) return;
+    if (btnColumns.contains(e.target) || btnFilter.contains(e.target)) return;
+    closeSidePanel();
   });
 
   initTable();
