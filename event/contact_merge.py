@@ -4,6 +4,17 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from .models import Action, CommunityMember, Contact, InfoContact
 
+def format_contact_merge_label(contact):
+    """Подпись карточки в форме объединения: ФИО, отчество, ник, id."""
+    parts = [contact.get_fio()]
+    if contact.middle_name:
+        parts.append(contact.middle_name)
+    if contact.nickname:
+        parts.append(f'«{contact.nickname}»')
+    parts.append(f'id: {contact.pk}')
+    return ', '.join(parts)
+
+
 ACTION_MERGE_PRIORITY = {
     'visited': 50,
     'registered': 40,

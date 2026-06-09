@@ -101,6 +101,7 @@
     <table class="merge-summary-table">
       <thead>
         <tr>
+          <th>ID</th>
           <th>ФИО</th>
           <th>Компания / категория</th>
           <th>Действий</th>
@@ -111,10 +112,9 @@
       <tbody>
         {% for row in contact_stats %}
           <tr>
+            <td>{{ row.contact.pk }}</td>
             <td>
-              <a href="{% url 'admin:event_contact_change' row.contact.pk %}">{{ row.contact.get_fio }}</a>
-              {% if row.contact.middle_name %}<br><span style="color:#666;">{{ row.contact.middle_name }}</span>{% endif %}
-              {% if row.contact.nickname %}<br>«{{ row.contact.nickname }}»{% endif %}
+              <a href="{% url 'admin:event_contact_change' row.contact.pk %}">{{ row.label }}</a>
             </td>
             <td>
               {{ row.contact.company|default:"—" }}<br>

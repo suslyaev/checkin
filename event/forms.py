@@ -9,6 +9,7 @@ from .models import (
     CategoryContact,
     TypeGuestContact,
 )
+from .contact_merge import format_contact_merge_label
 
 class CheckinOrCancelForm(forms.Form):
     _selected_action = forms.CharField(widget=forms.MultipleHiddenInput)
@@ -63,11 +64,12 @@ class ContactMergeForm(forms.Form):
         super().__init__(*args, **kwargs)
         contact_qs = Contact.objects.filter(pk__in=[c.pk for c in self.contacts])
         self.fields['primary_contact'].queryset = contact_qs
+        self.fields['primary_contact'].label_from_instance = format_contact_merge_label
 
         photo_choices = [('', 'Без фото')]
         for contact in self.contacts:
             if contact.photo:
-                photo_choices.append((str(contact.pk), contact.get_fio()))
+                photo_choices.append((str(contact.pk), format_contact_merge_label(contact)))
         self.fields['photo_source'].choices = photo_choices
 
         if not self.is_bound and self.contacts:
