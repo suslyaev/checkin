@@ -49,6 +49,11 @@
     console.log.apply(console, args);
   }
 
+  function cellIsEditing(cell) {
+    const el = cell.getElement();
+    return !!(el && el.classList.contains('tabulator-editing'));
+  }
+
   function installCellSwitchTracker() {
     const el = document.getElementById('attendly-table');
     if (!el || el.dataset.ztSwitchTracker) return;
@@ -1284,7 +1289,7 @@
         return;
       }
       selectRow(row);
-      if (!cell.isEditing()) {
+      if (!cellIsEditing(cell)) {
         dbg('cellMouseDown -> edit', cell.getField(), row.getPosition());
         cell.edit();
       }
