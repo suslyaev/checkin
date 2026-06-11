@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib import admin, messages
+from django.db import IntegrityError
 import event.services as service
 from .models import (
     CustomUser,
@@ -689,6 +690,13 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                     )
                 except ValueError as exc:
                     self.message_user(request, str(exc), level=messages.ERROR)
+                except IntegrityError:
+                    self.message_user(
+                        request,
+                        'Не удалось объединить: конфликт уникальных данных (ФИО или регистрация на мероприятие). '
+                        'Измените ФИО или обратитесь к администратору.',
+                        level=messages.ERROR,
+                    )
                 else:
                     change_url = reverse('admin:event_contact_change', args=[primary.pk])
                     self.message_user(
