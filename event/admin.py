@@ -359,6 +359,8 @@ class PresumedDuplicatesOnlyFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value() != 'yes' or request.GET.get('duplicate_of'):
             return queryset
+        if request.method == 'POST' and request.POST.get('action') == 'merge_duplicates_action':
+            return queryset
         pks = presumed_duplicates_queryset().values_list('pk', flat=True)
         return queryset.filter(pk__in=pks)
 
@@ -577,7 +579,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 )
             except (Contact.DoesNotExist, ValueError, TypeError):
                 self.message_user(request, 'Карточка для поиска дублей не найдена.', level=messages.WARNING)
-        elif global_duplicates:
+        elif global_duplicates and request.method != 'POST':
             count = presumed_duplicates_queryset().count()
             clear_url = reverse('admin:event_contact_changelist')
             self.message_user(

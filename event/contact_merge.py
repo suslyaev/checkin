@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from django.core.files.base import ContentFile
 from django.db import transaction
+from .contact_duplicates import invalidate_presumed_duplicates_cache
 from .models import Action, CommunityMember, Contact, InfoContact
 
 def format_contact_merge_label(contact):
@@ -168,4 +169,5 @@ def merge_contacts(primary, duplicates, field_values, photo_from_contact_id=None
         primary.photo = None
 
     primary.save()
+    invalidate_presumed_duplicates_cache()
     return len(duplicate_ids)

@@ -1,16 +1,24 @@
 """
 Поиск предположительных дублей контакта для списка в админке.
 """
-from django.db.models import Count, Q
+from django.core.cache import cache
+from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.functions import Length, Lower
 
 from .models import Contact, InfoContact
+
+DUPLICATE_IDS_CACHE_KEY = 'contact_presumed_duplicate_ids'
+DUPLICATE_IDS_CACHE_TTL = 300
 
 
 def _norm(value):
     if value is None:
         return ''
     return str(value).strip()
+
+
+def invalidate_presumed_duplicates_cache():
+    cache.delete(DUPLICATE_IDS_CACHE_KEY)
 
 
 def build_duplicate_candidates_q(contact, *, weak_last_name=False):
@@ -68,67 +76,60 @@ def duplicate_candidates_queryset(contact, *, weak_last_name=False):
     ).distinct()
 
 
-def _annotate_group_fields(qs, group_fields, *, min_field_length=None):
-    annotations = {f'{f}_l': Lower(f) for f in group_fields}
-    if min_field_length is not None and len(group_fields) == 1:
-        field = group_fields[0]
-        annotations[f'{field}_len'] = Length(field)
-    qs = qs.annotate(**annotations)
-    if min_field_length is not None and len(group_fields) == 1:
-        field = group_fields[0]
-        qs = qs.filter(**{f'{field}_len__gte': min_field_length})
-    return qs
-
-
 def _ids_from_grouped_contacts(group_fields, *, min_field_length=None):
-    """Контакты из групп, где по group_fields больше одной записи."""
-    ids = set()
-    base_qs = _annotate_group_fields(Contact.objects.all(), group_fields, min_field_length=min_field_length)
+    """Контакты из групп, где по group_fields больше одной непустой записи."""
+    annotations = {f'{f}_l': Lower(f) for f in group_fields}
+    non_empty = {f'{f}_l__gt': '' for f in group_fields}
 
-    groups = (
-        base_qs
-        .values(*(f'{f}_l' for f in group_fields))
-        .annotate(cnt=Count('pk'))
-        .filter(cnt__gt=1)
+    def base_qs():
+        qs = Contact.objects.annotate(**annotations).filter(**non_empty)
+        if min_field_length is not None and len(group_fields) == 1:
+            field = group_fields[0]
+            qs = qs.annotate(**{f'{field}_len': Length(field)}).filter(
+                **{f'{field}_len__gte': min_field_length}
+            )
+        return qs
+
+    match = {f'{f}_l': OuterRef(f'{f}_l') for f in group_fields}
+    duplicate = base_qs().filter(**match).exclude(pk=OuterRef('pk'))
+
+    return set(
+        base_qs()
+        .filter(Exists(duplicate))
+        .values_list('pk', flat=True)
     )
-    for group in groups:
-        filters = {f'{f}_l': group[f'{f}_l'] for f in group_fields}
-        for empty_field in group_fields:
-            filters[f'{empty_field}_l__gt'] = ''
-        chunk_qs = _annotate_group_fields(Contact.objects.all(), group_fields, min_field_length=min_field_length)
-        ids.update(chunk_qs.filter(**filters).values_list('pk', flat=True))
-    return ids
 
 
 def _ids_from_duplicate_social_handles():
-    ids = set()
-    handles = (
+    dup_handles = (
         InfoContact.objects.filter(community__isnull=True)
         .exclude(external_id='')
         .exclude(contact__isnull=True)
         .values('external_id')
         .annotate(cnt=Count('contact_id', distinct=True))
         .filter(cnt__gt=1)
+        .values_list('external_id', flat=True)
     )
-    for row in handles:
-        ids.update(
-            InfoContact.objects.filter(
-                community__isnull=True,
-                external_id=row['external_id'],
-            )
-            .exclude(contact__isnull=True)
-            .values_list('contact_id', flat=True)
-        )
-    return ids
+    return set(
+        InfoContact.objects.filter(community__isnull=True, external_id__in=dup_handles)
+        .exclude(contact__isnull=True)
+        .values_list('contact_id', flat=True)
+        .distinct()
+    )
 
 
 def all_presumed_duplicate_contact_ids():
     """Все карточки, у которых есть хотя бы один предположительный дубль."""
+    cached = cache.get(DUPLICATE_IDS_CACHE_KEY)
+    if cached is not None:
+        return cached
+
     ids = set()
     ids.update(_ids_from_grouped_contacts(['last_name', 'first_name']))
     ids.update(_ids_from_grouped_contacts(['first_name', 'middle_name']))
     ids.update(_ids_from_grouped_contacts(['nickname'], min_field_length=2))
     ids.update(_ids_from_duplicate_social_handles())
+    cache.set(DUPLICATE_IDS_CACHE_KEY, ids, DUPLICATE_IDS_CACHE_TTL)
     return ids
 
 
