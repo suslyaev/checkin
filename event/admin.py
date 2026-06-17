@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.contrib import admin, messages
+from django.db import IntegrityError
 import event.services as service
 from .models import (
     CustomUser,
@@ -102,7 +104,25 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
-        # 4. Пошаговая загрузка (временно скрыто в меню)
+        # 4. Табличный интерфейс /table/
+        table_group = None
+        if getattr(settings, 'ATTENDLY_TABLE_ENABLED', True):
+            table_group = {
+                'name': 'Таблицы',
+                'app_label': 'attendly_table',
+                'app_url': reverse('table:workspace_root'),
+                'has_module_perms': True,
+                'models': [{
+                    'name': 'Таблицы',
+                    'object_name': 'AttendlyTable',
+                    'admin_url': reverse('table:workspace_root'),
+                    'add_url': None,
+                    'view_only': True,
+                    'perms': {'view': True},
+                }],
+            }
+
+        # 5. Пошаговая загрузка (временно скрыто в меню)
         STAGED_IMPORT_MENU_ENABLED = False
         upload_group = None
         if STAGED_IMPORT_MENU_ENABLED and request.user.has_perm('event.add_contact'):
@@ -143,7 +163,7 @@ class CustomAdminSite(admin.AdminSite):
                         access_group['models'].append(model_dict[model_name])
 
         # Добавляем только непустые группы
-        for group in [events_group, reference_group, upload_group, access_group]:
+        for group in [events_group, reference_group, table_group, upload_group, access_group]:
             if group and group.get('models'):
                 custom_apps.append(group)
 
@@ -670,6 +690,13 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                     )
                 except ValueError as exc:
                     self.message_user(request, str(exc), level=messages.ERROR)
+                except IntegrityError:
+                    self.message_user(
+                        request,
+                        'Не удалось объединить: конфликт уникальных данных (ФИО или регистрация на мероприятие). '
+                        'Измените ФИО или обратитесь к администратору.',
+                        level=messages.ERROR,
+                    )
                 else:
                     change_url = reverse('admin:event_contact_change', args=[primary.pk])
                     self.message_user(
