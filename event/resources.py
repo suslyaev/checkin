@@ -213,10 +213,15 @@ class ContactExport(resources.ModelResource):
 
         И т.д.
         """
-        social_networks = InfoContact.objects.filter(contact=obj)
+        social_networks = InfoContact.objects.filter(contact=obj).select_related('social_network')
         parts = []
         for s in social_networks:
-            title = f"{s.social_network.name} ({s.subscribers})" if s.subscribers else s.social_network.name
+            if s.social_network and s.subscribers:
+                title = f"{s.social_network.name} ({s.subscribers})"
+            elif s.social_network:
+                title = s.social_network.name
+            else:
+                title = '—'
             link = s.external_id or ""
             parts.append(f"{title}\n{link}")
         return '\n\n'.join(parts)

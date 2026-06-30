@@ -359,6 +359,8 @@ class PresumedDuplicatesOnlyFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value() != 'yes' or request.GET.get('duplicate_of'):
             return queryset
+        if request.method == 'POST' and request.POST.get('action') == 'merge_duplicates_action':
+            return queryset
         pks = presumed_duplicates_queryset().values_list('pk', flat=True)
         return queryset.filter(pk__in=pks)
 
@@ -577,7 +579,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 )
             except (Contact.DoesNotExist, ValueError, TypeError):
                 self.message_user(request, 'Карточка для поиска дублей не найдена.', level=messages.WARNING)
-        elif global_duplicates:
+        elif global_duplicates and request.method != 'POST':
             count = presumed_duplicates_queryset().count()
             clear_url = reverse('admin:event_contact_changelist')
             self.message_user(
@@ -638,11 +640,21 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
 
     find_duplicates_button.short_description = 'Поиск дублей'
 
+    MERGE_CONTACTS_MAX = 20
+
     @admin.action(description='Объединить дубли')
     def merge_duplicates_action(self, request, queryset):
         selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)
         if not selected_ids:
+            if 'apply' in request.POST:
+                self.message_user(
+                    request,
+                    'Не удалось определить выбранные карточки. Вернитесь в список и выберите людей заново.',
+                    level=messages.ERROR,
+                )
+                return HttpResponseRedirect(reverse('admin:event_contact_changelist'))
             selected_ids = [str(pk) for pk in queryset.values_list('pk', flat=True)]
+        selected_ids = list(dict.fromkeys(selected_ids))
         if len(selected_ids) < 2:
             self.message_user(
                 request,
@@ -650,10 +662,23 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 level=messages.ERROR,
             )
             return
+        if len(selected_ids) > self.MERGE_CONTACTS_MAX:
+            self.message_user(
+                request,
+                f'Слишком много карточек для объединения ({len(selected_ids)}). '
+                f'Отметьте не более {self.MERGE_CONTACTS_MAX} человек.',
+                level=messages.ERROR,
+            )
+            return
 
         contacts = list(
             Contact.objects.filter(pk__in=selected_ids)
             .select_related('company', 'category', 'type_guest', 'producer')
+            .annotate(
+                actions_count=Count('action_set', distinct=True),
+                info_count=Count('infocontact_set', distinct=True),
+                communities_count=Count('communitymember_set', distinct=True),
+            )
             .order_by('last_name', 'first_name')
         )
         if len(contacts) < 2:
@@ -717,15 +742,16 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 contacts=contacts,
             )
 
-        contact_stats = []
-        for contact in contacts:
-            contact_stats.append({
+        contact_stats = [
+            {
                 'contact': contact,
                 'label': format_contact_merge_label(contact),
-                'actions_count': Action.objects.filter(contact=contact).count(),
-                'info_count': InfoContact.objects.filter(contact=contact).count(),
-                'communities_count': CommunityMember.objects.filter(contact=contact).count(),
-            })
+                'actions_count': contact.actions_count,
+                'info_count': contact.info_count,
+                'communities_count': contact.communities_count,
+            }
+            for contact in contacts
+        ]
 
         context = {
             'title': 'Объединение дублей',
