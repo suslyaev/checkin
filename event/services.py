@@ -17,34 +17,40 @@ def get_link_list_for_event(actions, type, id):
     if not actions:
         return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
     
+    # actions — это уже queryset, получаем count без доп. запроса если есть len()
     total = actions.count()
+    if total == 0:
+        return format_html('<ul><li><span style="color: #888;">Нет записей</span></li></ul>')
 
     # Отображаем первые 10
+    items = list(actions[:10])
     items_html = ''.join(
         get_object_link(a, type)
-        for a in actions[:10]
+        for a in items
     )
 
-    # Остальные — в скрытом блоке
-    hidden_html = ''.join(
-        get_object_link(a, type)
-        for a in actions[10:]
-    )
+    # Остальные — в скрытом блоке (только если больше 10)
+    if total > 10:
+        hidden_items = list(actions[10:])
+        hidden_html = ''.join(
+            get_object_link(a, type)
+            for a in hidden_items
+        )
 
-    html = f"""
-        <ul>
-            {items_html}
-            <div id="{id}" style="display:none">
-                {hidden_html}
-            </div>
-    """
-    if total>10:
-        html = html + f"""
-            <button type="button" class="button-cancel" onclick="document.getElementById('{id}').style.display='block'; this.style.display='none'" style="width: 200px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
-                    Показать все ({total})
-            </button>
+        html = f"""
+            <ul>
+                {items_html}
+                <div id="{id}" style="display:none">
+                    {hidden_html}
+                </div>
+                <button type="button" class="button-cancel" onclick="document.getElementById('{id}').style.display='block'; this.style.display='none'" style="width: 200px; background: none;color: gray;border: 2px solid gray;padding: 5px 5px;border-radius: 3px;font-size: 12px;">
+                        Показать все ({total})
+                </button>
             </ul>
         """
+    else:
+        html = f'<ul>{items_html}</ul>'
+        
     return mark_safe(html)
 
 def get_object_link(a, type):

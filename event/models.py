@@ -316,8 +316,9 @@ def log_action_status_change(sender, instance, **kwargs):
         # Новая запись, не логируем
         return
 
+    # Используем only() вместо get() для экономии памяти
     try:
-        old_instance = Action.objects.get(pk=instance.pk)
+        old_instance = Action.objects.only('action_type').get(pk=instance.pk)
     except Action.DoesNotExist:
         return
 

@@ -16,11 +16,11 @@ def checkin_list(request, pk):
     # Проверяем, есть ли такое мероприятие
     inst = get_object_or_404(ModuleInstance, pk=pk)
 
-    # Фильтруем checkin: is_last_state=True, action_type='new', event=inst
+    # Фильтруем checkin: action_type='announced' (заявленные, ещё не подтверждённые)
     qs = Action.objects.filter(
-        action_type='new',
+        action_type='announced',
         event=inst
-    )
+    ).select_related('contact', 'contact__company', 'contact__category', 'contact__type_guest')
 
     # Если пользователь - проверяющий, проверяем, что inst.checkers=user
     # (или если в админке get_queryset требует event.checkers=user)
