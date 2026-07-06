@@ -353,25 +353,32 @@ class CheckinPerformanceTest(TestCase):
 
     def test_02_query_count_without_select_related(self):
         """Без select_related запросов будет больше (N+1)."""
-        initial_queries = len(connection.queries)
+        from django.test.utils import override_settings
         
-        qs = Action.objects.filter(
-            action_type='announced',
-            event=self.event
-        )
-        list(qs)
-        
-        # Теперь обращаемся к contact — это вызовет N+1
-        for action in qs:
-            _ = action.contact.last_name
-        
-        queries_made = len(connection.queries) - initial_queries
-        
-        # Без select_related будет 1 (Action) + N (Contact) = 201+
-        self.assertGreater(
-            queries_made, 10,
-            f'Ожидалось много запросов без select_related, но получено: {queries_made}'
-        )
+        # Отключаем кэширование соединений для точного подсчёта
+        with override_settings(DEBUG=True):
+            from django.db import connection
+            connection.queries_log.clear()
+            
+            qs = Action.objects.filter(
+                action_type='announced',
+                event=self.event
+            )
+            
+            # Запрос к БД до
+            initial_queries = len(connection.queries)
+            
+            # Выполняем и обращаемся к contact — это вызовет N+1
+            for action in qs:
+                _ = action.contact.last_name
+            
+            queries_made = len(connection.queries) - initial_queries
+            
+            # Без select_related будет 1 (Action) + N (Contact) = 201+
+            self.assertGreater(
+                queries_made, 10,
+                f'Ожидалось много запросов без select_related, но получено: {queries_made}'
+            )
 
     def test_03_bulk_create_performance(self):
         """bulk_create должен быть быстрее поштучного создания."""
@@ -404,7 +411,7 @@ class CheckinPerformanceTest(TestCase):
     def test_05_count_query_performance(self):
         """count() должен быть быстрым."""
         import time
-        
+
         start = time.time()
         count = Action.objects.filter(
             action_type='announced',
@@ -461,7 +468,7 @@ class IntegrationTest(TestCase):
         self.assertTrue(ActionLog.objects.filter(
             action=action, old_status='invited', new_status='registered'
         ).exists())
-        
+
         # registered → visited
         action.action_type = 'visited'
         action.save()
@@ -481,6 +488,9 @@ class IntegrationTest(TestCase):
 
     def test_03_event_visibility(self):
         """Проверка флага is_visible."""
+        # Удаляем событие из setUp, чтобы не мешало
+        self.event.delete()
+        
         visible_event = _create_full_event(name='Видимое', days_ahead=5)
         hidden_event = _create_full_event(name='Скрытое', days_ahead=10)
         hidden_event.is_visible = False
