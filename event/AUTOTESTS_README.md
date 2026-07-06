@@ -54,58 +54,58 @@ python3 manage.py test event.tests.CheckinFlowTest.test_01_smena_status_na_prigl
 ### 🔵 Класс 1: `CheckinFlowTest` (9 тестов)
 **Цель:** Проверить, что правильный статус присваивается при каждом действии.
 
-| Название теста | Что делает | Какую проверку проводит |
-|---|---|---|
-| `test_01_smena_status_na_priglashennyi` | Меняет статус с `announced` на `invited`. | Убедится, что объект сохранил новый статус в БД. |
-| `test_02_smena_status_na_zaregistrirovanniy` | Меняет статус с `invited` на `registered`. | Убедится, что переход работает корректно. |
-| `test_03_smena_status_na_posetivshiy` | Меняет статус с `registered` на `visited`. | Убедится, что финальный статус (чекин) сохраняется. |
-| `test_04_polnyy_cikl_ot_zayavki_do_chequina` | Запускает полный цикл: `announced` → `invited` → `registered` → `visited`. | Проверяет всю цепочку действий за один раз. |
-| `test_05_otmena_priglasheniya` | Меняет статус с `invited` на `cancelled`. | Проверяет ветку отмены. |
-| `test_06_zapolnenie_update_user` | При сохранении указывает `update_user`. | Проверяет, что поле `update_user` заполняется при изменении статуса. |
-| `test_07_sozdanie_zapisi_v_actionlog` | Меняет статус и смотрит в таблицу `ActionLog`. | Проверяет, что сигнал (`pre_save`) создал запись в логе аудита. |
-| `test_08_filter_accheckin_list_verny` | Создаёт `announced` и `visited` записи для одного события. | Проверяет, что `Action.objects.filter(action_type='announced')` возвращает только нужные. |
-| `test_09_neskolko_kontaktov_na_odnom_meropriyatii` | Создаёт 3 разных контакта на одном событии. | Проверяет, что система корректно обрабатывает множественные записи. |
+| Название теста | Ссылка на код | Что делает | Какую проверку проводит |
+|---|---|---|---|
+| `test_01_smena_status_na_priglashennyi` | [Код](event/tests.py#L68) | Меняет статус с `announced` на `invited`. | Убедится, что объект сохранил новый статус в БД. |
+| `test_02_smena_status_na_zaregistrirovanniy` | [Код](event/tests.py#L88) | Меняет статус с `invited` на `registered`. | Убедится, что переход работает корректно. |
+| `test_03_smena_status_na_posetivshiy` | [Код](event/tests.py#L103) | Меняет статус с `registered` на `visited`. | Убедится, что финальный статус (чекин) сохраняется. |
+| `test_04_polnyy_cikl_ot_zayavki_do_chequina` | [Код](event/tests.py#L118) | Запускает полный цикл: `announced` → `invited` → `registered` → `visited`. | Проверяет всю цепочку действий за один раз. |
+| `test_05_otmena_priglasheniya` | [Код](event/tests.py#L145) | Меняет статус с `invited` на `cancelled`. | Проверяет ветку отмены. |
+| `test_06_zapolnenie_update_user` | [Код](event/tests.py#L160) | При сохранении указывает `update_user`. | Проверяет, что поле `update_user` заполняется при изменении статуса. |
+| `test_07_sozdanie_zapisi_v_actionlog` | [Код](event/tests.py#L180) | Меняет статус и смотрит в таблицу `ActionLog`. | Проверяет, что сигнал (`pre_save`) создал запись в логе аудита. |
+| `test_08_filter_accheckin_list_verny` | [Код](event/tests.py#L196) | Создаёт `announced` и `visited` записи для одного события. | Проверяет, что `Action.objects.filter(action_type='announced')` возвращает только нужные. |
+| `test_09_neskolko_kontaktov_na_odnom_meropriyatii` | [Код](event/tests.py#L220) | Создаёт 3 разных контакта на одном событии. | Проверяет, что система корректно обрабатывает множественные записи. |
 
 ---
 
 ### 🟢 Класс 2: `FutureEventTest` (8 тестов)
 **Цель:** Проверить работу с будущими мероприятиями, датами и массовыми операциями.
 
-| Название теста | Что делает | Какую проверку проводит |
-|---|---|---|
-| `test_01_sozdanie_buduschego_meropriyatiya` | Создаёт событие через 60 дней. | Проверяет, что `date_start` > текущего времени. |
-| `test_02_sozdanie_proshedshego_meropriyatiya` | Создаёт событие в прошлом. | Проверяет, что `date_start` < текущего времени. |
-| `test_03_sozdanie_teкущего_meropriyatiya` | Создаёт событие, которое идёт прямо сейчас. | Проверяет граничное условие (началось, но не закончилось). |
-| `test_04_buduschee_meropriyatie_s_priglashennymi` | Создаёт событие и добавляет 5 контактов. | Проверяет массовое добавление приглашённых. |
-| `test_05_validaciya_dat_meropriyatiya` | Пытается создать событие, где `date_end` раньше `date_start`. | Проверяет валидацию дат (хотя в модели её нет, проверяем логику). |
-| `test_06_unikalnost_nazvaniya_meropriyatiya` | Создаёт событие с уникальным именем дважды. | Проверяет ограничение `unique=True` на поле `name`. |
-| `test_07_spisok_buduschih_meropriyatii` | Создаёт 2 будущих и 1 прошедшее событие. | Проверяет фильтрацию `date_start__gt=now`. |
-| `test_08_mnopogostvo_priglashenii_150_chel` | Создаёт 150 приглашений через `bulk_create`. | Проверяет производительность массового добавления. |
+| Название теста | Ссылка на код | Что делает | Какую проверку проводит |
+|---|---|---|---|
+| `test_01_sozdanie_buduschego_meropriyatiya` | [Код](event/tests.py#L242) | Создаёт событие через 60 дней. | Проверяет, что `date_start` > текущего времени. |
+| `test_02_sozdanie_proshedshego_meropriyatiya` | [Код](event/tests.py#L255) | Создаёт событие в прошлом. | Проверяет, что `date_start` < текущего времени. |
+| `test_03_sozdanie_teкущего_meropriyatiya` | [Код](event/tests.py#L270) | Создаёт событие, которое идёт прямо сейчас. | Проверяет граничное условие (началось, но не закончилось). |
+| `test_04_buduschee_meropriyatie_s_priglashennymi` | [Код](event/tests.py#L287) | Создаёт событие и добавляет 5 контактов. | Проверяет массовое добавление приглашённых. |
+| `test_05_validaciya_dat_meropriyatiya` | [Код](event/tests.py#L307) | Пытается создать событие, где `date_end` раньше `date_start`. | Проверяет валидацию дат (хотя в модели её нет, проверяем логику). |
+| `test_06_unikalnost_nazvaniya_meropriyatiya` | [Код](event/tests.py#L322) | Создаёт событие с уникальным именем дважды. | Проверяет ограничение `unique=True` на поле `name`. |
+| `test_07_spisok_buduschih_meropriyatii` | [Код](event/tests.py#L335) | Создаёт 2 будущих и 1 прошедшее событие. | Проверяет фильтрацию `date_start__gt=now`. |
+| `test_08_mnopogostvo_priglashenii_150_chel` | [Код](event/tests.py#L356) | Создаёт 150 приглашений через `bulk_create`. | Проверяет производительность массового добавления. |
 
 ---
 
 ### 🟡 Класс 3: `CheckinPerformanceTest` (6 тестов)
 **Цель:** Доказать, что проблема с тормозами решена. Это самые важные тесты для оптимизации.
 
-| Название теста | Что делает | Какую проверку проводит |
-|---|---|---|
-| `test_01_podschet_zaprosov_pri_zagruzke_spiska` | Загружает список из 200 контактов с `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **≤ 2**. (Раньше было бы 201+). |
-| `test_02_podschet_zaprosov_bez_select_related` | Загружает список **без** `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **> 10**. (Доказывает, что без оптимизации тормоза есть). |
-| `test_03_proverka_bulk_create` | Создаёт 200 записей через `bulk_create`. | Проверяет, что запись прошла успешно. |
-| `test_04_ispolzovanie_indeksa_pri_filtracii` | Выполняет SQL-запрос `EXPLAIN SELECT...`. | **Ключевой тест:** Смотрит план выполнения запроса. Проверяет, что используется **Index Scan**, а не `Seq Scan` (полный перебор таблицы). |
-| `test_05_skorost_zaprosa_count` | Считает количество записей через `.count()`. | Проверяет, что операция выполняется быстро (< 1 сек). |
-| `test_06_podschet_zaprosov_pri_smene_statusa` | Меняет статус и считает запросы. | Проверяет, что сигнал аудита не создаёт лишних запросов (должно быть ≤ 3). |
+| Название теста | Ссылка на код | Что делает | Какую проверку проводит |
+|---|---|---|---|
+| `test_01_podschet_zaprosov_pri_zagruzke_spiska` | [Код](event/tests.py#L382) | Загружает список из 200 контактов с `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **≤ 2**. (Раньше было бы 201+). |
+| `test_02_podschet_zaprosov_bez_select_related` | [Код](event/tests.py#L405) | Загружает список **без** `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **> 10**. (Доказывает, что без оптимизации тормоза есть). |
+| `test_03_proverka_bulk_create` | [Код](event/tests.py#L433) | Создаёт 200 записей через `bulk_create`. | Проверяет, что запись прошла успешно. |
+| `test_04_ispolzovanie_indeksa_pri_filtracii` | [Код](event/tests.py#L447) | Выполняет SQL-запрос `EXPLAIN SELECT...`. | **Ключевой тест:** Смотрит план выполнения запроса. Проверяет, что используется **Index Scan**, а не `Seq Scan` (полный перебор таблицы). |
+| `test_05_skorost_zaprosa_count` | [Код](event/tests.py#L468) | Считает количество записей через `.count()`. | Проверяет, что операция выполняется быстро (< 1 сек). |
+| `test_06_podschet_zaprosov_pri_smene_statusa` | [Код](event/tests.py#L485) | Меняет статус и считает запросы. | Проверяет, что сигнал аудита не создаёт лишних запросов (должно быть ≤ 3). |
 
 ---
 
 ### 🟣 Класс 4: `IntegrationTest` (3 теста)
 **Цель:** Проверить взаимодействие разных моделей вместе.
 
-| Название теста | Что делает | Какую проверку проводит |
-|---|---|---|
-| `test_01_polnyy_workflow_s_proverkoy_logov` | Запускает полный цикл + проверяет логи. | Проверяет, что и статусы, и логи аудита создаются корректно в связке. |
-| `test_02_odin_kontakt_na_neskolkih_meropriyatiyah` | Один контакт на двух разных событиях. | Проверяет, что `Action` правильно связывает `Contact` и `Event` (многие-ко-многим). |
-| `test_03_proverka_flaga_is_visible` | Создаёт видимое и невидимое событие. | Проверяет, что фильтр `is_visible=True` возвращает только нужные. |
+| Название теста | Ссылка на код | Что делает | Какую проверку проводит |
+|---|---|---|---|
+| `test_01_polnyy_workflow_s_proverkoy_logov` | [Код](event/tests.py#L509) | Запускает полный цикл + проверяет логи. | Проверяет, что и статусы, и логи аудита создаются корректно в связке. |
+| `test_02_odin_kontakt_na_neskolkih_meropriyatiyah` | [Код](event/tests.py#L534) | Один контакт на двух разных событиях. | Проверяет, что `Action` правильно связывает `Contact` и `Event` (многие-ко-многим). |
+| `test_03_proverka_flaga_is_visible` | [Код](event/tests.py#L550) | Создаёт видимое и невидимое событие. | Проверяет, что фильтр `is_visible=True` возвращает только нужные. |
 
 ---
 
