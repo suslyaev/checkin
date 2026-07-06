@@ -67,7 +67,7 @@ class CheckinFlowTest(TestCase):
         self.event = _create_full_event()
         self.contact = _create_contact(last_name='Тестовый', first_name='Контакт')
 
-    def test_01_announced_to_invited(self):
+    def test_01_smena_status_na_priglashennyi(self):
         """Заявлен → Приглашён."""
         action = _create_action(self.contact, self.event, 'announced')
         self.assertEqual(action.action_type, 'announced')
@@ -77,7 +77,7 @@ class CheckinFlowTest(TestCase):
         action.refresh_from_db()
         self.assertEqual(action.action_type, 'invited')
 
-    def test_02_invited_to_registered(self):
+    def test_02_smena_status_na_zaregistrirovanniy(self):
         """Приглашён → Зарегистрирован."""
         action = _create_action(self.contact, self.event, 'invited')
         action.action_type = 'registered'
@@ -85,7 +85,7 @@ class CheckinFlowTest(TestCase):
         action.refresh_from_db()
         self.assertEqual(action.action_type, 'registered')
 
-    def test_03_registered_to_visited(self):
+    def test_03_smena_status_na_posetivshiy(self):
         """Зарегистрирован → Зачекинен."""
         action = _create_action(self.contact, self.event, 'registered')
         action.action_type = 'visited'
@@ -93,7 +93,7 @@ class CheckinFlowTest(TestCase):
         action.refresh_from_db()
         self.assertEqual(action.action_type, 'visited')
 
-    def test_04_full_flow(self):
+    def test_04_polnyy_cikl_ot_zayavki_do_chequina(self):
         """Полный цикл: announced → invited → registered → visited."""
         action = _create_action(self.contact, self.event, 'announced')
         
@@ -115,7 +115,7 @@ class CheckinFlowTest(TestCase):
         action.refresh_from_db()
         self.assertEqual(action.action_type, 'visited')
 
-    def test_05_cancel_from_invited(self):
+    def test_05_otmena_priglasheniya(self):
         """Приглашён → Отменён."""
         action = _create_action(self.contact, self.event, 'invited')
         action.action_type = 'cancelled'
@@ -123,7 +123,7 @@ class CheckinFlowTest(TestCase):
         action.refresh_from_db()
         self.assertEqual(action.action_type, 'cancelled')
 
-    def test_06_action_has_update_user(self):
+    def test_06_zapolnenie_update_user(self):
         """При изменении action_type заполняется update_user."""
         user = User.objects.create_user(phone='+79990000000', password='test')
         action = _create_action(self.contact, self.event, 'announced')
@@ -135,7 +135,7 @@ class CheckinFlowTest(TestCase):
         action.refresh_from_db()
         self.assertEqual(action.update_user, user)
 
-    def test_07_action_log_created_on_status_change(self):
+    def test_07_sozdanie_zapisi_v_actionlog(self):
         """При смене статуса создаётся запись в ActionLog."""
         action = _create_action(self.contact, self.event, 'announced')
         
@@ -150,7 +150,7 @@ class CheckinFlowTest(TestCase):
             ).exists()
         )
 
-    def test_08_checkin_list_returns_announced(self):
+    def test_08_filter_accheckin_list_verny(self):
         """checkin_list возвращает только announced (не visited)."""
         _create_action(self.contact, self.event, 'announced')
         _create_action(
@@ -171,7 +171,7 @@ class CheckinFlowTest(TestCase):
         )
         self.assertEqual(visited.count(), 1)
 
-    def test_09_multiple_contacts_same_event(self):
+    def test_09_neskolko_kontaktov_na_odnom_meropriyatii(self):
         """Несколько контактов на одном мероприятии."""
         c1 = _create_contact('Первый', 'Контакт')
         c2 = _create_contact('Второй', 'Контакт')
@@ -195,7 +195,7 @@ class CheckinFlowTest(TestCase):
 class FutureEventTest(TestCase):
     """Проверяет работу с будущими мероприятиями."""
 
-    def test_01_create_future_event(self):
+    def test_01_sozdanie_buduschego_meropriyatiya(self):
         """Создание мероприятия в будущем."""
         now = timezone.now()
         event = _create_full_event(name='Будущее событие', days_ahead=60)
@@ -204,7 +204,7 @@ class FutureEventTest(TestCase):
         self.assertTrue(event.date_start > now)
         self.assertTrue(event.is_visible)
 
-    def test_02_create_past_event(self):
+    def test_02_sozdanie_proshedshego_meropriyatiya(self):
         """Создание прошедшего мероприятия."""
         now = timezone.now()
         past_event = ModuleInstance.objects.create(
@@ -217,7 +217,7 @@ class FutureEventTest(TestCase):
         
         self.assertTrue(past_event.date_start < now)
 
-    def test_03_create_present_event(self):
+    def test_03_sozdanie_teкущего_meropriyatiya(self):
         """Создание текущего мероприятия."""
         now = timezone.now()
         present_event = ModuleInstance.objects.create(
@@ -231,7 +231,7 @@ class FutureEventTest(TestCase):
         self.assertTrue(present_event.date_start < now)
         self.assertTrue(present_event.date_end > now)
 
-    def test_04_future_event_with_contacts(self):
+    def test_04_buduschee_meropriyatie_s_priglashennymi(self):
         """Будущее мероприятие с приглашёнными контактами."""
         event = _create_full_event(days_ahead=14)
         contacts = [
@@ -248,7 +248,7 @@ class FutureEventTest(TestCase):
         )
         self.assertEqual(invited.count(), 5)
 
-    def test_05_event_date_validation(self):
+    def test_05_validaciya_dat_meropriyatiya(self):
         """date_end не может быть раньше date_start."""
         now = timezone.now()
         
@@ -260,14 +260,14 @@ class FutureEventTest(TestCase):
         )
         self.assertIsNotNone(event.pk)
 
-    def test_06_event_name_unique(self):
+    def test_06_unikalnost_nazvaniya_meropriyatiya(self):
         """Название мероприятия должно быть уникальным."""
         _create_full_event(name='Уникальное событие')
         
         with self.assertRaises(Exception):
             _create_full_event(name='Уникальное событие')
 
-    def test_07_list_future_events(self):
+    def test_07_spisok_buduschih_meropriyatii(self):
         """Получение списка будущих мероприятий."""
         now = timezone.now()
         
@@ -287,7 +287,7 @@ class FutureEventTest(TestCase):
         )
         self.assertEqual(future_events.count(), 2)
 
-    def test_08_event_with_many_invitations(self):
+    def test_08_mnopogostvo_priglashenii_150_chel(self):
         """Мероприятие с большим количеством приглашений (100+)."""
         event = _create_full_event(name='Масштабное событие', days_ahead=7)
         
@@ -328,7 +328,7 @@ class CheckinPerformanceTest(TestCase):
         ]
         self.action_count = Action.objects.bulk_create(self.actions)
 
-    def test_01_query_count_for_list(self):
+    def test_01_podschet_zaprosov_pri_zagruzke_spiska(self):
         """Загрузка списка checkin не должна делать более 2 запросов."""
         # Запрос к БД до
         initial_queries = len(connection.queries)
@@ -351,7 +351,7 @@ class CheckinPerformanceTest(TestCase):
             f'Слишком много запросов: {queries_made}. Ожидалось <= 2'
         )
 
-    def test_02_query_count_without_select_related(self):
+    def test_02_podschet_zaprosov_bez_select_related(self):
         """Без select_related запросов будет больше (N+1)."""
         from django.test.utils import override_settings
         
@@ -380,7 +380,7 @@ class CheckinPerformanceTest(TestCase):
                 f'Ожидалось много запросов без select_related, но получено: {queries_made}'
             )
 
-    def test_03_bulk_create_performance(self):
+    def test_03_proverka_bulk_create(self):
         """bulk_create должен быть быстрее поштучного создания."""
         import time
         
@@ -388,7 +388,7 @@ class CheckinPerformanceTest(TestCase):
         # Проверяем, что 200 записей созданы
         self.assertEqual(Action.objects.count(), 200)
 
-    def test_04_filter_performance_with_index(self):
+    def test_04_ispolzovanie_indeksa_pri_filtracii(self):
         """Фильтрация по (event, action_type) должна использовать индекс."""
         from django.db import connection
         
@@ -408,7 +408,7 @@ class CheckinPerformanceTest(TestCase):
             f'Индекс не используется! План: {plan_text}'
         )
 
-    def test_05_count_query_performance(self):
+    def test_05_skorost_zaprosa_count(self):
         """count() должен быть быстрым."""
         import time
 
@@ -423,7 +423,7 @@ class CheckinPerformanceTest(TestCase):
         # count() должен выполняться быстро (< 1 сек даже без индекса)
         self.assertLess(elapsed, 1.0, f'count() слишком медленный: {elapsed:.3f}с')
 
-    def test_06_status_change_with_signal(self):
+    def test_06_podschet_zaprosov_pri_smene_statusa(self):
         """Смена статуса не должна создавать более 3 запросов."""
         action = self.actions[0]
         initial_queries = len(connection.queries)
@@ -451,7 +451,7 @@ class IntegrationTest(TestCase):
         self.event = _create_full_event()
         self.contact = _create_contact(last_name='Интеграция', first_name='Тест')
 
-    def test_01_full_workflow_with_logs(self):
+    def test_01_polnyy_workflow_s_proverkoy_logov(self):
         """Полный workflow с проверкой логов."""
         action = _create_action(self.contact, self.event, 'announced')
         
@@ -476,7 +476,7 @@ class IntegrationTest(TestCase):
             action=action, old_status='registered', new_status='visited'
         ).exists())
 
-    def test_02_multiple_events_same_contact(self):
+    def test_02odin_kontakt_na_neskolkih_meropriyatiyah(self):
         """Один контакт на нескольких мероприятиях."""
         event2 = _create_full_event(name='Мероприятие 2', days_ahead=20)
         
@@ -486,7 +486,7 @@ class IntegrationTest(TestCase):
         actions = Action.objects.filter(contact=self.contact)
         self.assertEqual(actions.count(), 2)
 
-    def test_03_event_visibility(self):
+    def test_03_proverka_flaga_is_visible(self):
         """Проверка флага is_visible."""
         # Удаляем событие из setUp, чтобы не мешало
         self.event.delete()
