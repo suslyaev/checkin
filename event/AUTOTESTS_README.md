@@ -52,23 +52,23 @@ python3 manage.py test event.tests.CheckinFlowTest.test_01_smena_status_na_prigl
 ## 📖 Описание всех тестов
 
 > 💡 **Как работают ссылки:**
-> - **[КОД]** — открывает файл `event/tests.py` в VS Code на строке с этим тестом. **Важно:** VS Code должен быть открыт из корня проекта `attendly`.
-> - **[GitHub]** — открывает этот тест на GitHub
+> - **[КОД]** — открывает `test/event/tests.py` в VS Code на нужной строке
+> - **[GitHub]** — открывает тест на GitHub
 
 ### 🔵 Класс 1: `CheckinFlowTest` (9 тестов)
 **Цель:** Проверить, что правильный статус присваивается при каждом действии.
 
 | Название теста | VS Code | GitHub | Что делает | Какую проверку проводит |
 |---|---|---|---|---|
-| `test_01_smena_status_na_priglashennyi` | [КОД](vscode://file/event/tests.py:84) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L84) | Меняет статус с `announced` на `invited`. | Убедится, что объект сохранил новый статус в БД. |
-| `test_02_smena_status_na_zaregistrirovanniy` | [КОД](vscode://file/event/tests.py:104) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L104) | Меняет статус с `invited` на `registered`. | Убедится, что переход работает корректно. |
-| `test_03_smena_status_na_posetivshiy` | [КОД](vscode://file/event/tests.py:120) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L120) | Меняет статус с `registered` на `visited`. | Убедится, что финальный статус (чекин) сохраняется. |
-| `test_04_polnyy_cikl_ot_zayavki_do_chequina` | [КОД](vscode://file/event/tests.py:136) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L136) | Запускает полный цикл: `announced` → `invited` → `registered` → `visited`. | Проверяет всю цепочку действий за один раз. |
-| `test_05_otmena_priglasheniya` | [КОД](vscode://file/event/tests.py:166) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L166) | Меняет статус с `invited` на `cancelled`. | Проверяет ветку отмены. |
-| `test_06_zapolnenie_update_user` | [КОД](vscode://file/event/tests.py:182) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L182) | При сохранении указывает `update_user`. | Проверяет, что поле `update_user` заполняется при изменении статуса. |
-| `test_07_sozdanie_zapisi_v_actionlog` | [КОД](vscode://file/event/tests.py:202) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L202) | Меняет статус и смотрит в таблицу `ActionLog`. | Проверяет, что сигнал (`pre_save`) создал запись в логе аудита. |
-| `test_08_filter_accheckin_list_verny` | [КОД](vscode://file/event/tests.py:222) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L222) | Создаёт `announced` и `visited` записи для одного события. | Проверяет, что `Action.objects.filter(action_type='announced')` возвращает только нужные. |
-| `test_09_neskolko_kontaktov_na_odnom_meropriyatii` | [КОД](vscode://file/event/tests.py:252) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L252) | Создаёт 3 разных контакта на одном событии. | Проверяет, что система корректно обрабатывает множественные записи. |
+| `test_01_smena_status_na_priglashennyi` | [КОД](vscode://file/test/event/tests.py:84) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L84) | Меняет статус с `announced` на `invited`. | Убедится, что объект сохранил новый статус в БД. |
+| `test_02_smena_status_na_zaregistrirovanniy` | [КОД](vscode://file/test/event/tests.py:104) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L104) | Меняет статус с `invited` на `registered`. | Убедится, что переход работает корректно. |
+| `test_03_smena_status_na_posetivshiy` | [КОД](vscode://file/test/event/tests.py:120) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L120) | Меняет статус с `registered` на `visited`. | Убедится, что финальный статус (чекин) сохраняется. |
+| `test_04_polnyy_cikl_ot_zayavki_do_chequina` | [КОД](vscode://file/test/event/tests.py:136) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L136) | Запускает полный цикл: `announced` → `invited` → `registered` → `visited`. | Проверяет всю цепочку действий за один раз. |
+| `test_05_otmena_priglasheniya` | [КОД](vscode://file/test/event/tests.py:166) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L166) | Меняет статус с `invited` на `cancelled`. | Проверяет ветку отмены. |
+| `test_06_zapolnenie_update_user` | [КОД](vscode://file/test/event/tests.py:182) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L182) | При сохранении указывает `update_user`. | Проверяет, что поле `update_user` заполняется при изменении статуса. |
+| `test_07_sozdanie_zapisi_v_actionlog` | [КОД](vscode://file/test/event/tests.py:202) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L202) | Меняет статус и смотрит в таблицу `ActionLog`. | Проверяет, что сигнал (`pre_save`) создал запись в логе аудита. |
+| `test_08_filter_accheckin_list_verny` | [КОД](vscode://file/test/event/tests.py:222) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L222) | Создаёт `announced` и `visited` записи для одного события. | Проверяет, что `Action.objects.filter(action_type='announced')` возвращает только нужные. |
+| `test_09_neskolko_kontaktov_na_odnom_meropriyatii` | [КОД](vscode://file/test/event/tests.py:252) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L252) | Создаёт 3 разных контакта на одном событии. | Проверяет, что система корректно обрабатывает множественные записи. |
 
 ---
 
@@ -77,14 +77,14 @@ python3 manage.py test event.tests.CheckinFlowTest.test_01_smena_status_na_prigl
 
 | Название теста | VS Code | GitHub | Что делает | Какую проверку проводит |
 |---|---|---|---|---|
-| `test_01_sozdanie_buduschego_meropriyatiya` | [КОД](vscode://file/event/tests.py:282) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L282) | Создаёт событие через 60 дней. | Проверяет, что `date_start` > текущего времени. |
-| `test_02_sozdanie_proshedshego_meropriyatiya` | [КОД](vscode://file/event/tests.py:294) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L294) | Создаёт событие в прошлом. | Проверяет, что `date_start` < текущего времени. |
-| `test_03_sozdanie_teкущего_meropriyatiya` | [КОД](vscode://file/event/tests.py:310) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L310) | Создаёт событие, которое идёт прямо сейчас. | Проверяет граничное условие (началось, но не закончилось). |
-| `test_04_buduschee_meropriyatie_s_priglashennymi` | [КОД](vscode://file/event/tests.py:327) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L327) | Создаёт событие и добавляет 5 контактов. | Проверяет массовое добавление приглашённых. |
-| `test_05_validaciya_dat_meropriyatiya` | [КОД](vscode://file/event/tests.py:352) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L352) | Пытается создать событие, где `date_end` раньше `date_start`. | Проверяет валидацию дат (хотя в модели её нет, проверяем логику). |
-| `test_06_unikalnost_nazvaniya_meropriyatiya` | [КОД](vscode://file/event/tests.py:368) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L368) | Создаёт событие с уникальным именем дважды. | Проверяет ограничение `unique=True` на поле `name`. |
-| `test_07_spisok_buduschih_meropriyatii` | [КОД](vscode://file/event/tests.py:378) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L378) | Создаёт 2 будущих и 1 прошедшее событие. | Проверяет фильтрацию `date_start__gt=now`. |
-| `test_08_mnopogostvo_priglashenii_150_chel` | [КОД](vscode://file/event/tests.py:404) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L404) | Создаёт 150 приглашений через `bulk_create`. | Проверяет производительность массового добавления. |
+| `test_01_sozdanie_buduschego_meropriyatiya` | [КОД](vscode://file/test/event/tests.py:282) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L282) | Создаёт событие через 60 дней. | Проверяет, что `date_start` > текущего времени. |
+| `test_02_sozdanie_proshedshego_meropriyatiya` | [КОД](vscode://file/test/event/tests.py:294) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L294) | Создаёт событие в прошлом. | Проверяет, что `date_start` < текущего времени. |
+| `test_03_sozdanie_teкущего_meropriyatiya` | [КОД](vscode://file/test/event/tests.py:310) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L310) | Создаёт событие, которое идёт прямо сейчас. | Проверяет граничное условие (началось, но не закончилось). |
+| `test_04_buduschee_meropriyatie_s_priglashennymi` | [КОД](vscode://file/test/event/tests.py:327) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L327) | Создаёт событие и добавляет 5 контактов. | Проверяет массовое добавление приглашённых. |
+| `test_05_validaciya_dat_meropriyatiya` | [КОД](vscode://file/test/event/tests.py:352) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L352) | Пытается создать событие, где `date_end` раньше `date_start`. | Проверяет валидацию дат (хотя в модели её нет, проверяем логику). |
+| `test_06_unikalnost_nazvaniya_meropriyatiya` | [КОД](vscode://file/test/event/tests.py:368) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L368) | Создаёт событие с уникальным именем дважды. | Проверяет ограничение `unique=True` на поле `name`. |
+| `test_07_spisok_buduschih_meropriyatii` | [КОД](vscode://file/test/event/tests.py:378) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L378) | Создаёт 2 будущих и 1 прошедшее событие. | Проверяет фильтрацию `date_start__gt=now`. |
+| `test_08_mnopogostvo_priglashenii_150_chel` | [КОД](vscode://file/test/event/tests.py:404) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L404) | Создаёт 150 приглашений через `bulk_create`. | Проверяет производительность массового добавления. |
 
 ---
 
@@ -93,12 +93,12 @@ python3 manage.py test event.tests.CheckinFlowTest.test_01_smena_status_na_prigl
 
 | Название теста | VS Code | GitHub | Что делает | Какую проверку проводит |
 |---|---|---|---|---|
-| `test_01_podschet_zaprosov_pri_zagruzke_spiska` | [КОД](vscode://file/event/tests.py:453) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L453) | Загружает список из 200 контактов с `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **≤ 2**. (Раньше было бы 201+). |
-| `test_02_podschet_zaprosov_bez_select_related` | [КОД](vscode://file/event/tests.py:480) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L480) | Загружает список **без** `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **> 10**. (Доказывает, что без оптимизации тормоза есть). |
-| `test_03_proverka_bulk_create` | [КОД](vscode://file/event/tests.py:515) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L515) | Создаёт 200 записей через `bulk_create`. | Проверяет, что запись прошла успешно. |
-| `test_04_ispolzovanie_indeksa_pri_filtracii` | [КОД](vscode://file/event/tests.py:526) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L526) | Выполняет SQL-запрос `EXPLAIN SELECT...`. | **Ключевой тест:** Смотрит план выполнения запроса. Проверяет, что используется **Index Scan**, а не `Seq Scan` (полный перебор таблицы). |
-| `test_05_skorost_zaprosa_count` | [КОД](vscode://file/event/tests.py:550) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L550) | Считает количество записей через `.count()`. | Проверяет, что операция выполняется быстро (< 1 сек). |
-| `test_06_podschet_zaprosov_pri_smene_statusa` | [КОД](vscode://file/event/tests.py:569) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L569) | Меняет статус и считает запросы. | Проверяет, что сигнал аудита не создаёт лишних запросов (должно быть ≤ 3). |
+| `test_01_podschet_zaprosov_pri_zagruzke_spiska` | [КОД](vscode://file/test/event/tests.py:453) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L453) | Загружает список из 200 контактов с `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **≤ 2**. (Раньше было бы 201+). |
+| `test_02_podschet_zaprosov_bez_select_related` | [КОД](vscode://file/test/event/tests.py:480) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L480) | Загружает список **без** `select_related`. | **Ключевой тест:** Считает запросы к БД. Их должно быть **> 10**. (Доказывает, что без оптимизации тормоза есть). |
+| `test_03_proverka_bulk_create` | [КОД](vscode://file/test/event/tests.py:515) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L515) | Создаёт 200 записей через `bulk_create`. | Проверяет, что запись прошла успешно. |
+| `test_04_ispolzovanie_indeksa_pri_filtracii` | [КОД](vscode://file/test/event/tests.py:526) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L526) | Выполняет SQL-запрос `EXPLAIN SELECT...`. | **Ключевой тест:** Смотрит план выполнения запроса. Проверяет, что используется **Index Scan**, а не `Seq Scan` (полный перебор таблицы). |
+| `test_05_skorost_zaprosa_count` | [КОД](vscode://file/test/event/tests.py:550) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L550) | Считает количество записей через `.count()`. | Проверяет, что операция выполняется быстро (< 1 сек). |
+| `test_06_podschet_zaprosov_pri_smene_statusa` | [КОД](vscode://file/test/event/tests.py:569) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L569) | Меняет статус и считает запросы. | Проверяет, что сигнал аудита не создаёт лишних запросов (должно быть ≤ 3). |
 
 ---
 
@@ -107,9 +107,9 @@ python3 manage.py test event.tests.CheckinFlowTest.test_01_smena_status_na_prigl
 
 | Название теста | VS Code | GitHub | Что делает | Какую проверку проводит |
 |---|---|---|---|---|
-| `test_01_polnyy_workflow_s_proverkoy_logov` | [КОД](vscode://file/event/tests.py:603) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L603) | Запускает полный цикл + проверяет логи. | Проверяет, что и статусы, и логи аудита создаются корректно в связке. |
-| `test_02_odin_kontakt_na_neskolkih_meropriyatiyah` | [КОД](vscode://file/event/tests.py:641) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L641) | Один контакт на двух разных событиях. | Проверяет, что `Action` правильно связывает `Contact` и `Event` (многие-ко-многим). |
-| `test_03_proverka_flaga_is_visible` | [КОД](vscode://file/event/tests.py:657) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L657) | Создаёт видимое и невидимое событие. | Проверяет, что фильтр `is_visible=True` возвращает только нужные. |
+| `test_01_polnyy_workflow_s_proverkoy_logov` | [КОД](vscode://file/test/event/tests.py:603) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L603) | Запускает полный цикл + проверяет логи. | Проверяет, что и статусы, и логи аудита создаются корректно в связке. |
+| `test_02_odin_kontakt_na_neskolkih_meropriyatiyah` | [КОД](vscode://file/test/event/tests.py:641) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L641) | Один контакт на двух разных событиях. | Проверяет, что `Action` правильно связывает `Contact` и `Event` (многие-ко-многим). |
+| `test_03_proverka_flaga_is_visible` | [КОД](vscode://file/test/event/tests.py:657) | [GitHub](https://github.com/suslyaev/checkin/blob/test/event/tests.py#L657) | Создаёт видимое и невидимое событие. | Проверяет, что фильтр `is_visible=True` возвращает только нужные. |
 
 ---
 
