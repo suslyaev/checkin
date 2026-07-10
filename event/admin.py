@@ -683,9 +683,9 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
             Contact.objects.filter(pk__in=selected_ids)
             .select_related('company', 'category', 'type_guest', 'producer')
             .annotate(
-                actions_count=Count('action_set', distinct=True),
-                info_count=Count('infocontact_set', distinct=True),
-                communities_count=Count('communitymember_set', distinct=True),
+                actions_count=Count('action', distinct=True),
+                info_count=Count('infocontact', distinct=True),
+                communities_count=Count('communitymember', distinct=True),
             )
             .order_by('last_name', 'first_name')
         )
