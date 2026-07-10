@@ -224,6 +224,43 @@ class Contact(models.Model):
             )
         ]
 
+
+DUPLICATE_CONFLICT_STATUS = (
+    ('unprocessed', 'Не обработан'),
+    ('duplicate', 'Дубль'),
+    ('not_duplicate', 'Не дубль'),
+)
+
+
+# Возможный дубль (пара похожих карточек, найденная пересчётом)
+class ContactDuplicateConflict(models.Model):
+    contact_a = models.ForeignKey('Contact', on_delete=models.CASCADE, related_name='duplicate_as_a', verbose_name='Контакт A')
+    contact_b = models.ForeignKey('Contact', on_delete=models.CASCADE, related_name='duplicate_as_b', verbose_name='Контакт B')
+    match_reason = models.CharField(max_length=255, blank=True, verbose_name='Причина совпадения')
+    status = models.CharField(
+        max_length=20,
+        choices=DUPLICATE_CONFLICT_STATUS,
+        default='unprocessed',
+        db_index=True,
+        verbose_name='Статус',
+    )
+    create_date = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    update_date = models.DateTimeField(auto_now=True, verbose_name='Дата изменения')
+
+    def __str__(self):
+        return f'{self.contact_a} / {self.contact_b}'
+
+    class Meta:
+        verbose_name = 'Возможный дубль'
+        verbose_name_plural = 'Возможные дубли'
+        ordering = ['-create_date']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['contact_a', 'contact_b'],
+                name='unique_duplicate_conflict_pair',
+            )
+        ]
+
 # Мероприятие
 class ModuleInstance(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name='Наименование cобытия')

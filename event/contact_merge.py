@@ -3,7 +3,6 @@ from collections import defaultdict
 
 from django.core.files.base import ContentFile
 from django.db import transaction
-from .contact_duplicates import invalidate_presumed_duplicates_cache
 from .models import Action, CommunityMember, Contact, InfoContact
 
 def format_contact_merge_label(contact):
@@ -53,6 +52,8 @@ def fio_conflicts(last_name, first_name, middle_name, exclude_ids):
 
 def _copy_photo_to_contact(target, source_contact):
     if not source_contact or not source_contact.photo:
+        return
+    if not source_contact.photo.storage.exists(source_contact.photo.name):
         return
     source_contact.photo.open('rb')
     try:
@@ -169,5 +170,4 @@ def merge_contacts(primary, duplicates, field_values, photo_from_contact_id=None
         primary.photo = None
 
     primary.save()
-    invalidate_presumed_duplicates_cache()
     return len(duplicate_ids)
