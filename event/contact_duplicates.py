@@ -1,24 +1,18 @@
 """
 Поиск предположительных дублей контакта для списка в админке.
 """
-from django.core.cache import cache
-from django.db.models import Count, Exists, OuterRef, Q
-from django.db.models.functions import Length, Lower
+from collections import defaultdict
+from itertools import combinations
 
-from .models import Contact, InfoContact
+from django.db.models import Q
 
-DUPLICATE_IDS_CACHE_KEY = 'contact_presumed_duplicate_ids'
-DUPLICATE_IDS_CACHE_TTL = 300
+from .models import Contact, ContactDuplicateConflict, InfoContact
 
 
 def _norm(value):
     if value is None:
         return ''
     return str(value).strip()
-
-
-def invalidate_presumed_duplicates_cache():
-    cache.delete(DUPLICATE_IDS_CACHE_KEY)
 
 
 def build_duplicate_candidates_q(contact, *, weak_last_name=False):
@@ -76,109 +70,96 @@ def duplicate_candidates_queryset(contact, *, weak_last_name=False):
     ).distinct()
 
 
-def _ids_from_grouped_contacts(group_fields, *, min_field_length=None):
-    """Контакты из групп, где по group_fields больше одной непустой записи."""
-    annotations = {f'{f}_l': Lower(f) for f in group_fields}
-    non_empty = {f'{f}_l__gt': '' for f in group_fields}
-
-    def base_qs():
-        qs = Contact.objects.annotate(**annotations).filter(**non_empty)
-        if min_field_length is not None and len(group_fields) == 1:
-            field = group_fields[0]
-            qs = qs.annotate(**{f'{field}_len': Length(field)}).filter(
-                **{f'{field}_len__gte': min_field_length}
-            )
-        return qs
-
-    match = {f'{f}_l': OuterRef(f'{f}_l') for f in group_fields}
-    duplicate = base_qs().filter(**match).exclude(pk=OuterRef('pk'))
-
-    return set(
-        base_qs()
-        .filter(Exists(duplicate))
-        .values_list('pk', flat=True)
-    )
+def _pairs_from_groups(groups):
+    """Все пары id внутри каждой группы размером > 1 (канонический порядок a < b)."""
+    pairs = set()
+    for ids in groups.values():
+        unique_ids = sorted(set(ids))
+        if len(unique_ids) < 2:
+            continue
+        pairs.update(combinations(unique_ids, 2))
+    return pairs
 
 
-def _ids_from_duplicate_social_handles():
-    dup_handles = (
-        InfoContact.objects.filter(community__isnull=True)
+def _candidate_pairs_with_reasons():
+    """
+    Пары контактов-кандидатов в дубли и причины совпадения, посчитанные
+    за 2 запроса к БД (без корреляции на каждую карточку) — используется
+    только явным пересчётом, не на горячем пути запросов.
+    """
+    reasons_by_pair = defaultdict(set)
+
+    by_last_first = defaultdict(list)
+    by_first_middle = defaultdict(list)
+    by_nickname = defaultdict(list)
+    for pk, last, first, middle, nick in Contact.objects.values_list(
+        'pk', 'last_name', 'first_name', 'middle_name', 'nickname'
+    ):
+        last, first, middle, nick = _norm(last).lower(), _norm(first).lower(), _norm(middle).lower(), _norm(nick).lower()
+        if last and first:
+            by_last_first[(last, first)].append(pk)
+        if first and middle:
+            by_first_middle[(first, middle)].append(pk)
+        if len(nick) >= 2:
+            by_nickname[nick].append(pk)
+
+    for pair in _pairs_from_groups(by_last_first):
+        reasons_by_pair[pair].add('фамилия и имя')
+    for pair in _pairs_from_groups(by_first_middle):
+        reasons_by_pair[pair].add('имя и отчество')
+    for pair in _pairs_from_groups(by_nickname):
+        reasons_by_pair[pair].add('никнейм')
+
+    by_handle = defaultdict(list)
+    for contact_id, external_id in (
+        InfoContact.objects.filter(community__isnull=True, contact__isnull=False)
         .exclude(external_id='')
-        .exclude(contact__isnull=True)
-        .values('external_id')
-        .annotate(cnt=Count('contact_id', distinct=True))
-        .filter(cnt__gt=1)
-        .values_list('external_id', flat=True)
+        .values_list('contact_id', 'external_id')
+    ):
+        by_handle[external_id.strip().lower()].append(contact_id)
+    for pair in _pairs_from_groups(by_handle):
+        reasons_by_pair[pair].add('контакт в соцсетях')
+
+    return reasons_by_pair
+
+
+def sync_duplicate_conflicts():
+    """
+    Пересчитывает возможные дубли и добавляет только новые пары (insert-only):
+    уже существующие строки — с любым статусом — не трогает, поэтому решённые
+    конфликты остаются решёнными, а новые похожие карточки всплывают отдельной парой.
+    Возвращает количество добавленных пар.
+    """
+    reasons_by_pair = _candidate_pairs_with_reasons()
+    existing_pairs = set(
+        ContactDuplicateConflict.objects.values_list('contact_a_id', 'contact_b_id')
     )
-    return set(
-        InfoContact.objects.filter(community__isnull=True, external_id__in=dup_handles)
-        .exclude(contact__isnull=True)
-        .values_list('contact_id', flat=True)
-        .distinct()
-    )
+    new_conflicts = [
+        ContactDuplicateConflict(
+            contact_a_id=a,
+            contact_b_id=b,
+            match_reason=', '.join(sorted(reasons)),
+        )
+        for (a, b), reasons in reasons_by_pair.items()
+        if (a, b) not in existing_pairs
+    ]
+    if new_conflicts:
+        ContactDuplicateConflict.objects.bulk_create(new_conflicts, ignore_conflicts=True)
+    return len(new_conflicts)
 
 
-def all_presumed_duplicate_contact_ids():
-    """Все карточки, у которых есть хотя бы один предположительный дубль."""
-    cached = cache.get(DUPLICATE_IDS_CACHE_KEY)
-    if cached is not None:
-        return cached
-
-    ids = set()
-    ids.update(_ids_from_grouped_contacts(['last_name', 'first_name']))
-    ids.update(_ids_from_grouped_contacts(['first_name', 'middle_name']))
-    ids.update(_ids_from_grouped_contacts(['nickname'], min_field_length=2))
-    ids.update(_ids_from_duplicate_social_handles())
-    cache.set(DUPLICATE_IDS_CACHE_KEY, ids, DUPLICATE_IDS_CACHE_TTL)
-    return ids
-
-
-def presumed_duplicates_queryset():
-    ids = all_presumed_duplicate_contact_ids()
-    if not ids:
-        return Contact.objects.none()
-    return Contact.objects.filter(pk__in=ids)
-
-
-def get_global_duplicate_reasons(contact):
-    """Почему контакт попал в глобальный список возможных дублей."""
+def get_conflict_reasons_for_contact(contact):
+    """Причины из уже посчитанных строк ContactDuplicateConflict для этой карточки."""
     reasons = []
-    last = _norm(contact.last_name)
-    first = _norm(contact.first_name)
-    middle = _norm(contact.middle_name)
-    nick = _norm(contact.nickname)
-
-    if last and first:
-        if Contact.objects.filter(
-            last_name__iexact=last,
-            first_name__iexact=first,
-        ).exclude(pk=contact.pk).exists():
-            reasons.append('фамилия и имя')
-
-    if first and middle:
-        if Contact.objects.filter(
-            first_name__iexact=first,
-            middle_name__iexact=middle,
-        ).exclude(pk=contact.pk).exists():
-            reasons.append('имя и отчество')
-
-    if nick and len(nick) >= 2:
-        if Contact.objects.filter(nickname__iexact=nick).exclude(pk=contact.pk).exists():
-            reasons.append('никнейм')
-
-    handles = list(
-        InfoContact.objects.filter(contact=contact, community__isnull=True)
-        .exclude(external_id='')
-        .values_list('external_id', flat=True)
-    )
-    for handle in handles:
-        if InfoContact.objects.filter(
-            community__isnull=True,
-            external_id=handle,
-        ).exclude(contact=contact).exclude(contact__isnull=True).exists():
-            reasons.append('контакт в соцсетях')
-            break
-
+    for match_reason in (
+        ContactDuplicateConflict.objects.filter(
+            Q(contact_a=contact) | Q(contact_b=contact),
+            status='unprocessed',
+        ).values_list('match_reason', flat=True)
+    ):
+        for reason in match_reason.split(', '):
+            if reason and reason not in reasons:
+                reasons.append(reason)
     return reasons
 
 

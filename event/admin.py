@@ -18,6 +18,7 @@ from .models import (
     ActionLog,
     Community,
     CommunityMember,
+    ContactDuplicateConflict,
 )
 from .forms import (
     CheckinOrCancelForm,
@@ -30,16 +31,16 @@ from .contact_merge import format_contact_merge_label, merge_contacts
 from .contact_duplicates import (
     build_duplicate_candidates_q,
     duplicate_candidates_queryset,
+    get_conflict_reasons_for_contact,
     get_duplicate_match_reasons,
-    get_global_duplicate_reasons,
-    presumed_duplicates_queryset,
+    sync_duplicate_conflicts,
 )
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
 from .resources import ContactImport, EventExport
 from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import mark_safe
 from django.urls import reverse
@@ -361,8 +362,11 @@ class PresumedDuplicatesOnlyFilter(admin.SimpleListFilter):
             return queryset
         if request.method == 'POST' and request.POST.get('action') == 'merge_duplicates_action':
             return queryset
-        pks = presumed_duplicates_queryset().values_list('pk', flat=True)
-        return queryset.filter(pk__in=pks)
+        unprocessed_conflicts = ContactDuplicateConflict.objects.filter(
+            Q(contact_a=OuterRef('pk')) | Q(contact_b=OuterRef('pk')),
+            status='unprocessed',
+        )
+        return queryset.filter(Exists(unprocessed_conflicts))
 
 
 class CopyInvitationsForm(forms.Form):
@@ -580,7 +584,11 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
             except (Contact.DoesNotExist, ValueError, TypeError):
                 self.message_user(request, 'Карточка для поиска дублей не найдена.', level=messages.WARNING)
         elif global_duplicates and request.method != 'POST':
-            count = presumed_duplicates_queryset().count()
+            unprocessed_conflicts = ContactDuplicateConflict.objects.filter(
+                Q(contact_a=OuterRef('pk')) | Q(contact_b=OuterRef('pk')),
+                status='unprocessed',
+            )
+            count = Contact.objects.filter(Exists(unprocessed_conflicts)).count()
             clear_url = reverse('admin:event_contact_changelist')
             self.message_user(
                 request,
@@ -600,7 +608,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     def _duplicate_match_hint_column(self, anchor=None, *, global_mode=False):
         def column(obj):
             if global_mode:
-                reasons = get_global_duplicate_reasons(obj)
+                reasons = get_conflict_reasons_for_contact(obj)
             elif anchor is not None:
                 reasons = get_duplicate_match_reasons(anchor, obj)
             else:
@@ -786,6 +794,64 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
 
         return service.get_link_list_for_event(actions, 'moduleinstance', 'more-checkins')
     checkin_events_list.short_description = "Посещено"
+
+
+# Возможные дубли (worklist пар, найденных пересчётом)
+@admin.register(ContactDuplicateConflict)
+class ContactDuplicateConflictAdmin(BaseAdminPage):
+    change_list_template = 'admin/event/contactduplicateconflict_change_list.html'
+    list_display = ('contact_a_link', 'contact_b_link', 'match_reason', 'status', 'merge_link', 'update_date')
+    list_display_links = ('contact_a_link', 'contact_b_link')
+    list_editable = ('status',)
+    list_filter = ('status',)
+    ordering = ['-create_date']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('contact_a', 'contact_b')
+
+    def has_add_permission(self, request):
+        return False
+
+    def contact_a_link(self, obj):
+        url = reverse('admin:event_contact_change', args=[obj.contact_a_id])
+        return format_html('<a href="{}">{}</a>', url, obj.contact_a.get_fio())
+    contact_a_link.short_description = 'Контакт A'
+
+    def contact_b_link(self, obj):
+        url = reverse('admin:event_contact_change', args=[obj.contact_b_id])
+        return format_html('<a href="{}">{}</a>', url, obj.contact_b.get_fio())
+    contact_b_link.short_description = 'Контакт B'
+
+    def merge_link(self, obj):
+        url = reverse('admin:event_contact_changelist') + f'?duplicate_of={obj.contact_a_id}'
+        return format_html('<a href="{}">Перейти к объединению</a>', url)
+    merge_link.short_description = ''
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('recompute/', self.admin_site.admin_view(self.recompute_view), name='event_contactduplicateconflict_recompute'),
+        ]
+        return custom_urls + urls
+
+    def recompute_view(self, request):
+        changelist_url = reverse('admin:event_contactduplicateconflict_changelist')
+        if request.method != 'POST':
+            return HttpResponseRedirect(changelist_url)
+        if not request.user.is_superuser:
+            self.message_user(
+                request,
+                'Пересчёт возможных дублей доступен только главному администратору.',
+                level=messages.ERROR,
+            )
+            return HttpResponseRedirect(changelist_url)
+        added = sync_duplicate_conflicts()
+        self.message_user(
+            request,
+            f'Пересчёт завершён: найдено новых пар — {added}.',
+        )
+        return HttpResponseRedirect(changelist_url)
+
 
 # Компания
 @admin.register(CompanyContact)
