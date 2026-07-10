@@ -149,7 +149,7 @@ class CustomAdminSite(admin.AdminSite):
                 model_dict = {model["object_name"]: model for model in app["models"]}
 
                 # События
-                for model_name in ['Contact', 'Community', 'ModuleInstance', 'Action']:
+                for model_name in ['Contact', 'Community', 'ModuleInstance', 'Action', 'ContactDuplicateConflict']:
                     if model_name in model_dict:
                         events_group['models'].append(model_dict[model_name])
 
