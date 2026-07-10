@@ -53,6 +53,8 @@ def fio_conflicts(last_name, first_name, middle_name, exclude_ids):
 def _copy_photo_to_contact(target, source_contact):
     if not source_contact or not source_contact.photo:
         return
+    if not source_contact.photo.storage.exists(source_contact.photo.name):
+        return
     source_contact.photo.open('rb')
     try:
         data = source_contact.photo.read()
