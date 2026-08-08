@@ -14,9 +14,9 @@ def checkin_list(request, pk):
     # Проверяем, есть ли такое мероприятие
     inst = get_object_or_404(ModuleInstance, pk=pk)
 
-    # Фильтруем checkin: is_last_state=True, action_type='new', event=inst
+    # На check-in показываем зарегистрированных гостей мероприятия.
     qs = Action.objects.filter(
-        action_type='new',
+        action_type='registered',
         event=inst
     )
 

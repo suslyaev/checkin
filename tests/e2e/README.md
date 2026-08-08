@@ -1,47 +1,60 @@
 # UI tests
 
+The UI tests run only against the persistent `testAnis` environment:
+
+```text
+http://62.113.111.146:8001
+```
+
+The test suite refuses to run against another host or port. Tests create
+unique events, contacts, and registrations through the UI. These records stay
+in the persistent `testAnis` database after the run.
+
+Set the credentials for the `testAnis` superuser in the current PowerShell
+session. Do not add them to Git or to this file:
+
+```powershell
+$env:E2E_PHONE="+79990000001"
+$env:E2E_PASSWORD="your-test-password"
+```
+
 Run all UI tests in headless mode:
-
-```powershell
-python -m pytest tests\e2e -v
-```
-
-Show the browser and pause for two seconds after each action:
-
-```powershell
-$env:E2E_HEADLESS="0"
-$env:E2E_SLOWMO="2"
-python -m pytest tests\e2e\test_auth.py -v
-```
-
-Return to the normal fast headless mode:
 
 ```powershell
 $env:E2E_HEADLESS="1"
 $env:E2E_SLOWMO="0"
+python -m pytest tests\e2e -v
 ```
 
-Run the guest search test in visible slow mode:
+Show the browser and pause for two seconds after each supported action:
 
 ```powershell
 $env:E2E_HEADLESS="0"
 $env:E2E_SLOWMO="2"
-python -m pytest tests\e2e\test_checkin.py::test_checker_can_find_guest_by_last_name -v
+python -m pytest tests\e2e -v
 ```
 
-Run event creation through Django Admin in visible slow mode:
+Run event creation through Django Admin:
 
 ```powershell
-$env:E2E_HEADLESS="0"
-$env:E2E_SLOWMO="2"
 python -m pytest tests\e2e\test_event.py -v
 ```
 
-Run the check-in confirmation test in visible slow mode:
+Run the guest search scenario:
+
+```powershell
+python -m pytest tests\e2e\test_checkin.py::test_checker_can_find_guest_by_last_name -v
+```
+
+Run the check-in confirmation scenario:
 
 ```powershell
 python -m pytest tests\e2e\test_checkin.py::test_checker_can_confirm_guest -v
 ```
 
-Each test creates real Django model records in a temporary pytest database.
-The database is destroyed after the run, so hosted events are not changed.
+Clear credentials from the current PowerShell session when finished:
+
+```powershell
+Remove-Item Env:E2E_PHONE
+Remove-Item Env:E2E_PASSWORD
+```

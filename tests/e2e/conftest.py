@@ -1,14 +1,19 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 import time
 
 import pytest
-from django.contrib.auth.models import Group
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-from event.models import Action, Contact, CustomUser, ModuleInstance
+from tests.e2e.pages.event_admin_page import EventAdminPage
+from tests.e2e.pages.login_page import LoginPage
+
+
+SAFE_REMOTE_HOST = '62.113.111.146'
+SAFE_REMOTE_PORT = 8001
 
 
 def _cached_chromedriver():
@@ -19,6 +24,32 @@ def _cached_chromedriver():
     cache_root = Path.home() / '.cache' / 'selenium' / 'chromedriver'
     drivers = list(cache_root.glob('**/chromedriver.exe'))
     return max(drivers, key=lambda path: path.stat().st_mtime) if drivers else None
+
+
+@pytest.fixture(scope='session')
+def base_url():
+    url = os.getenv(
+        'E2E_BASE_URL',
+        f'http://{SAFE_REMOTE_HOST}:{SAFE_REMOTE_PORT}',
+    ).rstrip('/')
+    parsed = urlparse(url)
+    if parsed.hostname != SAFE_REMOTE_HOST or parsed.port != SAFE_REMOTE_PORT:
+        pytest.exit(
+            'Remote UI tests are allowed only against '
+            f'{SAFE_REMOTE_HOST}:{SAFE_REMOTE_PORT}.',
+        )
+    return url
+
+
+@pytest.fixture(scope='session')
+def credentials():
+    phone = os.getenv('E2E_PHONE')
+    password = os.getenv('E2E_PASSWORD')
+    if not phone or not password:
+        pytest.exit(
+            'Set E2E_PHONE and E2E_PASSWORD for the testAnis superuser.'
+        )
+    return phone, password
 
 
 @pytest.fixture
@@ -44,49 +75,15 @@ def browser():
 
 
 @pytest.fixture
-def test_user(db):
-    password = 'Test-password-123'
-    admin_group = Group.objects.create(name='Администратор')
-    user = CustomUser.objects.create_superuser(
-        phone='+79991234567',
-        password=password,
-        first_name='Selenium',
-    )
-    user.groups.add(admin_group)
-    return user, password
-
-
-@pytest.fixture
-def checkin_data(test_user, ui_event):
-    user, _ = test_user
-    ivanov = Contact.objects.create(last_name='Иванов', first_name='Иван')
-    petrov = Contact.objects.create(last_name='Петров', first_name='Пётр')
-    ivanov_action = Action.objects.create(
-        contact=ivanov,
-        event=ui_event,
-        action_type='new',
-        create_user=user,
-    )
-    Action.objects.create(
-        contact=petrov,
-        event=ui_event,
-        action_type='new',
-        create_user=user,
-    )
-
-    return ui_event, ivanov_action
-
-
-@pytest.fixture
-def ui_event(browser, live_server, test_user):
-    from tests.e2e.pages.event_admin_page import EventAdminPage
-    from tests.e2e.pages.login_page import LoginPage
-
-    user, password = test_user
-    login_page = LoginPage(browser, live_server.url).open()
-    login_page.login(user.phone, password)
+def authenticated_browser(browser, base_url, credentials):
+    phone, password = credentials
+    login_page = LoginPage(browser, base_url).open()
+    login_page.login(phone, password)
     login_page.wait_until_logged_in()
+    return browser
 
-    event_name = EventAdminPage.unique_event_name()
-    EventAdminPage(browser, live_server.url).open().create_event(event_name)
-    return ModuleInstance.objects.get(name=event_name)
+
+@pytest.fixture
+def ui_event(authenticated_browser, base_url):
+    page = EventAdminPage(authenticated_browser, base_url).open()
+    return page.create_event(page.unique_event_name())

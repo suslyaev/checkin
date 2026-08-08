@@ -1,9 +1,8 @@
 import os
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from uuid import uuid4
 
-from django.utils import timezone
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -46,7 +45,7 @@ class EventAdminPage:
         return self
 
     def create_event(self, name):
-        now = timezone.localtime()
+        now = datetime.now().astimezone()
         end = now + timedelta(hours=3)
         self._fill(self.NAME, name)
         self._fill(self.ADDRESS, 'Selenium test address')
@@ -74,3 +73,10 @@ class EventAdminPage:
                 f'validation errors: {errors}'
             ) from error
         self._pause()
+        event_link = self.wait.until(
+            EC.element_to_be_clickable(
+                (By.XPATH, f"//a[normalize-space()='{name}']")
+            )
+        )
+        event_id = int(event_link.get_attribute('href').rstrip('/').split('/')[-2])
+        return {'id': event_id, 'name': name}
