@@ -53,7 +53,7 @@ from django.shortcuts import render
 from django.urls import path
 from django.urls import reverse
 from django.shortcuts import redirect
-from admin_auto_filters.filters import AutocompleteFilterMultiple
+from .admin_filters import AutocompleteFilterMultiple
 from django import forms
 from django.contrib.admin.widgets import AutocompleteSelect
 
