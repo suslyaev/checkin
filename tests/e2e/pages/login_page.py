@@ -2,6 +2,7 @@ import os
 import time
 
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -38,7 +39,14 @@ class LoginPage:
         self._pause()
 
     def wait_until_logged_in(self):
-        return self.wait.until(EC.presence_of_element_located(self.APP_ROOT))
+        try:
+            return self.wait.until(EC.presence_of_element_located(self.APP_ROOT))
+        except TimeoutException as error:
+            if self.browser.find_elements(*self.BRANDING):
+                raise AssertionError(
+                    'Login failed. Check E2E_PHONE and E2E_PASSWORD.'
+                ) from error
+            raise
 
     def is_login_form_visible(self):
         return self.browser.find_element(*self.BRANDING).is_displayed()

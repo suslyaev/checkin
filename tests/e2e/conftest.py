@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 import time
@@ -14,6 +15,12 @@ from tests.e2e.pages.login_page import LoginPage
 
 SAFE_REMOTE_HOST = '62.113.111.146'
 SAFE_REMOTE_PORT = 8001
+
+
+@dataclass(frozen=True)
+class Credentials:
+    phone: str
+    password: str = field(repr=False)
 
 
 def _cached_chromedriver():
@@ -49,7 +56,7 @@ def credentials():
         pytest.exit(
             'Set E2E_PHONE and E2E_PASSWORD for the testAnis superuser.'
         )
-    return phone, password
+    return Credentials(phone=phone, password=password)
 
 
 @pytest.fixture
@@ -76,9 +83,8 @@ def browser():
 
 @pytest.fixture
 def authenticated_browser(browser, base_url, credentials):
-    phone, password = credentials
     login_page = LoginPage(browser, base_url).open()
-    login_page.login(phone, password)
+    login_page.login(credentials.phone, credentials.password)
     login_page.wait_until_logged_in()
     return browser
 
