@@ -1,26 +1,46 @@
-# UI tests
+# UI-автотесты
 
-The UI tests run only against the persistent `testAnis` environment:
+UI-тесты запускаются только для постоянного окружения `testAnis`:
 
 ```text
 http://62.113.111.146:8001
 ```
 
-The test suite refuses to run against another host or port. Tests create
-numbered events, contacts, and registrations through the UI. These records
-stay in the persistent `testAnis` database after the run. Existing records are
-never deleted. New names look like `Selenium Event 0001` and
-`Selenium Guest 0001`.
+Защита в тестах запрещает запуск на другом сервере или порту. Тесты через UI
+создают события, контакты и регистрации в постоянной базе `testAnis`.
+Созданные записи после завершения тестов не удаляются.
 
-Set the credentials for the `testAnis` superuser in the current PowerShell
-session. Do not add them to Git or to this file:
+Новые записи получают последовательные имена:
 
-```powershell
-$env:E2E_PHONE="+79990000001"
-$env:E2E_PASSWORD="your-test-password"
+```text
+Selenium Event 0001
+Selenium Event 0002
+Selenium Guest 0001
+Selenium Guest 0002
 ```
 
-Run all UI tests in headless mode:
+Старые записи не изменяются. Тест находит максимальный существующий номер и
+использует следующий. Запускайте тесты последовательно, без `pytest-xdist`,
+чтобы два теста не выбрали одинаковый номер.
+
+## Подготовка учётных данных
+
+В текущем окне PowerShell укажите телефон суперпользователя `testAnis`:
+
+```powershell
+$env:E2E_PHONE="+79879631518"
+```
+
+Введите пароль скрыто. Пароль не добавляется в Git и не сохраняется в README:
+
+```powershell
+$secure = Read-Host -Prompt "Password" -AsSecureString
+$env:E2E_PASSWORD = [Net.NetworkCredential]::new("", $secure).Password
+```
+
+## Запуск всех тестов
+
+Запуск без отображения браузера:
 
 ```powershell
 $env:E2E_HEADLESS="1"
@@ -28,7 +48,8 @@ $env:E2E_SLOWMO="0"
 python -m pytest tests\e2e -v
 ```
 
-Show the browser and pause for two seconds after each supported action:
+Запуск с видимым браузером и паузой две секунды между поддерживаемыми
+действиями:
 
 ```powershell
 $env:E2E_HEADLESS="0"
@@ -36,27 +57,43 @@ $env:E2E_SLOWMO="2"
 python -m pytest tests\e2e -v
 ```
 
-Run event creation through Django Admin:
+Значение `E2E_SLOWMO` задаёт длительность учебной паузы в секундах. Для
+обычного быстрого запуска используйте `0`.
+
+## Запуск отдельных сценариев
+
+Создание события через Django Admin:
 
 ```powershell
 python -m pytest tests\e2e\test_event.py -v
 ```
 
-Run the guest search scenario:
+Поиск гостя в созданном событии:
 
 ```powershell
 python -m pytest tests\e2e\test_checkin.py::test_checker_can_find_guest_by_last_name -v
 ```
 
-Run the check-in confirmation scenario:
+Подтверждение check-in гостя:
 
 ```powershell
 python -m pytest tests\e2e\test_checkin.py::test_checker_can_confirm_guest -v
 ```
 
-Clear credentials from the current PowerShell session when finished:
+Проверка успешного входа:
 
 ```powershell
-Remove-Item Env:E2E_PHONE
-Remove-Item Env:E2E_PASSWORD
+python -m pytest tests\e2e\test_auth.py::test_user_can_log_in -v
 ```
+
+## Завершение работы
+
+После тестов удалите логин и пароль из текущей сессии PowerShell:
+
+```powershell
+Remove-Item Env:E2E_PHONE -ErrorAction SilentlyContinue
+Remove-Item Env:E2E_PASSWORD -ErrorAction SilentlyContinue
+```
+
+Сообщения Chrome про GPU, USB или GCM обычно не связаны с результатом теста.
+Ориентируйтесь на итоговый статус pytest: `PASSED`, `FAILED` или `ERROR`.
