@@ -1,11 +1,9 @@
 import os
-from datetime import timedelta
 from pathlib import Path
 import time
 
 import pytest
 from django.contrib.auth.models import Group
-from django.utils import timezone
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -49,7 +47,7 @@ def browser():
 def test_user(db):
     password = 'Test-password-123'
     admin_group = Group.objects.create(name='Администратор')
-    user = CustomUser.objects.create_user(
+    user = CustomUser.objects.create_superuser(
         phone='+79991234567',
         password=password,
         first_name='Selenium',
@@ -59,30 +57,36 @@ def test_user(db):
 
 
 @pytest.fixture
-def checkin_data(test_user):
+def checkin_data(test_user, ui_event):
     user, _ = test_user
-    event = ModuleInstance.objects.create(
-        name='Selenium Test Event',
-        address='Test address',
-        date_start=timezone.now() - timedelta(hours=1),
-        date_end=timezone.now() + timedelta(hours=3),
-        is_visible=True,
-    )
-    event.checkers.add(user)
-
     ivanov = Contact.objects.create(last_name='Иванов', first_name='Иван')
     petrov = Contact.objects.create(last_name='Петров', first_name='Пётр')
     ivanov_action = Action.objects.create(
         contact=ivanov,
-        event=event,
+        event=ui_event,
         action_type='new',
         create_user=user,
     )
     Action.objects.create(
         contact=petrov,
-        event=event,
+        event=ui_event,
         action_type='new',
         create_user=user,
     )
 
-    return event, ivanov_action
+    return ui_event, ivanov_action
+
+
+@pytest.fixture
+def ui_event(browser, live_server, test_user):
+    from tests.e2e.pages.event_admin_page import EventAdminPage
+    from tests.e2e.pages.login_page import LoginPage
+
+    user, password = test_user
+    login_page = LoginPage(browser, live_server.url).open()
+    login_page.login(user.phone, password)
+    login_page.wait_until_logged_in()
+
+    event_name = EventAdminPage.unique_event_name()
+    EventAdminPage(browser, live_server.url).open().create_event(event_name)
+    return ModuleInstance.objects.get(name=event_name)

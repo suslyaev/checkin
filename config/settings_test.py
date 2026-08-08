@@ -9,12 +9,6 @@ from .settings import *  # noqa: F401,F403,E402
 
 
 DEBUG = True
-ROOT_URLCONF = 'config.urls_test'
-INSTALLED_APPS = [
-    app for app in INSTALLED_APPS
-    if app != 'django.contrib.admin'
-]
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.MD5PasswordHasher',
 ]
-

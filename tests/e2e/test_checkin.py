@@ -1,17 +1,12 @@
 import pytest
 
 from tests.e2e.pages.checkin_page import CheckinPage
-from tests.e2e.pages.login_page import LoginPage
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
 def open_checkin_page(browser, live_server, test_user, event):
-    user, password = test_user
-    login_page = LoginPage(browser, live_server.url).open()
-    login_page.login(user.phone, password)
-    login_page.wait_until_logged_in()
     return CheckinPage(browser, live_server.url, event.pk).open()
 
 
