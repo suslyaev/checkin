@@ -7,8 +7,10 @@ http://62.113.111.146:8001
 ```
 
 The test suite refuses to run against another host or port. Tests create
-unique events, contacts, and registrations through the UI. These records stay
-in the persistent `testAnis` database after the run.
+numbered events, contacts, and registrations through the UI. These records
+stay in the persistent `testAnis` database after the run. Existing records are
+never deleted. New names look like `Selenium Event 0001` and
+`Selenium Guest 0001`.
 
 Set the credentials for the `testAnis` superuser in the current PowerShell
 session. Do not add them to Git or to this file:

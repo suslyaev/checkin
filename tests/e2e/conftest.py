@@ -91,5 +91,6 @@ def authenticated_browser(browser, base_url, credentials):
 
 @pytest.fixture
 def ui_event(authenticated_browser, base_url):
-    page = EventAdminPage(authenticated_browser, base_url).open()
-    return page.create_event(page.unique_event_name())
+    page = EventAdminPage(authenticated_browser, base_url)
+    event_name = page.next_event_name()
+    return page.open().create_event(event_name)

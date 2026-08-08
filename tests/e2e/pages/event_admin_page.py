@@ -1,7 +1,7 @@
 import os
+import re
 import time
 from datetime import datetime, timedelta
-from uuid import uuid4
 
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
@@ -21,13 +21,25 @@ class EventAdminPage:
 
     def __init__(self, browser, base_url):
         self.browser = browser
+        self.base_url = base_url
         self.url = f'{base_url}/admin/event/moduleinstance/add/'
         self.wait = WebDriverWait(browser, 10)
         self.slowmo = float(os.getenv('E2E_SLOWMO', '0'))
 
-    @staticmethod
-    def unique_event_name():
-        return f'Selenium Event {uuid4().hex[:8]}'
+    def next_event_name(self):
+        self.browser.get(
+            f'{self.base_url}/admin/event/moduleinstance/'
+            '?q=Selenium+Event&all='
+        )
+        numbers = []
+        for link in self.browser.find_elements(
+            By.CSS_SELECTOR,
+            '#result_list tbody th a',
+        ):
+            match = re.fullmatch(r'Selenium Event (\d+)', link.text.strip())
+            if match:
+                numbers.append(int(match.group(1)))
+        return f'Selenium Event {max(numbers, default=0) + 1:04d}'
 
     def _pause(self):
         if self.slowmo > 0:

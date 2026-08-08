@@ -8,7 +8,7 @@ from tests.e2e.pages.contact_admin_page import ContactAdminPage
 @pytest.fixture
 def registered_guest(authenticated_browser, base_url, ui_event):
     contact_page = ContactAdminPage(authenticated_browser, base_url)
-    last_name, first_name = contact_page.unique_contact_name()
+    last_name, first_name = contact_page.next_contact_name()
     contact = contact_page.create_contact(last_name, first_name)
     ActionAdminPage(authenticated_browser, base_url).create_registration(
         ui_event['id'],

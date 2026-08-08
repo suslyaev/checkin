@@ -1,4 +1,4 @@
-from uuid import uuid4
+import re
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -12,13 +12,25 @@ class ContactAdminPage:
 
     def __init__(self, browser, base_url):
         self.browser = browser
+        self.base_url = base_url
         self.url = f'{base_url}/admin/event/contact/add/'
         self.wait = WebDriverWait(browser, 10)
 
-    @staticmethod
-    def unique_contact_name(prefix='Guest'):
-        suffix = uuid4().hex[:8]
-        return f'{prefix}{suffix}', f'User{suffix}'
+    def next_contact_name(self):
+        self.browser.get(
+            f'{self.base_url}/admin/event/contact/'
+            '?q=Selenium+Guest&all='
+        )
+        numbers = []
+        for link in self.browser.find_elements(
+            By.CSS_SELECTOR,
+            '#result_list tbody th a',
+        ):
+            match = re.fullmatch(r'Selenium Guest (\d+)', link.text.strip())
+            if match:
+                numbers.append(int(match.group(1)))
+        number = max(numbers, default=0) + 1
+        return 'Selenium', f'Guest {number:04d}'
 
     def create_contact(self, last_name, first_name):
         self.browser.get(self.url)
@@ -37,4 +49,3 @@ class ContactAdminPage:
             contact_link.get_attribute('href').rstrip('/').split('/')[-2]
         )
         return {'id': contact_id, 'full_name': full_name}
-
