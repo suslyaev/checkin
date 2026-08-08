@@ -7,8 +7,6 @@ from django.http import JsonResponse
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from django.db.models.functions import Lower
 
 
 @login_required
@@ -33,12 +31,7 @@ def checkin_list(request, pk):
     # Поиск (опционально)
     search_term = request.GET.get('q', '')
     if search_term:
-        term_lower = search_term.lower()
-        qs = qs.annotate(
-            last_name_lower=Lower('contact__last_name')
-        ).filter(
-            Q(last_name_lower__contains=term_lower)
-        )
+        qs = qs.filter(contact__last_name__icontains=search_term)
 
     return render(request, 'front/checkin_list.html', {
         'instance': inst,
