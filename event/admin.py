@@ -123,10 +123,9 @@ class CustomAdminSite(admin.AdminSite):
                 }],
             }
 
-        # 5. Пошаговая загрузка (временно скрыто в меню)
-        STAGED_IMPORT_MENU_ENABLED = False
+        # 5. Пошаговая загрузка
         upload_group = None
-        if STAGED_IMPORT_MENU_ENABLED and request.user.has_perm('event.add_contact'):
+        if request.user.has_perm('event.add_contact'):
             upload_group = {
                 'name': 'Загрузка',
                 'app_label': 'event_upload',
@@ -570,7 +569,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                     format_html(
                         'Показаны <strong>предположительные дубли</strong> для '
                         '<a href="{}">{}</a> ({} {}). '
-                        'Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
+                        'Совпадения: фамилия+имя, никнейм, контакт в соцсетях. '
                         'Отметьте нужные строки → «Объединить дубли». '
                         '<a href="{}">Показать весь справочник</a>.',
                         change_url,
@@ -594,7 +593,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 request,
                 format_html(
                     'Показаны все карточки с <strong>возможными дублями</strong> '
-                    '({} {}). Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
+                    '({} {}). Совпадения: фамилия+имя, никнейм, контакт в соцсетях. '
                     'Отметьте нужные строки → «Объединить дубли». '
                     '<a href="{}">Показать весь справочник</a>.',
                     count,
@@ -796,6 +795,25 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     checkin_events_list.short_description = "Посещено"
 
 
+class MatchReasonConflictFilter(admin.SimpleListFilter):
+    """Фильтр списка пар-дублей по причине совпадения."""
+    title = 'Причина совпадения'
+    parameter_name = 'match_reason'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('фамилия и имя', 'Фамилия и имя'),
+            ('никнейм', 'Никнейм'),
+            ('контакт в соцсетях', 'Контакт в соцсетях'),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        return queryset.filter(match_reason__icontains=value)
+
+
 # Возможные дубли (worklist пар, найденных пересчётом)
 @admin.register(ContactDuplicateConflict)
 class ContactDuplicateConflictAdmin(BaseAdminPage):
@@ -803,7 +821,7 @@ class ContactDuplicateConflictAdmin(BaseAdminPage):
     list_display = ('contact_a_link', 'contact_b_link', 'match_reason', 'status', 'merge_link', 'update_date')
     list_display_links = ('contact_a_link', 'contact_b_link')
     list_editable = ('status',)
-    list_filter = ('status',)
+    list_filter = ('status', MatchReasonConflictFilter)
     ordering = ['-create_date']
 
     def get_queryset(self, request):

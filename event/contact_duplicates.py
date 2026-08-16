@@ -23,16 +23,11 @@ def build_duplicate_candidates_q(contact, *, weak_last_name=False):
     conditions = Q()
     last = _norm(contact.last_name)
     first = _norm(contact.first_name)
-    middle = _norm(contact.middle_name)
     nick = _norm(contact.nickname)
 
     # Фамилия + имя (отчество может отличаться или быть пустым)
     if last and first:
         conditions |= Q(last_name__iexact=last, first_name__iexact=first)
-
-    # Имя + отчество (ошибка в фамилии при импорте)
-    if first and middle:
-        conditions |= Q(first_name__iexact=first, middle_name__iexact=middle)
 
     # Только фамилия — опционально, по умолчанию выключено
     if weak_last_name and last and len(last) >= 3:
@@ -90,23 +85,18 @@ def _candidate_pairs_with_reasons():
     reasons_by_pair = defaultdict(set)
 
     by_last_first = defaultdict(list)
-    by_first_middle = defaultdict(list)
     by_nickname = defaultdict(list)
-    for pk, last, first, middle, nick in Contact.objects.values_list(
-        'pk', 'last_name', 'first_name', 'middle_name', 'nickname'
+    for pk, last, first, nick in Contact.objects.values_list(
+        'pk', 'last_name', 'first_name', 'nickname'
     ):
-        last, first, middle, nick = _norm(last).lower(), _norm(first).lower(), _norm(middle).lower(), _norm(nick).lower()
+        last, first, nick = _norm(last).lower(), _norm(first).lower(), _norm(nick).lower()
         if last and first:
             by_last_first[(last, first)].append(pk)
-        if first and middle:
-            by_first_middle[(first, middle)].append(pk)
         if len(nick) >= 2:
             by_nickname[nick].append(pk)
 
     for pair in _pairs_from_groups(by_last_first):
         reasons_by_pair[pair].add('фамилия и имя')
-    for pair in _pairs_from_groups(by_first_middle):
-        reasons_by_pair[pair].add('имя и отчество')
     for pair in _pairs_from_groups(by_nickname):
         reasons_by_pair[pair].add('никнейм')
 
@@ -168,18 +158,14 @@ def get_duplicate_match_reasons(anchor, candidate):
     reasons = []
     last = _norm(anchor.last_name)
     first = _norm(anchor.first_name)
-    middle = _norm(anchor.middle_name)
     nick = _norm(anchor.nickname)
 
     c_last = _norm(candidate.last_name)
     c_first = _norm(candidate.first_name)
-    c_middle = _norm(candidate.middle_name)
     c_nick = _norm(candidate.nickname)
 
     if last and first and c_last.lower() == last.lower() and c_first.lower() == first.lower():
         reasons.append('фамилия и имя')
-    if first and middle and c_first.lower() == first.lower() and c_middle.lower() == middle.lower():
-        reasons.append('имя и отчество')
     if (
         last
         and len(last) >= 3
