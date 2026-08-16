@@ -36,6 +36,7 @@ def _save_rows_to_session(request, rows):
         item = {col: row.get(col, '') for col in CONTACT_IMPORT_COLUMNS}
         item['_row_number'] = row.get('_row_number')
         item['excluded'] = bool(row.get('excluded'))
+        item['match_choice'] = row.get('match_choice', '')
         serializable.append(item)
     request.session[SESSION_KEY] = json.dumps(serializable, ensure_ascii=False)
     request.session.modified = True
@@ -76,6 +77,9 @@ def _prepare_table_rows(validated_rows):
             'import_action': row.get('import_action'),
             'import_action_label': row.get('import_action_label', '—'),
             'import_action_url': row.get('import_action_url'),
+            'needs_confirm': row.get('import_action') == 'confirm',
+            'match_choice': row.get('match_choice', ''),
+            'match_candidates': row.get('match_candidates', []),
             'cells': cells,
         })
     return table_rows
@@ -86,6 +90,8 @@ def _validated_with_preview(rows):
     validated, action_summary = annotate_import_actions(validated)
     summary['create_count'] = action_summary['create']
     summary['update_count'] = action_summary['update']
+    summary['confirm_count'] = action_summary['confirm']
+    summary['can_import'] = summary['can_import'] and summary['confirm_count'] == 0
     return validated, summary
 
 
@@ -95,6 +101,7 @@ def _rows_from_post(request, row_count):
         row = {
             '_row_number': request.POST.get(f'row_{index}__row_number', index + 2),
             'excluded': request.POST.get(f'row_{index}__excluded') == 'on',
+            'match_choice': request.POST.get(f'row_{index}__match_choice', ''),
         }
         for col in CONTACT_IMPORT_COLUMNS:
             row[col] = request.POST.get(f'row_{index}__{col}', '')
@@ -114,7 +121,8 @@ def staged_contact_upload_view(request):
             messages.info(
                 request,
                 f'Загружено строк: {summary["total"]}. '
-                f'Создать: {summary["create_count"]}, обновить: {summary["update_count"]}. '
+                f'Создать: {summary["create_count"]}, обновить: {summary["update_count"]}, '
+                f'требуют подтверждения: {summary["confirm_count"]}. '
                 f'Ошибок: {summary["error_rows"]}, предупреждений: {summary["warning_rows"]}.',
             )
             return HttpResponseRedirect(reverse('admin:staged_import_contacts_review'))

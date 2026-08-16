@@ -118,10 +118,19 @@ class ContactImport(resources.ModelResource):
         skip_unchanged = True
 
     def get_instance(self, instance_loader, row):
+        # Служебные поля от staged-загрузчика (event/staged_import/): там сопоставление
+        # с существующей карточкой уже решено пользователем (см. contact_import.py),
+        # поэтому здесь просто выполняем его решение, не угадывая заново по ФИО.
+        force_contact_id = row.get('_force_contact_id')
+        if force_contact_id:
+            return Contact.objects.filter(pk=force_contact_id).first()
+        if row.get('_force_new'):
+            return None
+
         last_name = row.get('last_name', '').strip()
         first_name = row.get('first_name', '').strip()
         middle_name = row.get('middle_name')
-        
+
         # Преобразуем middle_name в None если это пустая строка или None
         if not middle_name or middle_name == 'None' or middle_name.strip() == '':
             middle_name = None
@@ -151,34 +160,79 @@ class ContactImport(resources.ModelResource):
         for key, value in row.items():
             if isinstance(value, str):
                 row[key] = value.strip()
+
+        # Строка подтверждённо привязана к существующей карточке (см.
+        # event/staged_import/contact_import.py), но отчество в файле не указано —
+        # не затираем уже известное отчество карточки пустым значением.
+        force_contact_id = row.get('_force_contact_id')
+        if force_contact_id and not (row.get('middle_name') or '').strip():
+            existing_middle_name = Contact.objects.filter(
+                pk=force_contact_id
+            ).values_list('middle_name', flat=True).first()
+            if existing_middle_name:
+                row['middle_name'] = existing_middle_name
+
         return row
 
+    def _resolve_saved_instance(self, row):
+        """Находит уже сохранённую (после save_instance) карточку по строке импорта.
+
+        В отличие от get_instance, не возвращает None для _force_new — строка row
+        обрабатывается уже после сохранения, поэтому карточка точно есть в базе.
+        """
+        force_contact_id = row.get('_force_contact_id')
+        if force_contact_id:
+            return Contact.objects.filter(pk=force_contact_id).first()
+
+        last_name = row.get('last_name', '').strip()
+        first_name = row.get('first_name', '').strip()
+        middle_name = row.get('middle_name')
+        if not middle_name or middle_name == 'None' or middle_name.strip() == '':
+            middle_name = None
+
+        if not last_name or not first_name:
+            return None
+
+        qs = Contact.objects.filter(last_name=last_name, first_name=first_name)
+        if middle_name:
+            qs = qs.filter(middle_name=middle_name)
+        else:
+            qs = qs.filter(Q(middle_name__isnull=True) | Q(middle_name=''))
+        return qs.order_by('-pk').first()
+
     def after_import_row(self, row, row_result, **kwargs):
-        # Обработка соцсетей после сохранения контакта
-        social_name = row.get('social_network_name')
-        social_id = row.get('social_network_id')
-        social_subscribers = row.get('social_network_subscribers')
-        
-        # Преобразуем подписчиков в число
-        if social_subscribers:
-            try:
-                social_subscribers = int(float(str(social_subscribers)))
-            except (ValueError, TypeError):
-                social_subscribers = None
-        
-        if social_name and social_id:
-            instance = self.get_instance(None, row)
-            if instance:
-                social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
-                info_contact, created = InfoContact.objects.get_or_create(
-                    contact=instance,
-                    social_network=social_network,
-                    defaults={'external_id': social_id, 'subscribers': social_subscribers}
-                )
-                if not created:
-                    info_contact.external_id = social_id
-                    info_contact.subscribers = social_subscribers
-                    info_contact.save()
+        # Обработка соцсетей после сохранения контакта (до 3 соцсетей на строку,
+        # см. event/staged_import/contact_columns.py SOCIAL_NETWORK_GROUPS).
+        instance = None
+        for i in (1, 2, 3):
+            social_name = row.get(f'social_network_{i}_name')
+            social_id = row.get(f'social_network_{i}_id')
+            social_subscribers = row.get(f'social_network_{i}_subscribers')
+
+            if not (social_name and social_id):
+                continue
+
+            if social_subscribers:
+                try:
+                    social_subscribers = int(float(str(social_subscribers)))
+                except (ValueError, TypeError):
+                    social_subscribers = None
+
+            if instance is None:
+                instance = self._resolve_saved_instance(row)
+                if not instance:
+                    break
+
+            social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
+            info_contact, created = InfoContact.objects.get_or_create(
+                contact=instance,
+                social_network=social_network,
+                defaults={'external_id': social_id, 'subscribers': social_subscribers}
+            )
+            if not created:
+                info_contact.external_id = social_id
+                info_contact.subscribers = social_subscribers
+                info_contact.save()
         return row_result
 
 class ContactExport(resources.ModelResource):

@@ -25,9 +25,13 @@
     .staged-import-summary .warn-count { color: #996600; }
     .staged-import-summary .create-count { color: #1a7f37; font-weight: bold; }
     .staged-import-summary .update-count { color: #417690; font-weight: bold; }
+    .staged-import-summary .confirm-count { color: #996600; font-weight: bold; }
     .import-action-create { color: #1a7f37; font-weight: 600; }
     .import-action-update { color: #417690; font-weight: 600; }
     .import-action-update a { color: #417690; }
+    .import-action-confirm { color: #996600; font-weight: 600; }
+    .staged-import-table tr.row-confirm td { background: #fffdf5; }
+    .match-choice-select { width: 220px; max-width: 100%; font-size: 12px; margin-top: 4px; }
     .staged-import-table-wrap {
       overflow-x: auto;
       margin-bottom: 16px;
@@ -133,9 +137,10 @@
     с ошибками: <span class="error-count">{{ summary.error_rows }}</span>,
     с предупреждениями: <span class="warn-count">{{ summary.warning_rows }}</span>,
     будет создано: <span class="create-count">{{ summary.create_count }}</span>,
-    обновлено: <span class="update-count">{{ summary.update_count }}</span>.
+    обновлено: <span class="update-count">{{ summary.update_count }}</span>,
+    требуют подтверждения: <span class="confirm-count">{{ summary.confirm_count }}</span>.
     {% if not summary.can_import %}
-      <br><span class="error-count">Исправьте ошибки или исключите проблемные строки, чтобы загрузить данные.</span>
+      <br><span class="error-count">Исправьте ошибки, подтвердите совпадения или исключите проблемные строки, чтобы загрузить данные.</span>
     {% endif %}
   </div>
 
@@ -155,17 +160,29 @@
         </thead>
         <tbody>
           {% for row in table_rows %}
-            <tr class="{% if row.excluded %}row-excluded{% elif row.has_errors %}row-error{% endif %}">
+            <tr class="{% if row.excluded %}row-excluded{% elif row.has_errors %}row-error{% elif row.needs_confirm %}row-confirm{% endif %}">
               <td>{{ row.row_number }}</td>
               <td>
                 <input type="checkbox" name="row_{{ row.index }}__excluded" {% if row.excluded %}checked{% endif %}>
                 <input type="hidden" name="row_{{ row.index }}__row_number" value="{{ row.row_number }}">
               </td>
-              <td class="{% if row.import_action == 'create' %}import-action-create{% elif row.import_action == 'update' %}import-action-update{% endif %}">
+              <td class="{% if row.import_action == 'create' %}import-action-create{% elif row.import_action == 'update' %}import-action-update{% elif row.import_action == 'confirm' %}import-action-confirm{% endif %}">
                 {% if row.import_action_url %}
                   <a href="{{ row.import_action_url }}" target="_blank">{{ row.import_action_label }}</a>
                 {% else %}
                   {{ row.import_action_label }}
+                {% endif %}
+                {% if row.needs_confirm %}
+                  <br>
+                  <select class="match-choice-select" name="row_{{ row.index }}__match_choice">
+                    <option value="" {% if not row.match_choice %}selected{% endif %}>— выберите —</option>
+                    <option value="new" {% if row.match_choice == 'new' %}selected{% endif %}>Создать нового</option>
+                    {% for candidate in row.match_candidates %}
+                      <option value="{{ candidate.pk }}" {% if row.match_choice == candidate.pk|stringformat:"s" %}selected{% endif %}>
+                        Обновить: {{ candidate.label }} (#{{ candidate.pk }})
+                      </option>
+                    {% endfor %}
+                  </select>
                 {% endif %}
               </td>
               {% for cell in row.cells %}

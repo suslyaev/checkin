@@ -1,9 +1,58 @@
 import re
 
-from .contact_columns import CONTACT_IMPORT_COLUMNS, NAME_FIELDS, REQUIRED_CONTACT_COLUMNS
+from .contact_columns import (
+    CONTACT_IMPORT_COLUMNS,
+    NAME_FIELDS,
+    REQUIRED_CONTACT_COLUMNS,
+    SOCIAL_NETWORK_GROUPS,
+    YO_NORMALIZE_FIELDS,
+)
 
 FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>"{}|\\`\x00-\x08\x0b\x0c\x0e-\x1f]')
 MAX_FIELD_LENGTH = 300
+YO_PATTERN = re.compile('[ёЁ]')
+
+
+def normalize_yo(value):
+    """Приводит «ё» к «е» (обязательное приведение, не проверка)."""
+    if value is None:
+        return value
+    return YO_PATTERN.sub(lambda m: 'е' if m.group() == 'ё' else 'Е', value)
+
+
+def _looks_like_social_handle(value):
+    """Ссылка/хэндл соцсети не содержит пробелов; должность вроде
+    «Сотрудник MQP» или «Аккаунт менеджер» — содержит."""
+    value = value.strip()
+    if not value:
+        return True
+    return not re.search(r'\s', value)
+
+
+def _apply_normalization(row):
+    """Обязательное приведение значений до валидации: ё->е в ФИО-полях,
+    очистка мусора в полях соцсетей. Возвращает (row, social_clear_notes)."""
+    normalized = dict(row)
+    for field in YO_NORMALIZE_FIELDS:
+        if field in normalized:
+            normalized[field] = normalize_yo(normalized[field])
+
+    social_clear_notes = {}
+    for i in SOCIAL_NETWORK_GROUPS:
+        id_field = f'social_network_{i}_id'
+        raw_id = normalized.get(id_field, '')
+        raw_id = '' if raw_id is None else str(raw_id)
+        if raw_id.strip() and not _looks_like_social_handle(raw_id):
+            name_field = f'social_network_{i}_name'
+            subs_field = f'social_network_{i}_subscribers'
+            normalized[id_field] = ''
+            normalized[name_field] = ''
+            normalized[subs_field] = ''
+            social_clear_notes[id_field] = (
+                'Похоже, это не ссылка/ID соцсети — значение очищено'
+            )
+
+    return normalized, social_clear_notes
 
 
 def _cell_issues(field, raw_value):
@@ -29,7 +78,8 @@ def _cell_issues(field, raw_value):
     if field in NAME_FIELDS and value.strip() and FORBIDDEN_CHARS_PATTERN.search(value):
         errors.append('Недопустимые символы (< > " { } | \\ и управляющие)')
 
-    if field == 'social_network_subscribers' and value.strip():
+    subscriber_columns = {f'social_network_{i}_subscribers' for i in SOCIAL_NETWORK_GROUPS}
+    if field in subscriber_columns and value.strip():
         try:
             int(float(value.strip().replace(' ', '').replace(',', '.')))
         except (ValueError, TypeError):
@@ -40,16 +90,20 @@ def _cell_issues(field, raw_value):
 
 def validate_contact_row(row):
     """Возвращает row с полями errors, warnings, has_errors, has_warnings."""
+    normalized_row, social_clear_notes = _apply_normalization(row)
+
     errors = {}
     warnings = {}
     for field in CONTACT_IMPORT_COLUMNS:
-        field_errors, field_warnings = _cell_issues(field, row.get(field, ''))
+        field_errors, field_warnings = _cell_issues(field, normalized_row.get(field, ''))
+        if field in social_clear_notes:
+            field_warnings = list(field_warnings) + [social_clear_notes[field]]
         if field_errors:
             errors[field] = field_errors
         if field_warnings:
             warnings[field] = field_warnings
 
-    result = dict(row)
+    result = dict(normalized_row)
     result['errors'] = errors
     result['warnings'] = warnings
     result['has_errors'] = bool(errors)
