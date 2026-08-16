@@ -172,7 +172,7 @@
                 {% else %}
                   {{ row.import_action_label }}
                 {% endif %}
-                {% if row.needs_confirm %}
+                {% if row.match_candidates %}
                   <br>
                   <select class="match-choice-select" name="row_{{ row.index }}__match_choice">
                     <option value="" {% if not row.match_choice %}selected{% endif %}>— выберите —</option>
