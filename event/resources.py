@@ -217,6 +217,8 @@ class ContactImport(resources.ModelResource):
                     social_subscribers = int(float(str(social_subscribers)))
                 except (ValueError, TypeError):
                     social_subscribers = None
+            else:
+                social_subscribers = None
 
             if instance is None:
                 instance = self._resolve_saved_instance(row)
