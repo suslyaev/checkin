@@ -4,21 +4,18 @@ import tablib
 from django.db import transaction
 from django.urls import reverse
 
-from event.models import CategoryContact, CompanyContact, Contact, TypeGuestContact
+from event.models import Contact
 from event.resources import ContactImport, find_producer
 
-from .contact_columns import CONTACT_IMPORT_COLUMNS
-from .contact_validation import normalize_row_for_import, normalize_yo
+from .contact_columns import CONTACT_IMPORT_COLUMNS, REFERENCE_FIELD_MODELS
+from .contact_validation import (
+    load_reference_casing_maps,
+    normalize_row_for_import,
+    normalize_yo,
+    resolve_reference_casing,
+)
 
 MATCH_CHOICE_NEW = 'new'
-
-# Поля-справочники, для которых новые значения не создаются молча (п.3
-# требований) — показываются пользователю пакетом на подтверждение.
-REFERENCE_FIELD_MODELS = {
-    'company': CompanyContact,
-    'category': CategoryContact,
-    'type_guest': TypeGuestContact,
-}
 
 
 def _norm(value):
@@ -150,6 +147,43 @@ def resolve_contact_import_action(row, exact_index, candidates_index):
     }
 
 
+# Базовые поля карточки, для которых на "Обновить"-строках показывается
+# diff с текущим значением в базе (соцсети не сравниваем — там отдельная
+# аддитивная логика per-network, не одно значение на поле).
+BASE_DIFF_FIELDS = (
+    'last_name', 'first_name', 'middle_name', 'nickname',
+    'company', 'category', 'type_guest', 'producer', 'comment',
+)
+
+
+def _producer_display(producer):
+    if not producer:
+        return ''
+    return f'{producer.last_name or ""} {producer.first_name or ""}'.strip()
+
+
+def _fetch_current_values(pks):
+    """{pk: {field: текущее строковое значение}} для строк 'Обновить' —
+    чтобы показать в таблице проверки, что реально изменится."""
+    if not pks:
+        return {}
+    contacts = Contact.objects.filter(pk__in=pks).select_related('company', 'category', 'type_guest', 'producer')
+    result = {}
+    for contact in contacts:
+        result[contact.pk] = {
+            'last_name': contact.last_name or '',
+            'first_name': contact.first_name or '',
+            'middle_name': contact.middle_name or '',
+            'nickname': contact.nickname or '',
+            'company': contact.company.name if contact.company else '',
+            'category': contact.category.name if contact.category else '',
+            'type_guest': contact.type_guest.name if contact.type_guest else '',
+            'producer': _producer_display(contact.producer),
+            'comment': contact.comment or '',
+        }
+    return result
+
+
 def annotate_import_actions(rows):
     exact_index, candidates_index = build_contact_match_index()
     counts = {'create': 0, 'update': 0, 'confirm': 0}
@@ -166,6 +200,14 @@ def annotate_import_actions(rows):
             continue
         if preview['action'] in counts:
             counts[preview['action']] += 1
+
+    update_pks = {row['import_action_pk'] for row in rows if row.get('import_action') == 'update' and row.get('import_action_pk')}
+    current_values_by_pk = _fetch_current_values(update_pks)
+    for row in rows:
+        if row.get('import_action') == 'update':
+            row['_current_values'] = current_values_by_pk.get(row.get('import_action_pk'), {})
+        else:
+            row['_current_values'] = {}
 
     return rows, counts
 
@@ -246,6 +288,7 @@ def import_contact_rows(rows, user, confirmed_refs=None):
         )
 
     ensure_reference_values_exist(confirmed_refs)
+    reference_casing_maps = load_reference_casing_maps()
 
     resource = ContactImport()
     headers = CONTACT_IMPORT_COLUMNS + ['_force_new', '_force_contact_id']
@@ -255,6 +298,15 @@ def import_contact_rows(rows, user, confirmed_refs=None):
         if row.get('excluded'):
             continue
         normalized = normalize_row_for_import(row)
+
+        # Опечатка в регистре (например "вип3" при существующей "ВИП3") не
+        # должна плодить дубль справочника — приводим к уже существующему
+        # написанию прямо перед сохранением (в сетке при этом остаётся то,
+        # что реально ввёл пользователь, см. contact_validation.py).
+        for field, casing_map in reference_casing_maps.items():
+            canonical = resolve_reference_casing(normalized.get(field), casing_map)
+            if canonical:
+                normalized[field] = canonical
 
         force_new = ''
         force_contact_id = ''

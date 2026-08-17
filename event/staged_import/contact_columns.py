@@ -1,6 +1,18 @@
 """Колонки файла импорта людей (тот же формат, что import_cont.xlsx)."""
 
+from event.models import CategoryContact, CompanyContact, TypeGuestContact
+
 SOCIAL_NETWORK_GROUPS = (1, 2, 3)
+
+# Поля-справочники, для которых новые значения не создаются молча (п.3
+# требований) — используется и для сбора значений на подтверждение
+# (contact_import.py), и для приведения регистра к уже существующему
+# значению (contact_validation.py).
+REFERENCE_FIELD_MODELS = {
+    'company': CompanyContact,
+    'category': CategoryContact,
+    'type_guest': TypeGuestContact,
+}
 
 
 def _social_columns():

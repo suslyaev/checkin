@@ -9,13 +9,14 @@ from django.urls import path, reverse
 
 from .contact_columns import CONTACT_COLUMN_LABELS, CONTACT_IMPORT_COLUMNS
 from .contact_import import (
+    BASE_DIFF_FIELDS,
     REFERENCE_FIELD_MODELS,
     annotate_import_actions,
     collect_new_reference_values,
     collect_unresolved_producers,
     import_contact_rows,
 )
-from .contact_validation import validate_contact_rows
+from .contact_validation import load_reference_casing_maps, resolve_reference_casing, validate_contact_rows
 from .forms import ContactStagedUploadForm
 from .parsers import parse_spreadsheet
 
@@ -79,28 +80,58 @@ def _update_confirmed_refs_from_post(request):
     return confirmed_refs
 
 
-def _prepare_table_rows(validated_rows):
+def _prepare_table_rows(validated_rows, new_reference_values):
+    new_reference_by_field = {
+        field: set(values.keys()) for field, values in new_reference_values.items()
+    }
+    reference_casing_maps = load_reference_casing_maps()
     table_rows = []
     for index, row in enumerate(validated_rows):
         cells = []
         row_errors = row.get('errors', {})
         row_warnings = row.get('warnings', {})
+        is_update = row.get('import_action') == 'update'
+        current_values = row.get('_current_values', {}) if is_update else {}
         for col in CONTACT_IMPORT_COLUMNS:
             cell_errors = row_errors.get(col, [])
             cell_warnings = row_warnings.get(col, [])
-            css = ''
+            value = row.get(col, '')
+            is_reference = col in REFERENCE_FIELD_MODELS
+            is_new_reference = bool(value.strip()) and value.strip() in new_reference_by_field.get(col, set())
+
+            changed = False
+            current_value = ''
+            if is_update and col in BASE_DIFF_FIELDS:
+                current_value = current_values.get(col, '')
+                effective_value = value.strip()
+                if is_reference:
+                    # Опечатка в регистре — не "изменение", при коммите всё равно
+                    # подставится уже существующее написание (см. contact_import.py).
+                    effective_value = resolve_reference_casing(
+                        effective_value, reference_casing_maps.get(col, {})
+                    ) or effective_value
+                changed = effective_value != current_value.strip()
+
+            css_parts = []
             if cell_errors:
-                css = 'cell-error'
+                css_parts.append('cell-error')
             elif cell_warnings:
-                css = 'cell-warning'
+                css_parts.append('cell-warning')
+            if is_new_reference:
+                css_parts.append('cell-new-reference')
+
             cells.append({
                 'field': col,
-                'value': row.get(col, ''),
+                'value': value,
                 'errors': cell_errors,
                 'warnings': cell_warnings,
-                'css': css,
+                'css': ' '.join(css_parts),
                 'is_comment': col == 'comment',
-                'is_reference': col in REFERENCE_FIELD_MODELS,
+                'is_reference': is_reference,
+                'is_new_reference': is_new_reference,
+                'is_update': is_update,
+                'changed': changed,
+                'current_value': current_value,
             })
         table_rows.append({
             'index': index,
@@ -160,6 +191,7 @@ def _full_preview(rows, request):
     )
 
     extra = {
+        'new_reference_values': new_reference_values,
         'new_reference_panels': new_reference_panels,
         'unresolved_producers': [
             {'value': value, 'row_numbers': row_numbers}
@@ -268,7 +300,7 @@ def staged_contact_review_view(request):
 
     context = {
         'title': 'Проверка данных перед загрузкой',
-        'table_rows': _prepare_table_rows(stored),
+        'table_rows': _prepare_table_rows(stored, extra['new_reference_values']),
         'column_labels': [CONTACT_COLUMN_LABELS[col] for col in CONTACT_IMPORT_COLUMNS],
         'summary': summary,
         'new_reference_panels': extra['new_reference_panels'],

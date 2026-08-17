@@ -87,6 +87,18 @@
     }
     .cell-messages .err { color: #ba2121; }
     .cell-messages .warn { color: #996600; }
+    .cell-messages .diff { color: #417690; }
+    .cell-new-reference input {
+      border: 2px solid #d4a017;
+      background: #fffdf5;
+    }
+    .cell-reference-status {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .cell-reference-status.new { color: #996600; }
+    .cell-reference-status.known { color: #888; }
     .staged-import-actions {
       display: flex;
       gap: 10px;
@@ -266,6 +278,16 @@
                     <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}" list="datalist-{{ cell.field }}">
                   {% else %}
                     <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}">
+                  {% endif %}
+                  {% if cell.is_reference and cell.value %}
+                    {% if cell.is_new_reference %}
+                      <div class="cell-reference-status new">🆕 новое значение — см. подтверждение выше</div>
+                    {% else %}
+                      <div class="cell-reference-status known">есть в справочнике</div>
+                    {% endif %}
+                  {% endif %}
+                  {% if cell.is_update and cell.changed %}
+                    <div class="cell-messages"><div class="diff">было: «{{ cell.current_value|default:"—" }}»</div></div>
                   {% endif %}
                   {% if cell.errors or cell.warnings %}
                     <div class="cell-messages">

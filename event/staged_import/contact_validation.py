@@ -5,12 +5,14 @@ from event.models import KnownFirstName, KnownLastName
 from .contact_columns import (
     CONTACT_IMPORT_COLUMNS,
     NAME_FIELDS,
+    REFERENCE_FIELD_MODELS,
     REQUIRED_CONTACT_COLUMNS,
     SOCIAL_NETWORK_GROUPS,
     YO_NORMALIZE_FIELDS,
 )
 
 NAME_SWAP_WARNING = 'Похоже, имя и фамилия перепутаны местами — проверьте'
+REFERENCE_CASING_NOTE = 'Приведено к уже существующему значению справочника: «{value}»'
 
 FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>"{}|\\`\x00-\x08\x0b\x0c\x0e-\x1f]')
 MAX_FIELD_LENGTH = 300
@@ -33,15 +35,39 @@ def _looks_like_social_handle(value):
     return not re.search(r'\s', value)
 
 
-def _apply_normalization(row):
+def load_reference_casing_maps():
+    """{field: {значение.lower(): точное_написание_в_БД}} — чтобы «вип3» не
+    завёл дубль категории рядом с уже существующей «ВИП3» только из-за
+    регистра (ForeignKeyGetOrCreateWidget ищет точным совпадением)."""
+    return {
+        field: {name.strip().lower(): name for name in model.objects.values_list('name', flat=True)}
+        for field, model in REFERENCE_FIELD_MODELS.items()
+    }
+
+
+def resolve_reference_casing(value, casing_map):
+    """Возвращает существующее написание значения из справочника, если оно
+    отличается от введённого только регистром, иначе None."""
+    value = (value or '').strip()
+    if not value:
+        return None
+    canonical = casing_map.get(value.lower())
+    if canonical and canonical != value:
+        return canonical
+    return None
+
+
+def _apply_normalization(row, reference_casing_maps=None):
     """Обязательное приведение значений до валидации: ё->е в ФИО-полях,
-    очистка мусора в полях соцсетей. Возвращает (row, social_clear_notes)."""
+    очистка мусора в полях соцсетей, приведение регистра справочных полей
+    к уже существующему значению. Возвращает (row, extra_notes)."""
     normalized = dict(row)
     for field in YO_NORMALIZE_FIELDS:
         if field in normalized:
             normalized[field] = normalize_yo(normalized[field])
 
-    social_clear_notes = {}
+    extra_notes = {}
+
     for i in SOCIAL_NETWORK_GROUPS:
         id_field = f'social_network_{i}_id'
         raw_id = normalized.get(id_field, '')
@@ -52,11 +78,19 @@ def _apply_normalization(row):
             normalized[id_field] = ''
             normalized[name_field] = ''
             normalized[subs_field] = ''
-            social_clear_notes[id_field] = (
-                'Похоже, это не ссылка/ID соцсети — значение очищено'
-            )
+            extra_notes[id_field] = 'Похоже, это не ссылка/ID соцсети — значение очищено'
 
-    return normalized, social_clear_notes
+    for field, casing_map in (reference_casing_maps or {}).items():
+        canonical = resolve_reference_casing(normalized.get(field), casing_map)
+        if canonical:
+            # Значение в сетке/сессии намеренно НЕ трогаем — иначе при следующей
+            # отрисовке несовпадение регистра уже не обнаружится и предупреждение
+            # исчезнет, толком не показавшись пользователю (загрузка сразу
+            # редиректит на страницу проверки). Каноническое написание
+            # подставляется только в момент коммита, см. import_contact_rows.
+            extra_notes[field] = REFERENCE_CASING_NOTE.format(value=canonical)
+
+    return normalized, extra_notes
 
 
 def _cell_issues(field, raw_value):
@@ -122,16 +156,16 @@ def _looks_swapped(last_name, first_name, known_first_names, known_last_names):
     return first_looks_like_surname and last_looks_like_firstname
 
 
-def validate_contact_row(row, known_first_names=None, known_last_names=None):
+def validate_contact_row(row, known_first_names=None, known_last_names=None, reference_casing_maps=None):
     """Возвращает row с полями errors, warnings, has_errors, has_warnings."""
-    normalized_row, social_clear_notes = _apply_normalization(row)
+    normalized_row, extra_notes = _apply_normalization(row, reference_casing_maps)
 
     errors = {}
     warnings = {}
     for field in CONTACT_IMPORT_COLUMNS:
         field_errors, field_warnings = _cell_issues(field, normalized_row.get(field, ''))
-        if field in social_clear_notes:
-            field_warnings = list(field_warnings) + [social_clear_notes[field]]
+        if field in extra_notes:
+            field_warnings = list(field_warnings) + [extra_notes[field]]
         if field_errors:
             errors[field] = field_errors
         if field_warnings:
@@ -154,7 +188,11 @@ def validate_contact_row(row, known_first_names=None, known_last_names=None):
 
 def validate_contact_rows(rows):
     known_first_names, known_last_names = _load_known_name_sets()
-    validated = [validate_contact_row(row, known_first_names, known_last_names) for row in rows]
+    reference_casing_maps = load_reference_casing_maps()
+    validated = [
+        validate_contact_row(row, known_first_names, known_last_names, reference_casing_maps)
+        for row in rows
+    ]
     active = [r for r in validated if not r.get('excluded')]
     summary = {
         'total': len(validated),
