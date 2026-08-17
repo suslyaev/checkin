@@ -1,5 +1,7 @@
 import re
 
+from event.models import KnownFirstName, KnownLastName
+
 from .contact_columns import (
     CONTACT_IMPORT_COLUMNS,
     NAME_FIELDS,
@@ -7,6 +9,8 @@ from .contact_columns import (
     SOCIAL_NETWORK_GROUPS,
     YO_NORMALIZE_FIELDS,
 )
+
+NAME_SWAP_WARNING = 'Похоже, имя и фамилия перепутаны местами — проверьте'
 
 FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>"{}|\\`\x00-\x08\x0b\x0c\x0e-\x1f]')
 MAX_FIELD_LENGTH = 300
@@ -88,7 +92,37 @@ def _cell_issues(field, raw_value):
     return errors, warnings
 
 
-def validate_contact_row(row):
+def _load_known_name_sets():
+    """Множества известных имён/фамилий (регистр не важен, ё->е), для п.1.3.
+    Списки заведомо неполные — пополняются вручную через админку."""
+    first_names = {
+        normalize_yo(name).strip().lower()
+        for name in KnownFirstName.objects.values_list('name', flat=True)
+    }
+    last_names = {
+        normalize_yo(name).strip().lower()
+        for name in KnownLastName.objects.values_list('name', flat=True)
+    }
+    return first_names, last_names
+
+
+def _looks_swapped(last_name, first_name, known_first_names, known_last_names):
+    """True, если слово из "Имя" похоже на фамилию, а слово из "Фамилия" —
+    на имя (и только тогда — единичное совпадение с одним из справочников
+    ничего не значит, слишком много имён, которые бывают и фамилиями)."""
+    last_word = (last_name or '').strip().split()
+    first_word = (first_name or '').strip().split()
+    if not last_word or not first_word:
+        return False
+    last_key = last_word[0].lower()
+    first_key = first_word[0].lower()
+
+    first_looks_like_surname = first_key in known_last_names and first_key not in known_first_names
+    last_looks_like_firstname = last_key in known_first_names and last_key not in known_last_names
+    return first_looks_like_surname and last_looks_like_firstname
+
+
+def validate_contact_row(row, known_first_names=None, known_last_names=None):
     """Возвращает row с полями errors, warnings, has_errors, has_warnings."""
     normalized_row, social_clear_notes = _apply_normalization(row)
 
@@ -103,6 +137,13 @@ def validate_contact_row(row):
         if field_warnings:
             warnings[field] = field_warnings
 
+    if known_first_names is not None and _looks_swapped(
+        normalized_row.get('last_name', ''), normalized_row.get('first_name', ''),
+        known_first_names, known_last_names,
+    ):
+        warnings.setdefault('last_name', []).append(NAME_SWAP_WARNING)
+        warnings.setdefault('first_name', []).append(NAME_SWAP_WARNING)
+
     result = dict(normalized_row)
     result['errors'] = errors
     result['warnings'] = warnings
@@ -112,7 +153,8 @@ def validate_contact_row(row):
 
 
 def validate_contact_rows(rows):
-    validated = [validate_contact_row(row) for row in rows]
+    known_first_names, known_last_names = _load_known_name_sets()
+    validated = [validate_contact_row(row, known_first_names, known_last_names) for row in rows]
     active = [r for r in validated if not r.get('excluded')]
     summary = {
         'total': len(validated),

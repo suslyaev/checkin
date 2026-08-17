@@ -4,13 +4,21 @@ import tablib
 from django.db import transaction
 from django.urls import reverse
 
-from event.models import Contact
-from event.resources import ContactImport
+from event.models import CategoryContact, CompanyContact, Contact, TypeGuestContact
+from event.resources import ContactImport, find_producer
 
 from .contact_columns import CONTACT_IMPORT_COLUMNS
 from .contact_validation import normalize_row_for_import, normalize_yo
 
 MATCH_CHOICE_NEW = 'new'
+
+# Поля-справочники, для которых новые значения не создаются молча (п.3
+# требований) — показываются пользователю пакетом на подтверждение.
+REFERENCE_FIELD_MODELS = {
+    'company': CompanyContact,
+    'category': CategoryContact,
+    'type_guest': TypeGuestContact,
+}
 
 
 def _norm(value):
@@ -162,7 +170,64 @@ def annotate_import_actions(rows):
     return rows, counts
 
 
-def import_contact_rows(rows, user):
+def _existing_reference_names(model):
+    return {name.strip().lower() for name in model.objects.values_list('name', flat=True)}
+
+
+def collect_new_reference_values(rows):
+    """
+    Значения company/category/type_guest из активных строк без ошибок, которых нет
+    в справочнике: {field: {значение: [номера строк]}}. По ним запрашивается
+    пакетное подтверждение (п.3) — без него ничего не создаётся молча.
+    """
+    existing = {field: _existing_reference_names(model) for field, model in REFERENCE_FIELD_MODELS.items()}
+    new_values = {field: {} for field in REFERENCE_FIELD_MODELS}
+
+    for row in rows:
+        if row.get('excluded') or row.get('has_errors'):
+            continue
+        for field in REFERENCE_FIELD_MODELS:
+            value = (row.get(field) or '').strip()
+            if not value or value.lower() in existing[field]:
+                continue
+            new_values[field].setdefault(value, []).append(row.get('_row_number'))
+
+    return new_values
+
+
+def ensure_reference_values_exist(confirmed_refs):
+    """Явно создаёт справочные значения, которые пользователь подтвердил
+    (см. collect_new_reference_values) — до вызова ContactImport, чтобы
+    ForeignKeyGetOrCreateWidget внутри просто их нашёл, а не создавал сам."""
+    if not confirmed_refs:
+        return
+    for field, model in REFERENCE_FIELD_MODELS.items():
+        for value in confirmed_refs.get(field, []):
+            value = (value or '').strip()
+            if value:
+                model.objects.get_or_create(name=value)
+
+
+def collect_unresolved_producers(rows):
+    """
+    Продюсеры из активных строк без ошибок, которых нет среди пользователей
+    системы: {значение: [номера строк]}. Только для отчёта (п.5) — контакт
+    всё равно создаётся/обновляется, producer остаётся пустым, пока кто-то
+    вручную не заведёт пользователя.
+    """
+    unresolved = {}
+    for row in rows:
+        if row.get('excluded') or row.get('has_errors'):
+            continue
+        value = (row.get('producer') or '').strip()
+        if not value:
+            continue
+        if find_producer(value) is None:
+            unresolved.setdefault(value, []).append(row.get('_row_number'))
+    return unresolved
+
+
+def import_contact_rows(rows, user, confirmed_refs=None):
     """Загружает отредактированные строки через ContactImport.
 
     Сопоставление с существующими карточками уже произведено в
@@ -179,6 +244,8 @@ def import_contact_rows(rows, user):
             'Есть строки, требующие подтверждения совпадения: '
             + ', '.join(str(n) for n in unresolved)
         )
+
+    ensure_reference_values_exist(confirmed_refs)
 
     resource = ContactImport()
     headers = CONTACT_IMPORT_COLUMNS + ['_force_new', '_force_contact_id']

@@ -159,6 +159,24 @@ class TypeGuestContact(BaseModelClass):
         verbose_name = 'Тип гостя'
         verbose_name_plural = 'Типы гостя'
 
+# Известное имя (для проверки "имя и фамилия не перепутаны" при загрузке)
+class KnownFirstName(BaseModelClass):
+    name = models.CharField(max_length=100, unique=True, verbose_name='Имя')
+    comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Известное имя'
+        verbose_name_plural = 'Известные имена'
+
+# Известная фамилия (для проверки "имя и фамилия не перепутаны" при загрузке)
+class KnownLastName(BaseModelClass):
+    name = models.CharField(max_length=100, unique=True, verbose_name='Фамилия')
+    comment = models.CharField(max_length=100, verbose_name='Описание', blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Известная фамилия'
+        verbose_name_plural = 'Известные фамилии'
+
 # Человек
 class Contact(models.Model):
     last_name = models.CharField(max_length=300, verbose_name='Фамилия')

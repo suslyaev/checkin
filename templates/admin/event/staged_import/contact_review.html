@@ -120,6 +120,45 @@
       background: #ba2121;
       color: #fff;
     }
+    .staged-import-panel {
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+    .staged-import-panel.pending {
+      background: #fffdf5;
+      border-color: #d4a017;
+    }
+    .staged-import-panel.info {
+      background: #f4f8fb;
+      border-color: #c3d7e6;
+    }
+    .staged-import-panel h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+    .staged-import-panel ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .staged-import-panel li {
+      margin-bottom: 4px;
+    }
+    .staged-import-panel .row-numbers {
+      color: #666;
+      font-size: 11px;
+    }
+    .staged-import-panel .confirm-all-btn {
+      font-size: 11px;
+      margin-left: 8px;
+      cursor: pointer;
+      color: #417690;
+      text-decoration: underline;
+      background: none;
+      border: none;
+      padding: 0;
+    }
   </style>
 {% endblock %}
 
@@ -138,14 +177,48 @@
     с предупреждениями: <span class="warn-count">{{ summary.warning_rows }}</span>,
     будет создано: <span class="create-count">{{ summary.create_count }}</span>,
     обновлено: <span class="update-count">{{ summary.update_count }}</span>,
-    требуют подтверждения: <span class="confirm-count">{{ summary.confirm_count }}</span>.
+    требуют подтверждения: <span class="confirm-count">{{ summary.confirm_count }}</span>,
+    новых значений справочников не подтверждено: <span class="confirm-count">{{ summary.pending_refs_count }}</span>.
     {% if not summary.can_import %}
-      <br><span class="error-count">Исправьте ошибки, подтвердите совпадения или исключите проблемные строки, чтобы загрузить данные.</span>
+      <br><span class="error-count">Исправьте ошибки, подтвердите совпадения и новые значения справочников или исключите проблемные строки, чтобы загрузить данные.</span>
     {% endif %}
   </div>
 
-  <form method="post">
+  <form method="post" id="staged-import-form">
     {% csrf_token %}
+
+    {% if new_reference_panels %}
+      <div class="staged-import-panel pending">
+        <h3>Новые значения справочников — нужно подтвердить (иначе не создаются)</h3>
+        {% for panel in new_reference_panels %}
+          <strong>{{ panel.label }}</strong>
+          <button type="button" class="confirm-all-btn" onclick="
+            this.closest('div').querySelectorAll('input[name=confirm_ref_{{ panel.field }}]').forEach(function(cb){cb.checked = true;});
+          ">подтвердить все</button>
+          <ul>
+            {% for item in panel.items %}
+              <li>
+                <label>
+                  <input type="checkbox" name="confirm_ref_{{ panel.field }}" value="{{ item.value }}" {% if item.confirmed %}checked{% endif %}>
+                  «{{ item.value }}» — <span class="row-numbers">строки: {% for n in item.row_numbers %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if unresolved_producers %}
+      <div class="staged-import-panel info">
+        <h3>Продюсеры не найдены в системе — потребуется завести пользователей вручную</h3>
+        <ul>
+          {% for item in unresolved_producers %}
+            <li>«{{ item.value }}» — <span class="row-numbers">строки: {% for n in item.row_numbers %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
     <div class="staged-import-table-wrap">
       <table class="staged-import-table">
         <thead>
@@ -189,6 +262,8 @@
                 <td class="{{ cell.css }}">
                   {% if cell.is_comment %}
                     <textarea name="row_{{ row.index }}__{{ cell.field }}">{{ cell.value }}</textarea>
+                  {% elif cell.is_reference %}
+                    <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}" list="datalist-{{ cell.field }}">
                   {% else %}
                     <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}">
                   {% endif %}
@@ -218,5 +293,13 @@
       <a href="{% url 'admin:staged_import_contacts_cancel' %}" class="btn btn-danger">Отменить</a>
       <a href="{{ upload_url }}" class="btn-secondary">Загрузить другой файл</a>
     </div>
+
+    {% for field, values in reference_datalists.items %}
+      <datalist id="datalist-{{ field }}">
+        {% for value in values %}
+          <option value="{{ value }}"></option>
+        {% endfor %}
+      </datalist>
+    {% endfor %}
   </form>
 {% endblock %}

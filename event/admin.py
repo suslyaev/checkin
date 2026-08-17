@@ -10,6 +10,8 @@ from .models import (
     CompanyContact,
     CategoryContact,
     TypeGuestContact,
+    KnownFirstName,
+    KnownLastName,
     SocialNetwork,
     InfoContact,
     Contact,
@@ -153,7 +155,7 @@ class CustomAdminSite(admin.AdminSite):
                         events_group['models'].append(model_dict[model_name])
 
                 # Справочники
-                for model_name in ['CompanyContact', 'CategoryContact', 'TypeGuestContact', 'SocialNetwork']:
+                for model_name in ['CompanyContact', 'CategoryContact', 'TypeGuestContact', 'SocialNetwork', 'KnownFirstName', 'KnownLastName']:
                     if model_name in model_dict:
                         reference_group['models'].append(model_dict[model_name])
 
@@ -1018,6 +1020,22 @@ class TypeGuestContactAdmin(BaseAdminPage):
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
+# Известное имя (для проверки при загрузке "имя/фамилия не перепутаны")
+@admin.register(KnownFirstName)
+class KnownFirstNameAdmin(BaseAdminPage):
+    list_display = ('id', 'name', 'comment')
+    list_editable = ('name', 'comment')
+    search_fields = ['name']
+    ordering = ['name']
+
+# Известная фамилия (для проверки при загрузке "имя/фамилия не перепутаны")
+@admin.register(KnownLastName)
+class KnownLastNameAdmin(BaseAdminPage):
+    list_display = ('id', 'name', 'comment')
+    list_editable = ('name', 'comment')
+    search_fields = ['name']
+    ordering = ['name']
 
 # Событие
 @admin.register(ModuleInstance)

@@ -15,72 +15,82 @@ class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
         except self.model.DoesNotExist:
             return self.model.objects.create(**{self.field: value})
 
+def find_producer(value):
+    """Ищет CustomUser по значению поля "Продюсер" (Фамилия[, Имя]).
+
+    Общая логика для ProducerWidget (реальное сохранение при импорте) и
+    для staged-загрузчика (event/staged_import/contact_import.py), которому
+    нужно то же самое сопоставление только для отчёта "продюсеры не найдены",
+    без побочных эффектов.
+    """
+    if not value:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+
+    parts = value.split()
+
+    # Если в поле указана одна часть - считаем, что это фамилия (старое поведение)
+    if len(parts) == 1:
+        last_name = parts[0]
+        try:
+            producer = CustomUser.objects.get(last_name=last_name)
+            print(f"Найден продюсер по фамилии: {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров с фамилией '{last_name}', пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            print(f"Продюсер не найден по фамилии: {last_name}")
+            return None
+
+    # Если частей две и больше - пробуем интерпретировать как Фамилия Имя и Имя Фамилия
+    if len(parts) >= 2:
+        p1, p2 = parts[0], parts[1]
+
+        # 1) Пытаемся найти как Фамилия Имя
+        try:
+            producer = CustomUser.objects.get(last_name=p1, first_name=p2)
+            print(f"Найден продюсер по ФИО (Фамилия Имя): {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Фамилия Имя), пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            pass
+
+        # 2) Пытаемся найти как Имя Фамилия
+        try:
+            producer = CustomUser.objects.get(last_name=p2, first_name=p1)
+            print(f"Найден продюсер по ФИО (Имя Фамилия): {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Имя Фамилия), пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            pass
+
+        # 3) Фоллбек: пробуем как раньше, только по фамилии (первая часть)
+        try:
+            producer = CustomUser.objects.get(last_name=p1)
+            print(f"Найден продюсер по фамилии (фоллбек): {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров с фамилией '{p1}' (фоллбек), пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            print(f"Продюсер не найден ни по ФИО, ни по фамилии: '{value}'")
+            return None
+
+    # На всякий случай, если формат совсем неожиданный
+    print(f"Неверный формат значения продюсера: '{value}'")
+    return None
+
+
 class ProducerWidget(ForeignKeyWidget):
     def clean(self, value, row=None, *args, **kwargs):
-        if not value:
-            return None
-        # Очищаем значение
-        value = str(value).strip()
-        if not value:
-            return None
-
-        parts = value.split()
-
-        # Если в поле указана одна часть - считаем, что это фамилия (старое поведение)
-        if len(parts) == 1:
-            last_name = parts[0]
-            try:
-                producer = CustomUser.objects.get(last_name=last_name)
-                print(f"Найден продюсер по фамилии: {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров с фамилией '{last_name}', пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                print(f"Продюсер не найден по фамилии: {last_name}")
-                return None
-
-        # Если частей две и больше - пробуем интерпретировать как Фамилия Имя и Имя Фамилия
-        if len(parts) >= 2:
-            p1, p2 = parts[0], parts[1]
-
-            # 1) Пытаемся найти как Фамилия Имя
-            try:
-                producer = CustomUser.objects.get(last_name=p1, first_name=p2)
-                print(f"Найден продюсер по ФИО (Фамилия Имя): {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Фамилия Имя), пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                pass
-
-            # 2) Пытаемся найти как Имя Фамилия
-            try:
-                producer = CustomUser.objects.get(last_name=p2, first_name=p1)
-                print(f"Найден продюсер по ФИО (Имя Фамилия): {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Имя Фамилия), пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                pass
-
-            # 3) Фоллбек: пробуем как раньше, только по фамилии (первая часть)
-            try:
-                producer = CustomUser.objects.get(last_name=p1)
-                print(f"Найден продюсер по фамилии (фоллбек): {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров с фамилией '{p1}' (фоллбек), пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                print(f"Продюсер не найден ни по ФИО, ни по фамилии: '{value}'")
-                return None
-
-        # На всякий случай, если формат совсем неожиданный
-        print(f"Неверный формат значения продюсера: '{value}'")
-        return None
+        return find_producer(value)
 
 class ContactImport(resources.ModelResource):
     social_network_name = fields.Field(column_name='social_network_name')
