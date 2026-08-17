@@ -202,7 +202,7 @@ class Contact(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        if self.photo:
+        if self.photo and self.photo.storage.exists(self.photo.name):
             img = Image.open(self.photo.path)
 
             # Ограничиваем максимальный размер изображения
