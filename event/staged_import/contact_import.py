@@ -33,13 +33,16 @@ def build_contact_match_index():
     фамилией и именем, независимо от отчества карточки — используется только когда
     отчество во входной строке пустое (п.2.2), и никогда не приводит к автоматической
     привязке без подтверждения пользователя.
+    existing_pks: множество всех ID карточек — для сопоставления по колонке id (Фаза 3).
     """
     exact_index = {}
     candidates_index = defaultdict(list)
+    existing_pks = set()
 
     for pk, last_name, first_name, middle_name in Contact.objects.values_list(
         'pk', 'last_name', 'first_name', 'middle_name'
     ):
+        existing_pks.add(pk)
         last_key = _norm(last_name)
         first_key = _norm(first_name)
         middle_key = _norm(middle_name)
@@ -53,7 +56,7 @@ def build_contact_match_index():
             'url': reverse('admin:event_contact_change', args=[pk]),
         })
 
-    return exact_index, candidates_index
+    return exact_index, candidates_index, existing_pks
 
 
 def _parse_middle_name(raw):
@@ -63,7 +66,7 @@ def _parse_middle_name(raw):
     return value or None
 
 
-def resolve_contact_import_action(row, exact_index, candidates_index):
+def resolve_contact_import_action(row, exact_index, candidates_index, existing_pks):
     empty = {
         'action': None,
         'label': '—',
@@ -75,6 +78,28 @@ def resolve_contact_import_action(row, exact_index, candidates_index):
         return empty
 
     normalized = normalize_row_for_import(row)
+
+    # Колонка id — приоритетный способ сопоставления (Фаза 3): если указана,
+    # ФИО вообще не участвует в поиске, только в самом обновлении карточки.
+    # Некорректный/несуществующий ID уже отмечен ошибкой в contact_validation.py —
+    # здесь для такой строки просто не резолвим действие (она в любом случае
+    # заблокирована как has_errors).
+    id_value = (normalized.get('id') or '').strip()
+    if id_value:
+        try:
+            contact_id = int(id_value)
+        except ValueError:
+            return empty
+        if contact_id not in existing_pks:
+            return empty
+        return {
+            'action': 'update',
+            'label': f'Обновить (#{contact_id}, по ID)',
+            'contact_pk': contact_id,
+            'contact_url': reverse('admin:event_contact_change', args=[contact_id]),
+            'match_candidates': [],
+        }
+
     last_name = normalized['last_name']
     first_name = normalized['first_name']
     middle_name = _parse_middle_name(normalized.get('middle_name'))
@@ -149,22 +174,19 @@ def resolve_contact_import_action(row, exact_index, candidates_index):
 
 # Базовые поля карточки, для которых на "Обновить"-строках показывается
 # diff с текущим значением в базе (соцсети не сравниваем — там отдельная
-# аддитивная логика per-network, не одно значение на поле).
+# аддитивная логика per-network, не одно значение на поле) и которые при
+# коммите бэкофилятся текущим значением, если их столбца нет в файле (Фаза 3).
 BASE_DIFF_FIELDS = (
     'last_name', 'first_name', 'middle_name', 'nickname',
-    'company', 'category', 'type_guest', 'producer', 'comment',
+    'company', 'category', 'type_guest',
+    'producer_last_name', 'producer_first_name', 'comment',
 )
-
-
-def _producer_display(producer):
-    if not producer:
-        return ''
-    return f'{producer.last_name or ""} {producer.first_name or ""}'.strip()
 
 
 def _fetch_current_values(pks):
     """{pk: {field: текущее строковое значение}} для строк 'Обновить' —
-    чтобы показать в таблице проверки, что реально изменится."""
+    чтобы показать в таблице проверки, что реально изменится, и подставить
+    вместо полей, чьих столбцов нет в загруженном файле (Фаза 3)."""
     if not pks:
         return {}
     contacts = Contact.objects.filter(pk__in=pks).select_related('company', 'category', 'type_guest', 'producer')
@@ -178,18 +200,19 @@ def _fetch_current_values(pks):
             'company': contact.company.name if contact.company else '',
             'category': contact.category.name if contact.category else '',
             'type_guest': contact.type_guest.name if contact.type_guest else '',
-            'producer': _producer_display(contact.producer),
+            'producer_last_name': contact.producer.last_name if contact.producer else '',
+            'producer_first_name': contact.producer.first_name if contact.producer else '',
             'comment': contact.comment or '',
         }
     return result
 
 
 def annotate_import_actions(rows):
-    exact_index, candidates_index = build_contact_match_index()
+    exact_index, candidates_index, existing_pks = build_contact_match_index()
     counts = {'create': 0, 'update': 0, 'confirm': 0}
 
     for row in rows:
-        preview = resolve_contact_import_action(row, exact_index, candidates_index)
+        preview = resolve_contact_import_action(row, exact_index, candidates_index, existing_pks)
         row['import_action'] = preview['action']
         row['import_action_label'] = preview['label']
         row['import_action_pk'] = preview['contact_pk']
@@ -250,6 +273,12 @@ def ensure_reference_values_exist(confirmed_refs):
                 model.objects.get_or_create(name=value)
 
 
+def _combined_producer(row):
+    last = (row.get('producer_last_name') or '').strip()
+    first = (row.get('producer_first_name') or '').strip()
+    return f'{last} {first}'.strip()
+
+
 def collect_unresolved_producers(rows):
     """
     Продюсеры из активных строк без ошибок, которых нет среди пользователей
@@ -261,7 +290,7 @@ def collect_unresolved_producers(rows):
     for row in rows:
         if row.get('excluded') or row.get('has_errors'):
             continue
-        value = (row.get('producer') or '').strip()
+        value = _combined_producer(row)
         if not value:
             continue
         if find_producer(value) is None:
@@ -269,7 +298,23 @@ def collect_unresolved_producers(rows):
     return unresolved
 
 
-def import_contact_rows(rows, user, confirmed_refs=None):
+def _effective_value(field, normalized, current_values, present_columns, is_update):
+    """Значение поля для коммита: то, что в файле, либо (для 'Обновить'-строк,
+    когда столбца нет в файле вовсе) текущее значение карточки — чтобы
+    обрезанный файл без этого столбца не затирал его пустотой (Фаза 3)."""
+    if is_update and present_columns is not None and field not in present_columns:
+        return current_values.get(field, '')
+    return normalized.get(field, '')
+
+
+# Поля, которые реально уходят в ContactImport (без служебных id/producer_*).
+_DATASET_BASE_FIELDS = [
+    col for col in CONTACT_IMPORT_COLUMNS
+    if col not in ('id', 'producer_last_name', 'producer_first_name')
+]
+
+
+def import_contact_rows(rows, user, confirmed_refs=None, present_columns=None):
     """Загружает отредактированные строки через ContactImport.
 
     Сопоставление с существующими карточками уже произведено в
@@ -291,13 +336,15 @@ def import_contact_rows(rows, user, confirmed_refs=None):
     reference_casing_maps = load_reference_casing_maps()
 
     resource = ContactImport()
-    headers = CONTACT_IMPORT_COLUMNS + ['_force_new', '_force_contact_id']
+    headers = _DATASET_BASE_FIELDS + ['producer', '_force_new', '_force_contact_id']
     dataset = tablib.Dataset(headers=headers)
 
     for row in rows:
         if row.get('excluded'):
             continue
         normalized = normalize_row_for_import(row)
+        is_update = row.get('import_action') == 'update'
+        current_values = row.get('_current_values', {}) if is_update else {}
 
         # Опечатка в регистре (например "вип3" при существующей "ВИП3") не
         # должна плодить дубль справочника — приводим к уже существующему
@@ -308,6 +355,15 @@ def import_contact_rows(rows, user, confirmed_refs=None):
             if canonical:
                 normalized[field] = canonical
 
+        base_values = [
+            _effective_value(field, normalized, current_values, present_columns, is_update)
+            for field in _DATASET_BASE_FIELDS
+        ]
+
+        producer_last = _effective_value('producer_last_name', normalized, current_values, present_columns, is_update)
+        producer_first = _effective_value('producer_first_name', normalized, current_values, present_columns, is_update)
+        producer_combined = f'{producer_last} {producer_first}'.strip()
+
         force_new = ''
         force_contact_id = ''
         if row.get('import_action') == 'create':
@@ -315,7 +371,7 @@ def import_contact_rows(rows, user, confirmed_refs=None):
         elif row.get('import_action') == 'update' and row.get('import_action_pk'):
             force_contact_id = str(row['import_action_pk'])
 
-        values = [normalized[col] for col in CONTACT_IMPORT_COLUMNS] + [force_new, force_contact_id]
+        values = base_values + [producer_combined, force_new, force_contact_id]
         dataset.append(values)
 
     if len(dataset) == 0:

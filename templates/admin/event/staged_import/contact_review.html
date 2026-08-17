@@ -99,6 +99,20 @@
     }
     .cell-reference-status.new { color: #996600; }
     .cell-reference-status.known { color: #888; }
+    .cell-not-in-file {
+      background: #fafafa;
+    }
+    .cell-not-in-file input,
+    .cell-not-in-file textarea {
+      background: #f0f0f0;
+      color: #999;
+    }
+    .cell-not-in-file-note {
+      margin-top: 4px;
+      font-size: 11px;
+      color: #999;
+      font-style: italic;
+    }
     .staged-import-actions {
       display: flex;
       gap: 10px;
@@ -273,11 +287,14 @@
               {% for cell in row.cells %}
                 <td class="{{ cell.css }}">
                   {% if cell.is_comment %}
-                    <textarea name="row_{{ row.index }}__{{ cell.field }}">{{ cell.value }}</textarea>
+                    <textarea name="row_{{ row.index }}__{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>{{ cell.value }}</textarea>
                   {% elif cell.is_reference %}
-                    <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}" list="datalist-{{ cell.field }}">
+                    <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}" list="datalist-{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>
                   {% else %}
-                    <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}">
+                    <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}" {% if not cell.in_file %}disabled{% endif %}>
+                  {% endif %}
+                  {% if not cell.in_file %}
+                    <div class="cell-not-in-file-note">нет в файле — не будет изменено</div>
                   {% endif %}
                   {% if cell.is_reference and cell.value %}
                     {% if cell.is_new_reference %}

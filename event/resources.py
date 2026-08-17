@@ -248,6 +248,11 @@ class ContactImport(resources.ModelResource):
         return row_result
 
 class ContactExport(resources.ModelResource):
+    """
+    Заголовки и раскладка соцсетей на 3 структурированные тройки колонок
+    намеренно совпадают с тем, что понимает загрузчик (event/staged_import/) —
+    можно выгрузить, обрезать лишние столбцы и залить обратно тем же файлом.
+    """
     id = fields.Field(attribute='id', column_name='ID')
     last_name = fields.Field(attribute='last_name', column_name='Фамилия')
     first_name = fields.Field(attribute='first_name', column_name='Имя')
@@ -259,39 +264,77 @@ class ContactExport(resources.ModelResource):
     producer__last_name = fields.Field(attribute='producer__last_name', column_name='Фамилия продюсера')
     producer__first_name = fields.Field(attribute='producer__first_name', column_name='Имя продюсера')
     comment = fields.Field(attribute='comment', column_name='Комментарий')
-    social_networks = fields.Field(attribute='social_networks', column_name='Соцсети')
+    social_network_1_name = fields.Field(column_name='Соцсеть 1')
+    social_network_1_id = fields.Field(column_name='Ссылка 1')
+    social_network_1_subscribers = fields.Field(column_name='Подписчики 1')
+    social_network_2_name = fields.Field(column_name='Соцсеть 2')
+    social_network_2_id = fields.Field(column_name='Ссылка 2')
+    social_network_2_subscribers = fields.Field(column_name='Подписчики 2')
+    social_network_3_name = fields.Field(column_name='Соцсеть 3')
+    social_network_3_id = fields.Field(column_name='Ссылка 3')
+    social_network_3_subscribers = fields.Field(column_name='Подписчики 3')
 
     class Meta:
         model = Contact
         fields = ('id', 'last_name', 'first_name', 'middle_name',
                     'nickname', 'company__name', 'category__name', 'type_guest__name',
                     'producer__last_name', 'producer__first_name', 'comment',
-                    'social_networks')
+                    'social_network_1_name', 'social_network_1_id', 'social_network_1_subscribers',
+                    'social_network_2_name', 'social_network_2_id', 'social_network_2_subscribers',
+                    'social_network_3_name', 'social_network_3_id', 'social_network_3_subscribers')
 
-    def dehydrate_social_networks(self, obj):
-        """
-        Формирует строку с соцсетями для выгрузки в формате:
-        VK (151627)
-        https://vk.com/...
+    def _social_networks(self, obj):
+        """Первые 3 соцсети контакта (кэш на объекте — иначе 3 запроса на
+        карточку при выгрузке списка). Если их больше — остальные просто не
+        попадают в выгрузку, в базе не теряются (загрузчик их не трогает,
+        если не упомянуты, см. event/staged_import/)."""
+        if not hasattr(obj, '_cached_social_networks'):
+            obj._cached_social_networks = list(
+                InfoContact.objects.filter(contact=obj).select_related('social_network').order_by('id')[:3]
+            )
+        return obj._cached_social_networks
 
-        Instagram (105400)
-        https://www.instagram.com/...
+    def _dehydrate_social(self, obj, index, part):
+        socials = self._social_networks(obj)
+        if index >= len(socials):
+            return ''
+        info = socials[index]
+        if part == 'name':
+            return info.social_network.name if info.social_network else ''
+        if part == 'id':
+            return info.external_id or ''
+        if part == 'subscribers':
+            return info.subscribers if info.subscribers is not None else ''
+        return ''
 
-        И т.д.
-        """
-        social_networks = InfoContact.objects.filter(contact=obj).select_related('social_network')
-        parts = []
-        for s in social_networks:
-            if s.social_network and s.subscribers:
-                title = f"{s.social_network.name} ({s.subscribers})"
-            elif s.social_network:
-                title = s.social_network.name
-            else:
-                title = '—'
-            link = s.external_id or ""
-            parts.append(f"{title}\n{link}")
-        return '\n\n'.join(parts)
-    
+    def dehydrate_social_network_1_name(self, obj):
+        return self._dehydrate_social(obj, 0, 'name')
+
+    def dehydrate_social_network_1_id(self, obj):
+        return self._dehydrate_social(obj, 0, 'id')
+
+    def dehydrate_social_network_1_subscribers(self, obj):
+        return self._dehydrate_social(obj, 0, 'subscribers')
+
+    def dehydrate_social_network_2_name(self, obj):
+        return self._dehydrate_social(obj, 1, 'name')
+
+    def dehydrate_social_network_2_id(self, obj):
+        return self._dehydrate_social(obj, 1, 'id')
+
+    def dehydrate_social_network_2_subscribers(self, obj):
+        return self._dehydrate_social(obj, 1, 'subscribers')
+
+    def dehydrate_social_network_3_name(self, obj):
+        return self._dehydrate_social(obj, 2, 'name')
+
+    def dehydrate_social_network_3_id(self, obj):
+        return self._dehydrate_social(obj, 2, 'id')
+
+    def dehydrate_social_network_3_subscribers(self, obj):
+        return self._dehydrate_social(obj, 2, 'subscribers')
+
+
 class EventExport(resources.ModelResource):
     name = fields.Field(attribute='name', column_name='Наименование')
     address = fields.Field(attribute='address', column_name='Адрес')
@@ -397,7 +440,10 @@ class ActionImport(resources.ModelResource):
             )
 
 class ActionExport(resources.ModelResource):
-    id = fields.Field(attribute='id', column_name='ID')
+    # ID самой записи регистрации никому не нужен — выгружаем ID карточки
+    # человека (тот же смысл, что и в ContactExport), чтобы обрезанную
+    # выгрузку действий тоже можно было надёжно сопоставить по ID при загрузке.
+    id = fields.Field(attribute='contact__id', column_name='ID')
     event__name = fields.Field(attribute='event__name', column_name='Наименование события')
     contact__last_name = fields.Field(attribute='contact__last_name', column_name='Фамилия')
     contact__first_name = fields.Field(attribute='contact__first_name', column_name='Имя')

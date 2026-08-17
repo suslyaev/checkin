@@ -1,6 +1,6 @@
 import re
 
-from event.models import KnownFirstName, KnownLastName
+from event.models import Contact, KnownFirstName, KnownLastName
 
 from .contact_columns import (
     CONTACT_IMPORT_COLUMNS,
@@ -13,6 +13,7 @@ from .contact_columns import (
 
 NAME_SWAP_WARNING = 'Похоже, имя и фамилия перепутаны местами — проверьте'
 REFERENCE_CASING_NOTE = 'Приведено к уже существующему значению справочника: «{value}»'
+NO_ID_NO_COLUMN_ERROR = 'Обязательное поле (в файле нет этого столбца, а ID для сопоставления не указан)'
 
 FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>"{}|\\`\x00-\x08\x0b\x0c\x0e-\x1f]')
 MAX_FIELD_LENGTH = 300
@@ -57,6 +58,11 @@ def resolve_reference_casing(value, casing_map):
     return None
 
 
+def load_existing_contact_ids():
+    """Множество ID существующих карточек — для проверки колонки id (п.2 Фазы 3)."""
+    return set(Contact.objects.values_list('pk', flat=True))
+
+
 def _apply_normalization(row, reference_casing_maps=None):
     """Обязательное приведение значений до валидации: ё->е в ФИО-полях,
     очистка мусора в полях соцсетей, приведение регистра справочных полей
@@ -93,14 +99,40 @@ def _apply_normalization(row, reference_casing_maps=None):
     return normalized, extra_notes
 
 
-def _cell_issues(field, raw_value):
+def _id_issues(value, existing_contact_ids):
+    value = (value or '').strip()
+    if not value:
+        return [], []
+    try:
+        contact_id = int(value)
+    except ValueError:
+        return ['ID должен быть числом'], []
+    if existing_contact_ids is not None and contact_id not in existing_contact_ids:
+        return [f'Человек с ID={contact_id} не найден в базе'], []
+    return [], []
+
+
+def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, existing_contact_ids=None):
     errors = []
     warnings = []
     value = '' if raw_value is None else str(raw_value)
 
+    if field == 'id':
+        id_errors, id_warnings = _id_issues(value, existing_contact_ids)
+        errors += id_errors
+        warnings += id_warnings
+
     if field in REQUIRED_CONTACT_COLUMNS:
-        if not value.strip():
-            errors.append('Обязательное поле')
+        # Столбца нет в файле вообще — не то же самое, что пустая ячейка
+        # (см. Фазу 3): если он есть, обнулить ФИО всё равно нельзя (так
+        # требует модель), а если его нет — ок при условии, что человек
+        # опознаётся по ID (тогда ФИО подставится из карточки при коммите).
+        col_present = present_columns is None or field in present_columns
+        if col_present:
+            if not value.strip():
+                errors.append('Обязательное поле')
+        elif not row_has_id:
+            errors.append(NO_ID_NO_COLUMN_ERROR)
 
     if value != value.strip() and value.strip():
         warnings.append('Пробелы в начале или конце — будут обрезаны при загрузке')
@@ -156,14 +188,26 @@ def _looks_swapped(last_name, first_name, known_first_names, known_last_names):
     return first_looks_like_surname and last_looks_like_firstname
 
 
-def validate_contact_row(row, known_first_names=None, known_last_names=None, reference_casing_maps=None):
+def validate_contact_row(
+    row,
+    known_first_names=None,
+    known_last_names=None,
+    reference_casing_maps=None,
+    present_columns=None,
+    existing_contact_ids=None,
+):
     """Возвращает row с полями errors, warnings, has_errors, has_warnings."""
     normalized_row, extra_notes = _apply_normalization(row, reference_casing_maps)
+    row_has_id = bool((normalized_row.get('id') or '').strip())
 
     errors = {}
     warnings = {}
     for field in CONTACT_IMPORT_COLUMNS:
-        field_errors, field_warnings = _cell_issues(field, normalized_row.get(field, ''))
+        field_errors, field_warnings = _cell_issues(
+            field, normalized_row.get(field, ''),
+            present_columns=present_columns, row_has_id=row_has_id,
+            existing_contact_ids=existing_contact_ids,
+        )
         if field in extra_notes:
             field_warnings = list(field_warnings) + [extra_notes[field]]
         if field_errors:
@@ -186,11 +230,15 @@ def validate_contact_row(row, known_first_names=None, known_last_names=None, ref
     return result
 
 
-def validate_contact_rows(rows):
+def validate_contact_rows(rows, present_columns=None):
     known_first_names, known_last_names = _load_known_name_sets()
     reference_casing_maps = load_reference_casing_maps()
+    existing_contact_ids = load_existing_contact_ids()
     validated = [
-        validate_contact_row(row, known_first_names, known_last_names, reference_casing_maps)
+        validate_contact_row(
+            row, known_first_names, known_last_names, reference_casing_maps,
+            present_columns=present_columns, existing_contact_ids=existing_contact_ids,
+        )
         for row in rows
     ]
     active = [r for r in validated if not r.get('excluded')]

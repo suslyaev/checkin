@@ -1,6 +1,6 @@
 import tablib
 
-from .contact_columns import CONTACT_IMPORT_COLUMNS
+from .contact_columns import CONTACT_IMPORT_COLUMNS, HEADER_TO_FIELD
 
 
 def _normalize_header(value):
@@ -12,7 +12,13 @@ def _normalize_header(value):
 def parse_spreadsheet(uploaded_file):
     """
     Читает xlsx/csv в список словарей по колонкам импорта людей.
-    Неизвестные колонки игнорируются.
+    Неизвестные колонки игнорируются. Порядок колонок в файле не важен —
+    важны только заголовки (см. CONTACT_COLUMN_LABELS/HEADER_TO_FIELD).
+
+    Возвращает (rows, present_columns) — present_columns это множество полей,
+    которые реально были в файле (не только с непустыми значениями): столбец,
+    которого нет в файле вообще, при обновлении не должен затирать то, что
+    уже есть в карточке (см. contact_import.py).
     """
     name = (uploaded_file.name or '').lower()
     raw = uploaded_file.read()
@@ -29,15 +35,17 @@ def parse_spreadsheet(uploaded_file):
 
     header_map = {}
     for idx, header in enumerate(dataset.headers):
-        key = _normalize_header(header)
+        key = HEADER_TO_FIELD.get(_normalize_header(header))
         if key in CONTACT_IMPORT_COLUMNS:
             header_map[idx] = key
 
     if not header_map:
         raise ValueError(
             'Не найдены колонки импорта. Ожидаются заголовки как в шаблоне '
-            '(last_name, first_name, …).'
+            '(Фамилия, Имя, …) — например, из выгрузки списка людей в админке.'
         )
+
+    present_columns = set(header_map.values())
 
     rows = []
     for row_index, raw_row in enumerate(dataset, start=2):
@@ -58,4 +66,4 @@ def parse_spreadsheet(uploaded_file):
     if not rows:
         raise ValueError('В файле нет строк с данными')
 
-    return rows
+    return rows, present_columns

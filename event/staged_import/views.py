@@ -22,6 +22,7 @@ from .parsers import parse_spreadsheet
 
 SESSION_KEY = 'staged_contact_import_rows'
 SESSION_REFS_KEY = 'staged_contact_import_confirmed_refs'
+SESSION_PRESENT_COLUMNS_KEY = 'staged_contact_import_present_columns'
 
 
 def _require_contact_import_perm(request):
@@ -53,6 +54,17 @@ def _save_rows_to_session(request, rows):
 def _clear_session(request):
     request.session.pop(SESSION_KEY, None)
     request.session.pop(SESSION_REFS_KEY, None)
+    request.session.pop(SESSION_PRESENT_COLUMNS_KEY, None)
+    request.session.modified = True
+
+
+def _present_columns_from_session(request):
+    raw = request.session.get(SESSION_PRESENT_COLUMNS_KEY)
+    return set(json.loads(raw)) if raw else None
+
+
+def _save_present_columns_to_session(request, present_columns):
+    request.session[SESSION_PRESENT_COLUMNS_KEY] = json.dumps(sorted(present_columns), ensure_ascii=False)
     request.session.modified = True
 
 
@@ -80,7 +92,7 @@ def _update_confirmed_refs_from_post(request):
     return confirmed_refs
 
 
-def _prepare_table_rows(validated_rows, new_reference_values):
+def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
     new_reference_by_field = {
         field: set(values.keys()) for field, values in new_reference_values.items()
     }
@@ -98,10 +110,11 @@ def _prepare_table_rows(validated_rows, new_reference_values):
             value = row.get(col, '')
             is_reference = col in REFERENCE_FIELD_MODELS
             is_new_reference = bool(value.strip()) and value.strip() in new_reference_by_field.get(col, set())
+            in_file = present_columns is None or col in present_columns
 
             changed = False
             current_value = ''
-            if is_update and col in BASE_DIFF_FIELDS:
+            if is_update and col in BASE_DIFF_FIELDS and in_file:
                 current_value = current_values.get(col, '')
                 effective_value = value.strip()
                 if is_reference:
@@ -119,6 +132,8 @@ def _prepare_table_rows(validated_rows, new_reference_values):
                 css_parts.append('cell-warning')
             if is_new_reference:
                 css_parts.append('cell-new-reference')
+            if not in_file:
+                css_parts.append('cell-not-in-file')
 
             cells.append({
                 'field': col,
@@ -132,6 +147,7 @@ def _prepare_table_rows(validated_rows, new_reference_values):
                 'is_update': is_update,
                 'changed': changed,
                 'current_value': current_value,
+                'in_file': in_file,
             })
         table_rows.append({
             'index': index,
@@ -169,9 +185,9 @@ def _prepare_new_reference_panels(new_reference_values, confirmed_refs):
     return panels, pending_count
 
 
-def _full_preview(rows, request):
+def _full_preview(rows, request, present_columns):
     """Валидация + сопоставление + новые справочные значения + продюсеры одним вызовом."""
-    validated, summary = validate_contact_rows(rows)
+    validated, summary = validate_contact_rows(rows, present_columns=present_columns)
     validated, action_summary = annotate_import_actions(validated)
     summary['create_count'] = action_summary['create']
     summary['update_count'] = action_summary['update']
@@ -229,9 +245,10 @@ def staged_contact_upload_view(request):
 
     if request.method == 'POST' and form.is_valid():
         try:
-            rows = parse_spreadsheet(form.cleaned_data['file'])
+            rows, present_columns = parse_spreadsheet(form.cleaned_data['file'])
             _clear_session(request)
-            validated, summary, _extra = _full_preview(rows, request)
+            _save_present_columns_to_session(request, present_columns)
+            validated, summary, _extra = _full_preview(rows, request, present_columns)
             _save_rows_to_session(request, validated)
             messages.info(
                 request,
@@ -261,12 +278,13 @@ def staged_contact_review_view(request):
         return HttpResponseRedirect(reverse('admin:staged_import_contacts'))
 
     row_count = len(stored)
+    present_columns = _present_columns_from_session(request)
 
     if request.method == 'POST':
         action = request.POST.get('action', 'validate')
         rows = _rows_from_post(request, row_count)
         _update_confirmed_refs_from_post(request)
-        validated, summary, extra = _full_preview(rows, request)
+        validated, summary, extra = _full_preview(rows, request, present_columns)
         _save_rows_to_session(request, validated)
 
         if action == 'import':
@@ -279,7 +297,10 @@ def staged_contact_review_view(request):
             else:
                 try:
                     confirmed_refs = {field: list(values) for field, values in extra['confirmed_refs'].items()}
-                    result = import_contact_rows(validated, request.user, confirmed_refs=confirmed_refs)
+                    result = import_contact_rows(
+                        validated, request.user,
+                        confirmed_refs=confirmed_refs, present_columns=present_columns,
+                    )
                     _clear_session(request)
                     messages.success(
                         request,
@@ -296,11 +317,11 @@ def staged_contact_review_view(request):
         stored = validated
 
     else:
-        stored, summary, extra = _full_preview(stored, request)
+        stored, summary, extra = _full_preview(stored, request, present_columns)
 
     context = {
         'title': 'Проверка данных перед загрузкой',
-        'table_rows': _prepare_table_rows(stored, extra['new_reference_values']),
+        'table_rows': _prepare_table_rows(stored, extra['new_reference_values'], present_columns),
         'column_labels': [CONTACT_COLUMN_LABELS[col] for col in CONTACT_IMPORT_COLUMNS],
         'summary': summary,
         'new_reference_panels': extra['new_reference_panels'],
