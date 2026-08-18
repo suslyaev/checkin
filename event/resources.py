@@ -495,7 +495,51 @@ class ActionExport(resources.ModelResource):
                   'contact__producer',
                   'action_type_display', 'create_date', 'update_date', 'create_user', 'update_user', 'social_networks',
                   'communities_ids', 'communities_names', 'communities_socials')
-        
+
+    def filter_export(self, queryset, **kwargs):
+        # Без select_related каждое поле контакта/продюсера/create_user/update_user
+        # тянуло свой SQL-запрос НА КАЖДУЮ строку (N+1) — на выгрузке в тысячи
+        # записей это и есть причина зависания страницы экспорта.
+        return queryset.select_related(
+            'contact', 'contact__company', 'contact__category', 'contact__type_guest',
+            'contact__producer', 'event', 'create_user', 'update_user',
+        )
+
+    def before_export(self, queryset, **kwargs):
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        contact_ids = list(queryset.values_list('contact_id', flat=True).distinct())
+
+        # Собственные соцсети контактов — одним запросом на всю выгрузку вместо
+        # одного запроса на каждую строку (dehydrate_social_networks).
+        self._own_socials_by_contact = {}
+        for info in InfoContact.objects.filter(
+            contact_id__in=contact_ids, community__isnull=True
+        ).select_related('social_network').order_by('contact_id', 'id'):
+            self._own_socials_by_contact.setdefault(info.contact_id, []).append(info)
+
+        # Членство в сообществах — тоже одним запросом (dehydrate_communities_ids/names).
+        self._communities_by_contact = {}
+        community_ids = set()
+        for member in CommunityMember.objects.filter(
+            contact_id__in=contact_ids
+        ).select_related('community').order_by('contact_id', 'id'):
+            self._communities_by_contact.setdefault(member.contact_id, []).append(member)
+            if member.community_id:
+                community_ids.add(member.community_id)
+
+        # Соцсети самих сообществ — одним запросом на все встретившиеся сообщества
+        # (dehydrate_communities_socials).
+        self._socials_by_community = {}
+        if community_ids:
+            for info in InfoContact.objects.filter(
+                community_id__in=community_ids, contact__isnull=True
+            ).select_related('social_network').order_by('community_id', 'id'):
+                self._socials_by_community.setdefault(info.community_id, []).append(info)
+
+        super().before_export(queryset, **kwargs)
+
     def dehydrate_contact__producer(self, obj):
         """Формирует список менеджеров в формате Фамилия Имя или телефон"""
         if obj.contact.producer:
@@ -528,7 +572,7 @@ class ActionExport(resources.ModelResource):
 
         И т.д.
         """
-        social_networks = InfoContact.objects.filter(contact=obj.contact, community__isnull=True)
+        social_networks = self._own_socials_by_contact.get(obj.contact_id, [])
         parts = []
         for s in social_networks:
             title = f"{s.social_network.name} ({s.subscribers})" if s.social_network and s.subscribers else (s.social_network.name if s.social_network else '—')
@@ -538,16 +582,12 @@ class ActionExport(resources.ModelResource):
 
     def dehydrate_communities_ids(self, obj):
         """ID сообществ, в которых состоит человек (через запятую)."""
-        if not obj.contact_id:
-            return ""
-        ids = CommunityMember.objects.filter(contact=obj.contact).values_list('community_id', flat=True)
-        return ", ".join(str(pk) for pk in ids)
+        members = self._communities_by_contact.get(obj.contact_id, [])
+        return ", ".join(str(m.community_id) for m in members if m.community_id)
 
     def dehydrate_communities_names(self, obj):
         """Названия сообществ, в которых состоит человек (через запятую)."""
-        if not obj.contact_id:
-            return ""
-        members = CommunityMember.objects.filter(contact=obj.contact).select_related('community')
+        members = self._communities_by_contact.get(obj.contact_id, [])
         return ", ".join(m.community.name for m in members if m.community)
 
     def dehydrate_communities_socials(self, obj):
@@ -555,23 +595,14 @@ class ActionExport(resources.ModelResource):
         Соцсети сообществ, в которых состоит человек.
         Формат: Соцсеть (подписчики) ссылка, каждый блок через перенос строки.
         """
-        if not obj.contact_id:
-            return ""
-        community_ids = list(
-            CommunityMember.objects.filter(contact=obj.contact).values_list('community_id', flat=True)
-        )
-        if not community_ids:
-            return ""
-        infos = InfoContact.objects.filter(
-            community_id__in=community_ids,
-            contact__isnull=True
-        ).select_related('social_network')
+        members = self._communities_by_contact.get(obj.contact_id, [])
         parts = []
-        for s in infos:
-            sn_name = s.social_network.name if s.social_network else "—"
-            subs = f" ({s.subscribers:,})" if s.subscribers is not None else ""
-            link = s.external_id or ""
-            parts.append(f"{sn_name}{subs} {link}".strip())
+        for member in members:
+            for s in self._socials_by_community.get(member.community_id, []):
+                sn_name = s.social_network.name if s.social_network else "—"
+                subs = f" ({s.subscribers:,})" if s.subscribers is not None else ""
+                link = s.external_id or ""
+                parts.append(f"{sn_name}{subs} {link}".strip())
         return "\n".join(parts)
     
     def dehydrate_action_type_display(self, obj):
