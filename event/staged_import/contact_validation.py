@@ -37,22 +37,33 @@ def _looks_like_social_handle(value):
 
 
 def load_reference_casing_maps():
-    """{field: {значение.lower(): точное_написание_в_БД}} — чтобы «вип3» не
-    завёл дубль категории рядом с уже существующей «ВИП3» только из-за
-    регистра (ForeignKeyGetOrCreateWidget ищет точным совпадением)."""
-    return {
-        field: {name.strip().lower(): name for name in model.objects.values_list('name', flat=True)}
-        for field, model in REFERENCE_FIELD_MODELS.items()
-    }
+    """{field: {'exact': {точные значения в БД}, 'by_lower': {значение.lower(): одно
+    из точных написаний}}} — чтобы «вип3» не завёл дубль категории рядом с уже
+    существующей «ВИП3» только из-за регистра (ForeignKeyGetOrCreateWidget ищет
+    точным совпадением). Если в базе одновременно есть и «гость», и «Гость» —
+    точное совпадение всегда важнее регистронезависимого угадывания, иначе можно
+    подменить ровно то значение, которое человек и имел в виду, на другое."""
+    maps = {}
+    for field, model in REFERENCE_FIELD_MODELS.items():
+        names = list(model.objects.values_list('name', flat=True))
+        by_lower = {}
+        for name in names:
+            by_lower.setdefault(name.strip().lower(), name)
+        maps[field] = {'exact': set(names), 'by_lower': by_lower}
+    return maps
 
 
 def resolve_reference_casing(value, casing_map):
     """Возвращает существующее написание значения из справочника, если оно
-    отличается от введённого только регистром, иначе None."""
+    отличается от введённого только регистром, иначе None. Если введённое
+    значение уже точно совпадает с чем-то в базе — это не про регистр, трогать
+    нечего, даже если в базе рядом есть тёзка с другим регистром."""
     value = (value or '').strip()
     if not value:
         return None
-    canonical = casing_map.get(value.lower())
+    if value in casing_map.get('exact', set()):
+        return None
+    canonical = casing_map.get('by_lower', {}).get(value.lower())
     if canonical and canonical != value:
         return canonical
     return None

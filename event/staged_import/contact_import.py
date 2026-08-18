@@ -109,6 +109,38 @@ def resolve_contact_import_action(row, exact_index, candidates_index, existing_p
 
     last_key = _norm(last_name)
     first_key = _norm(first_name)
+    candidates = candidates_index.get((last_key, first_key), [])
+
+    # Пользователь уже явно подтвердил, к какой карточке относится строка (или
+    # что это точно новый человек) — это решение весомее повторного
+    # автосопоставления по ФИО. Проверяем его ДО ветки с отчеством: иначе если
+    # человек после выбора «обновить конкретную карточку» дозаполнит в той же
+    # строке отчество, строка неожиданно съедет на точный поиск по
+    # (фамилия, имя, отчество), не найдёт совпадения и подменится на «Создать».
+    choice = (row.get('match_choice') or '').strip()
+    if choice == MATCH_CHOICE_NEW:
+        return {
+            'action': 'create',
+            'label': 'Создать (подтверждено)',
+            'contact_pk': None,
+            'contact_url': None,
+            'match_candidates': candidates,
+        }
+    if choice:
+        try:
+            chosen_pk = int(choice)
+        except ValueError:
+            chosen_pk = None
+        if chosen_pk is not None:
+            chosen = next((c for c in candidates if c['pk'] == chosen_pk), None)
+            url = chosen['url'] if chosen else reverse('admin:event_contact_change', args=[chosen_pk])
+            return {
+                'action': 'update',
+                'label': f'Обновить (#{chosen_pk}, подтверждено)',
+                'contact_pk': chosen_pk,
+                'contact_url': url,
+                'match_candidates': candidates,
+            }
 
     if middle_name:
         pk = exact_index.get((last_key, first_key, _norm(middle_name)))
@@ -129,7 +161,6 @@ def resolve_contact_import_action(row, exact_index, candidates_index, existing_p
         }
 
     # Отчество не указано — никогда не привязываем автоматически (п.2.2).
-    candidates = candidates_index.get((last_key, first_key), [])
     if not candidates:
         return {
             'action': 'create',
@@ -138,30 +169,6 @@ def resolve_contact_import_action(row, exact_index, candidates_index, existing_p
             'contact_url': None,
             'match_candidates': [],
         }
-
-    choice = (row.get('match_choice') or '').strip()
-    if choice == MATCH_CHOICE_NEW:
-        return {
-            'action': 'create',
-            'label': 'Создать (подтверждено)',
-            'contact_pk': None,
-            'contact_url': None,
-            'match_candidates': candidates,
-        }
-    if choice:
-        try:
-            chosen_pk = int(choice)
-        except ValueError:
-            chosen_pk = None
-        chosen = next((c for c in candidates if c['pk'] == chosen_pk), None)
-        if chosen:
-            return {
-                'action': 'update',
-                'label': f'Обновить (#{chosen["pk"]}, подтверждено)',
-                'contact_pk': chosen['pk'],
-                'contact_url': chosen['url'],
-                'match_candidates': candidates,
-            }
 
     return {
         'action': 'confirm',

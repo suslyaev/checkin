@@ -1,6 +1,6 @@
 from import_export import resources, fields
 from django.db import transaction
-from import_export.widgets import ForeignKeyWidget
+from import_export.widgets import CharWidget, ForeignKeyWidget
 from django.db.models import Q
 
 from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser, CommunityMember
@@ -97,6 +97,23 @@ class ContactImport(resources.ModelResource):
     social_network_id = fields.Field(column_name='social_network_id')
     social_network_subscribers = fields.Field(column_name='social_network_subscribers')
 
+    # allow_blank=False: пустая строка -> None, а не '' (поля nullable). Иначе
+    # виджет по умолчанию всегда приводит None к '' даже у пустых карточек, и
+    # skip_unchanged считает "обновлено" при перезаливке файла без единой правки,
+    # потому что None (в базе) и '' (после виджета) не равны.
+    middle_name = fields.Field(
+        column_name='middle_name', attribute='middle_name',
+        widget=CharWidget(allow_blank=False),
+    )
+    nickname = fields.Field(
+        column_name='nickname', attribute='nickname',
+        widget=CharWidget(allow_blank=False),
+    )
+    comment = fields.Field(
+        column_name='comment', attribute='comment',
+        widget=CharWidget(allow_blank=False),
+    )
+
     company = fields.Field(
         column_name='company',
         attribute='company',
@@ -181,6 +198,14 @@ class ContactImport(resources.ModelResource):
             ).values_list('middle_name', flat=True).first()
             if existing_middle_name:
                 row['middle_name'] = existing_middle_name
+
+        # Эти поля в модели nullable (middle_name/nickname/comment), в базе у
+        # незаполненных карточек там None. Если оставить '', skip_unchanged
+        # сравнивает None-в-базе с ''-из-файла как РАЗНЫЕ значения и репортит
+        # "обновлено" даже когда файл залит без единой правки, см. баг.
+        for key in ('middle_name', 'nickname', 'comment'):
+            if row.get(key) == '':
+                row[key] = None
 
         return row
 
