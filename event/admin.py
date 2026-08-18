@@ -40,6 +40,7 @@ from .contact_duplicates import (
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
+from import_export.forms import ExportForm
 from .resources import ContactImport, EventExport
 from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
 from django.db.models import Count, Exists, OuterRef, Q
@@ -450,6 +451,13 @@ class CommunityMemberForContactInline(admin.TabularInline):
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
+    # Обычная форма экспорта (только выбор формата файла) вместо дефолтной
+    # SelectableFieldsExportForm — та строит чекбоксы полей ДО экспорта, по
+    # статически объявленным на ContactExport полям, а колонки соцсетей у
+    # него динамические (см. ContactExport.before_export) и на момент показа
+    # формы ещё не существуют. С чекбоксами их результат тихо отфильтровывался
+    # бы из выгрузки, даже если галочка "экспортировать всё" отмечена.
+    export_form_class = ExportForm
     change_list_template = 'admin/event/contact_change_list.html'
     import_export_change_list_template = 'admin/event/contact_change_list_import_export.html'
     actions = ['merge_duplicates_action', 'delete_selected']
