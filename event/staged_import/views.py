@@ -368,8 +368,11 @@ def staged_contact_cancel_view(request):
 
 def staged_contact_template_view(request):
     _require_contact_import_perm(request)
-    file_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'import_cont.xlsx')
-    return FileResponse(open(file_path, 'rb'), as_attachment=True, filename='import_cont.xlsx')
+    # Отдельный файл от event/templates/import_cont.xlsx — тот шаблон принадлежит
+    # "сырому" импорту в стандартной админке (event.resources.ContactImport,
+    # /admin/event/contact/import/), у него другой, более старый формат колонок.
+    file_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'staged_import_cont.xlsx')
+    return FileResponse(open(file_path, 'rb'), as_attachment=True, filename='staged_import_cont.xlsx')
 
 
 def staged_import_urls(admin_site):
