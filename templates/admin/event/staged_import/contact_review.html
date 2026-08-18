@@ -185,6 +185,15 @@
       border: none;
       padding: 0;
     }
+    .status-select { width: 140px; max-width: 100%; font-size: 12px; box-sizing: border-box; }
+    .registration-preview {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .registration-preview.will_register { color: #1a7f37; }
+    .registration-preview.will_update_status { color: #996600; }
+    .registration-preview.already_registered { color: #888; }
   </style>
 {% endblock %}
 
@@ -204,7 +213,10 @@
     будет создано: <span class="create-count">{{ summary.create_count }}</span>,
     обновлено: <span class="update-count">{{ summary.update_count }}</span>,
     требуют подтверждения: <span class="confirm-count">{{ summary.confirm_count }}</span>,
-    новых значений справочников не подтверждено: <span class="confirm-count">{{ summary.pending_refs_count }}</span>.
+    новых значений справочников не подтверждено: <span class="confirm-count">{{ summary.pending_refs_count }}</span>,
+    будет зарегистрировано: <span class="create-count">{{ summary.will_register_count }}</span>,
+    статус обновится: <span class="update-count">{{ summary.will_update_status_count }}</span>,
+    уже зарегистрированы: {{ summary.already_registered_count }}.
     {% if not summary.can_import %}
       <br><span class="error-count">Исправьте ошибки, подтвердите совпадения и новые значения справочников или исключите проблемные строки, чтобы загрузить данные.</span>
     {% endif %}
@@ -288,6 +300,13 @@
                 <td class="{{ cell.css }}">
                   {% if cell.is_comment %}
                     <textarea name="row_{{ row.index }}__{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>{{ cell.value }}</textarea>
+                  {% elif cell.is_status %}
+                    <select class="status-select" name="row_{{ row.index }}__{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>
+                      <option value="" {% if not cell.value %}selected{% endif %}>—</option>
+                      {% for label in status_labels %}
+                        <option value="{{ label }}" {% if cell.value == label %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
                   {% elif cell.is_reference %}
                     <input type="text" name="row_{{ row.index }}__{{ cell.field }}" value="{{ cell.value }}" list="datalist-{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>
                   {% else %}
@@ -302,6 +321,13 @@
                     {% else %}
                       <div class="cell-reference-status known">есть в справочнике</div>
                     {% endif %}
+                  {% endif %}
+                  {% if cell.field == 'event' and row.registration_preview %}
+                    <div class="registration-preview {{ row.registration_preview }}">
+                      {% if row.registration_preview == 'will_register' %}будет зарегистрирован
+                      {% elif row.registration_preview == 'will_update_status' %}статус обновится
+                      {% else %}уже зарегистрирован{% endif %}
+                    </div>
                   {% endif %}
                   {% if cell.is_update and cell.changed %}
                     <div class="cell-messages"><div class="diff">было: «{{ cell.current_value|default:"—" }}»</div></div>

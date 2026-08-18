@@ -7,6 +7,7 @@ from django.urls import reverse
 from event.models import Contact
 from event.resources import ContactImport, find_producer
 
+from .action_import import preview_registrations, register_actions
 from .contact_columns import CONTACT_IMPORT_COLUMNS, REFERENCE_FIELD_MODELS
 from .contact_validation import (
     load_reference_casing_maps,
@@ -239,6 +240,8 @@ def annotate_import_actions(rows):
         else:
             row['_current_values'] = {}
 
+    preview_registrations(rows, load_reference_casing_maps())
+
     return rows, counts
 
 
@@ -314,10 +317,12 @@ def _effective_value(field, normalized, current_values, present_columns, is_upda
     return normalized.get(field, '')
 
 
-# Поля, которые реально уходят в ContactImport (без служебных id/producer_*).
+# Поля, которые реально уходят в ContactImport (без служебных id/producer_*/
+# event/status — регистрация на мероприятие обрабатывается отдельно, после
+# коммита карточек, см. register_actions).
 _DATASET_BASE_FIELDS = [
     col for col in CONTACT_IMPORT_COLUMNS
-    if col not in ('id', 'producer_last_name', 'producer_first_name')
+    if col not in ('id', 'producer_last_name', 'producer_first_name', 'event', 'status')
 ]
 
 
@@ -386,4 +391,5 @@ def import_contact_rows(rows, user, confirmed_refs=None, present_columns=None):
 
     with transaction.atomic():
         result = resource.import_data(dataset, dry_run=False, user=user, raise_errors=True)
-    return result
+        registration_summary = register_actions(rows, result, user, reference_casing_maps)
+    return result, registration_summary

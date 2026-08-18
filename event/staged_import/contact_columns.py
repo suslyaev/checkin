@@ -6,18 +6,28 @@
 этим же загрузчиком без пересборки формата.
 """
 
-from event.models import CategoryContact, CompanyContact, TypeGuestContact
+from event.models import CategoryContact, CompanyContact, ModuleInstance, STATUS_MODEL, TypeGuestContact
 
 SOCIAL_NETWORK_GROUPS = (1, 2, 3)
+
+# Регистрация на мероприятие (Фаза 4) — закрытый список статусов, не
+# растущий справочник: в сетке рендерится как <select>, а не текстовое поле.
+STATUS_CODE_TO_LABEL = dict(STATUS_MODEL)
+STATUS_LABEL_TO_CODE = {label: code for code, label in STATUS_MODEL}
+STATUS_LABELS = [label for _, label in STATUS_MODEL]
+DEFAULT_STATUS_CODE = 'announced'
 
 # Поля-справочники, для которых новые значения не создаются молча (п.3
 # требований) — используется и для сбора значений на подтверждение
 # (contact_import.py), и для приведения регистра к уже существующему
-# значению (contact_validation.py).
+# значению (contact_validation.py). 'event' сюда же — то же самое правило
+# «новое имя не создаётся молча», просто сущность — мероприятие, а не
+# карточка-справочник контакта (Фаза 4).
 REFERENCE_FIELD_MODELS = {
     'company': CompanyContact,
     'category': CategoryContact,
     'type_guest': TypeGuestContact,
+    'event': ModuleInstance,
 }
 
 
@@ -46,6 +56,8 @@ CONTACT_IMPORT_COLUMNS = [
     'producer_last_name',
     'producer_first_name',
     'comment',
+    'event',
+    'status',
 ] + _social_columns()
 
 CONTACT_COLUMN_LABELS = {
@@ -60,6 +72,8 @@ CONTACT_COLUMN_LABELS = {
     'producer_last_name': 'Фамилия продюсера',
     'producer_first_name': 'Имя продюсера',
     'comment': 'Комментарий',
+    'event': 'Наименование события',
+    'status': 'Статус',
 }
 for _i in SOCIAL_NETWORK_GROUPS:
     CONTACT_COLUMN_LABELS[f'social_network_{_i}_name'] = f'Соцсеть {_i}'

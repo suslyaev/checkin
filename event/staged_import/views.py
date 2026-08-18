@@ -7,7 +7,7 @@ from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 
-from .contact_columns import CONTACT_COLUMN_LABELS, CONTACT_IMPORT_COLUMNS
+from .contact_columns import CONTACT_COLUMN_LABELS, CONTACT_IMPORT_COLUMNS, STATUS_LABELS
 from .contact_import import (
     BASE_DIFF_FIELDS,
     REFERENCE_FIELD_MODELS,
@@ -144,6 +144,7 @@ def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
                 'is_comment': col == 'comment',
                 'is_reference': is_reference,
                 'is_new_reference': is_new_reference,
+                'is_status': col == 'status',
                 'is_update': is_update,
                 'changed': changed,
                 'current_value': current_value,
@@ -160,13 +161,14 @@ def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
             'needs_confirm': row.get('import_action') == 'confirm',
             'match_choice': row.get('match_choice', ''),
             'match_candidates': row.get('match_candidates', []),
+            'registration_preview': row.get('_registration_preview'),
             'cells': cells,
         })
     return table_rows
 
 
 def _prepare_new_reference_panels(new_reference_values, confirmed_refs):
-    labels = {'company': 'Компания', 'category': 'Категория', 'type_guest': 'Тип гостя'}
+    labels = {'company': 'Компания', 'category': 'Категория', 'type_guest': 'Тип гостя', 'event': 'Мероприятие'}
     panels = []
     pending_count = 0
     for field, values_by_row in new_reference_values.items():
@@ -200,8 +202,17 @@ def _full_preview(rows, request, present_columns):
     )
     unresolved_producers = collect_unresolved_producers(validated)
 
+    registration_counts = {'will_register': 0, 'will_update_status': 0, 'already_registered': 0}
+    for row in validated:
+        preview = row.get('_registration_preview')
+        if preview in registration_counts:
+            registration_counts[preview] += 1
+
     summary['pending_refs_count'] = pending_refs_count
     summary['unresolved_producers_count'] = len(unresolved_producers)
+    summary['will_register_count'] = registration_counts['will_register']
+    summary['will_update_status_count'] = registration_counts['will_update_status']
+    summary['already_registered_count'] = registration_counts['already_registered']
     summary['can_import'] = (
         summary['can_import'] and summary['confirm_count'] == 0 and pending_refs_count == 0
     )
@@ -255,7 +266,8 @@ def staged_contact_upload_view(request):
                 f'Загружено строк: {summary["total"]}. '
                 f'Создать: {summary["create_count"]}, обновить: {summary["update_count"]}, '
                 f'требуют подтверждения: {summary["confirm_count"]}. '
-                f'Ошибок: {summary["error_rows"]}, предупреждений: {summary["warning_rows"]}.',
+                f'Ошибок: {summary["error_rows"]}, предупреждений: {summary["warning_rows"]}. '
+                f'Будет зарегистрировано на мероприятия: {summary["will_register_count"]}.',
             )
             return HttpResponseRedirect(reverse('admin:staged_import_contacts_review'))
         except ValueError as exc:
@@ -297,17 +309,30 @@ def staged_contact_review_view(request):
             else:
                 try:
                     confirmed_refs = {field: list(values) for field, values in extra['confirmed_refs'].items()}
-                    result = import_contact_rows(
+                    result, registration_summary = import_contact_rows(
                         validated, request.user,
                         confirmed_refs=confirmed_refs, present_columns=present_columns,
                     )
                     _clear_session(request)
-                    messages.success(
-                        request,
+                    success_text = (
                         f'Загрузка завершена: новых {result.totals.get("new", 0)}, '
                         f'обновлено {result.totals.get("update", 0)}, '
-                        f'без изменений {result.totals.get("skip", 0)}.',
+                        f'без изменений {result.totals.get("skip", 0)}.'
                     )
+                    if any([registration_summary['registered'], registration_summary['status_updated'], registration_summary['unchanged']]):
+                        success_text += (
+                            f' Регистрация на мероприятия: новых {registration_summary["registered"]}, '
+                            f'статус обновлён {registration_summary["status_updated"]}, '
+                            f'без изменений {registration_summary["unchanged"]}.'
+                        )
+                    messages.success(request, success_text)
+                    if registration_summary['errors']:
+                        messages.warning(
+                            request,
+                            'Не удалось зарегистрировать (карточки при этом сохранены): ' + '; '.join(
+                                f'строка {err["row_number"]}: {err["error"]}' for err in registration_summary['errors']
+                            ),
+                        )
                     return HttpResponseRedirect(reverse('admin:event_contact_changelist'))
                 except Exception as exc:
                     messages.error(request, f'Ошибка при загрузке: {exc}')
@@ -327,6 +352,7 @@ def staged_contact_review_view(request):
         'new_reference_panels': extra['new_reference_panels'],
         'unresolved_producers': extra['unresolved_producers'],
         'reference_datalists': _reference_datalists(),
+        'status_labels': STATUS_LABELS,
         'upload_url': reverse('admin:staged_import_contacts'),
         'step': 2,
     }

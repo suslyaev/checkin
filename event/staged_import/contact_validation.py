@@ -8,6 +8,7 @@ from .contact_columns import (
     REFERENCE_FIELD_MODELS,
     REQUIRED_CONTACT_COLUMNS,
     SOCIAL_NETWORK_GROUPS,
+    STATUS_LABEL_TO_CODE,
     YO_NORMALIZE_FIELDS,
 )
 
@@ -132,6 +133,11 @@ def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, exist
         id_errors, id_warnings = _id_issues(value, existing_contact_ids)
         errors += id_errors
         warnings += id_warnings
+
+    if field == 'status' and value.strip() and value.strip() not in STATUS_LABEL_TO_CODE:
+        errors.append(
+            'Неизвестный статус. Допустимые значения: ' + ', '.join(STATUS_LABEL_TO_CODE)
+        )
 
     if field in REQUIRED_CONTACT_COLUMNS:
         # Столбца нет в файле вообще — не то же самое, что пустая ячейка
