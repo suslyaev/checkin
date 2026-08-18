@@ -7,7 +7,7 @@ from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 
-from .contact_columns import CONTACT_COLUMN_LABELS, CONTACT_IMPORT_COLUMNS, STATUS_LABELS
+from .contact_columns import STATUS_LABELS, columns_for_session, labels_for_session, social_groups_in_keys
 from .contact_import import (
     BASE_DIFF_FIELDS,
     REFERENCE_FIELD_MODELS,
@@ -32,6 +32,17 @@ def _require_contact_import_perm(request):
         raise PermissionDenied
 
 
+def _session_columns(present_columns):
+    """Полный список колонок этой загрузки: базовые + столько групп соцсетей,
+    сколько реально было распознано в файле (present_columns уже содержит их
+    ключи, см. parsers.py) — без фиксированного числа групп."""
+    return columns_for_session(social_groups_in_keys(present_columns or set()))
+
+
+def _session_labels(present_columns):
+    return labels_for_session(social_groups_in_keys(present_columns or set()))
+
+
 def _rows_from_session(request):
     raw = request.session.get(SESSION_KEY)
     if not raw:
@@ -39,10 +50,11 @@ def _rows_from_session(request):
     return json.loads(raw)
 
 
-def _save_rows_to_session(request, rows):
+def _save_rows_to_session(request, rows, present_columns):
+    columns = _session_columns(present_columns)
     serializable = []
     for row in rows:
-        item = {col: row.get(col, '') for col in CONTACT_IMPORT_COLUMNS}
+        item = {col: row.get(col, '') for col in columns}
         item['_row_number'] = row.get('_row_number')
         item['excluded'] = bool(row.get('excluded'))
         item['match_choice'] = row.get('match_choice', '')
@@ -104,7 +116,7 @@ def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
         row_warnings = row.get('warnings', {})
         is_update = row.get('import_action') == 'update'
         current_values = row.get('_current_values', {}) if is_update else {}
-        for col in CONTACT_IMPORT_COLUMNS:
+        for col in _session_columns(present_columns):
             cell_errors = row_errors.get(col, [])
             cell_warnings = row_warnings.get(col, [])
             value = row.get(col, '')
@@ -236,7 +248,8 @@ def _reference_datalists():
     }
 
 
-def _rows_from_post(request, row_count):
+def _rows_from_post(request, row_count, present_columns):
+    columns = _session_columns(present_columns)
     rows = []
     for index in range(row_count):
         row = {
@@ -244,7 +257,7 @@ def _rows_from_post(request, row_count):
             'excluded': request.POST.get(f'row_{index}__excluded') == 'on',
             'match_choice': request.POST.get(f'row_{index}__match_choice', ''),
         }
-        for col in CONTACT_IMPORT_COLUMNS:
+        for col in columns:
             row[col] = request.POST.get(f'row_{index}__{col}', '')
         rows.append(row)
     return rows
@@ -260,7 +273,7 @@ def staged_contact_upload_view(request):
             _clear_session(request)
             _save_present_columns_to_session(request, present_columns)
             validated, summary, _extra = _full_preview(rows, request, present_columns)
-            _save_rows_to_session(request, validated)
+            _save_rows_to_session(request, validated, present_columns)
             messages.info(
                 request,
                 f'Загружено строк: {summary["total"]}. '
@@ -294,10 +307,10 @@ def staged_contact_review_view(request):
 
     if request.method == 'POST':
         action = request.POST.get('action', 'validate')
-        rows = _rows_from_post(request, row_count)
+        rows = _rows_from_post(request, row_count, present_columns)
         _update_confirmed_refs_from_post(request)
         validated, summary, extra = _full_preview(rows, request, present_columns)
-        _save_rows_to_session(request, validated)
+        _save_rows_to_session(request, validated, present_columns)
 
         if action == 'import':
             if not summary['can_import']:
@@ -344,10 +357,11 @@ def staged_contact_review_view(request):
     else:
         stored, summary, extra = _full_preview(stored, request, present_columns)
 
+    session_labels = _session_labels(present_columns)
     context = {
         'title': 'Проверка данных перед загрузкой',
         'table_rows': _prepare_table_rows(stored, extra['new_reference_values'], present_columns),
-        'column_labels': [CONTACT_COLUMN_LABELS[col] for col in CONTACT_IMPORT_COLUMNS],
+        'column_labels': [session_labels[col] for col in _session_columns(present_columns)],
         'summary': summary,
         'new_reference_panels': extra['new_reference_panels'],
         'unresolved_producers': extra['unresolved_producers'],

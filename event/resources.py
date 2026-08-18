@@ -1,9 +1,12 @@
+import copy
+
 from import_export import resources, fields
 from django.db import transaction
 from import_export.widgets import CharWidget, ForeignKeyWidget
-from django.db.models import Q
+from django.db.models import Count, Max, Q
 
 from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser, CommunityMember
+from .staged_import.contact_columns import social_field_label, social_groups_in_keys
 
 
 class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
@@ -236,10 +239,11 @@ class ContactImport(resources.ModelResource):
         return qs.order_by('-pk').first()
 
     def after_import_row(self, row, row_result, **kwargs):
-        # Обработка соцсетей после сохранения контакта (до 3 соцсетей на строку,
-        # см. event/staged_import/contact_columns.py SOCIAL_NETWORK_GROUPS).
+        # Обработка соцсетей после сохранения контакта — сколько групп реально
+        # в строке (см. event/staged_import/contact_columns.py), столько и
+        # обрабатываем, без фиксированного числа.
         instance = None
-        for i in (1, 2, 3):
+        for i in sorted(social_groups_in_keys(row.keys())):
             social_name = row.get(f'social_network_{i}_name')
             social_id = row.get(f'social_network_{i}_id')
             social_subscribers = row.get(f'social_network_{i}_subscribers')
@@ -274,9 +278,16 @@ class ContactImport(resources.ModelResource):
 
 class ContactExport(resources.ModelResource):
     """
-    Заголовки и раскладка соцсетей на 3 структурированные тройки колонок
-    намеренно совпадают с тем, что понимает загрузчик (event/staged_import/) —
-    можно выгрузить, обрезать лишние столбцы и залить обратно тем же файлом.
+    Заголовки соцсетей ("Соцсеть N"/"Ссылка N"/"Подписчики N") намеренно
+    совпадают с тем, что понимает загрузчик (event/staged_import/) — можно
+    выгрузить, обрезать лишние столбцы и залить обратно тем же файлом.
+
+    Число групп соцсетей не фиксировано — перед конкретной выгрузкой
+    (before_export) считаем максимум соцсетей среди выгружаемых контактов и
+    ровно на столько групп динамически добавляем колонки. Из-за этого разные
+    выгрузки (весь список / один отфильтрованный контакт) могут иметь разное
+    число столбцов — это ожидаемо, таблице всё равно нужно одно и то же число
+    колонок в каждой строке одной конкретной выгрузки.
     """
     id = fields.Field(attribute='id', column_name='ID')
     last_name = fields.Field(attribute='last_name', column_name='Фамилия')
@@ -289,33 +300,49 @@ class ContactExport(resources.ModelResource):
     producer__last_name = fields.Field(attribute='producer__last_name', column_name='Фамилия продюсера')
     producer__first_name = fields.Field(attribute='producer__first_name', column_name='Имя продюсера')
     comment = fields.Field(attribute='comment', column_name='Комментарий')
-    social_network_1_name = fields.Field(column_name='Соцсеть 1')
-    social_network_1_id = fields.Field(column_name='Ссылка 1')
-    social_network_1_subscribers = fields.Field(column_name='Подписчики 1')
-    social_network_2_name = fields.Field(column_name='Соцсеть 2')
-    social_network_2_id = fields.Field(column_name='Ссылка 2')
-    social_network_2_subscribers = fields.Field(column_name='Подписчики 2')
-    social_network_3_name = fields.Field(column_name='Соцсеть 3')
-    social_network_3_id = fields.Field(column_name='Ссылка 3')
-    social_network_3_subscribers = fields.Field(column_name='Подписчики 3')
 
     class Meta:
         model = Contact
         fields = ('id', 'last_name', 'first_name', 'middle_name',
                     'nickname', 'company__name', 'category__name', 'type_guest__name',
-                    'producer__last_name', 'producer__first_name', 'comment',
-                    'social_network_1_name', 'social_network_1_id', 'social_network_1_subscribers',
-                    'social_network_2_name', 'social_network_2_id', 'social_network_2_subscribers',
-                    'social_network_3_name', 'social_network_3_id', 'social_network_3_subscribers')
+                    'producer__last_name', 'producer__first_name', 'comment')
+
+    def before_export(self, queryset, **kwargs):
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        max_groups = InfoContact.objects.filter(
+            contact__in=queryset, community__isnull=True
+        ).values('contact_id').annotate(n=Count('id')).aggregate(m=Max('n'))['m'] or 0
+
+        if max_groups:
+            # self.fields — per-instance копия (см. Resource.__init__), а вот
+            # self._meta — общий на весь класс объект, его нельзя мутировать
+            # напрямую (иначе одна выгрузка может повлиять на другую).
+            self._meta = copy.copy(self._meta)
+            new_field_names = []
+            for i in range(1, max_groups + 1):
+                for part in ('name', 'id', 'subscribers'):
+                    field_name = f'social_network_{i}_{part}'
+                    if field_name in self.fields:
+                        continue
+                    self.fields[field_name] = fields.Field(column_name=social_field_label(i, part))
+                    setattr(
+                        self, f'dehydrate_{field_name}',
+                        (lambda idx, p: lambda obj: self._dehydrate_social(obj, idx - 1, p))(i, part),
+                    )
+                    new_field_names.append(field_name)
+            if new_field_names:
+                self._meta.fields = tuple(self._meta.fields) + tuple(new_field_names)
+
+        super().before_export(queryset, **kwargs)
 
     def _social_networks(self, obj):
-        """Первые 3 соцсети контакта (кэш на объекте — иначе 3 запроса на
-        карточку при выгрузке списка). Если их больше — остальные просто не
-        попадают в выгрузку, в базе не теряются (загрузчик их не трогает,
-        если не упомянуты, см. event/staged_import/)."""
+        """Все соцсети контакта (кэш на объекте — иначе запрос на каждую
+        карточку при выгрузке списка)."""
         if not hasattr(obj, '_cached_social_networks'):
             obj._cached_social_networks = list(
-                InfoContact.objects.filter(contact=obj).select_related('social_network').order_by('id')[:3]
+                InfoContact.objects.filter(contact=obj).select_related('social_network').order_by('id')
             )
         return obj._cached_social_networks
 
@@ -331,33 +358,6 @@ class ContactExport(resources.ModelResource):
         if part == 'subscribers':
             return info.subscribers if info.subscribers is not None else ''
         return ''
-
-    def dehydrate_social_network_1_name(self, obj):
-        return self._dehydrate_social(obj, 0, 'name')
-
-    def dehydrate_social_network_1_id(self, obj):
-        return self._dehydrate_social(obj, 0, 'id')
-
-    def dehydrate_social_network_1_subscribers(self, obj):
-        return self._dehydrate_social(obj, 0, 'subscribers')
-
-    def dehydrate_social_network_2_name(self, obj):
-        return self._dehydrate_social(obj, 1, 'name')
-
-    def dehydrate_social_network_2_id(self, obj):
-        return self._dehydrate_social(obj, 1, 'id')
-
-    def dehydrate_social_network_2_subscribers(self, obj):
-        return self._dehydrate_social(obj, 1, 'subscribers')
-
-    def dehydrate_social_network_3_name(self, obj):
-        return self._dehydrate_social(obj, 2, 'name')
-
-    def dehydrate_social_network_3_id(self, obj):
-        return self._dehydrate_social(obj, 2, 'id')
-
-    def dehydrate_social_network_3_subscribers(self, obj):
-        return self._dehydrate_social(obj, 2, 'subscribers')
 
 
 class EventExport(resources.ModelResource):

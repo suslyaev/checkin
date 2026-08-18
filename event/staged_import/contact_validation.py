@@ -3,13 +3,13 @@ import re
 from event.models import Contact, KnownFirstName, KnownLastName
 
 from .contact_columns import (
-    CONTACT_IMPORT_COLUMNS,
     NAME_FIELDS,
     REFERENCE_FIELD_MODELS,
     REQUIRED_CONTACT_COLUMNS,
-    SOCIAL_NETWORK_GROUPS,
     STATUS_LABEL_TO_CODE,
     YO_NORMALIZE_FIELDS,
+    columns_for_session,
+    social_groups_in_keys,
 )
 
 NAME_SWAP_WARNING = 'Похоже, имя и фамилия перепутаны местами — проверьте'
@@ -86,7 +86,7 @@ def _apply_normalization(row, reference_casing_maps=None):
 
     extra_notes = {}
 
-    for i in SOCIAL_NETWORK_GROUPS:
+    for i in social_groups_in_keys(normalized.keys()):
         id_field = f'social_network_{i}_id'
         raw_id = normalized.get(id_field, '')
         raw_id = '' if raw_id is None else str(raw_id)
@@ -165,8 +165,8 @@ def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, exist
     if field in NAME_FIELDS and value.strip() and FORBIDDEN_CHARS_PATTERN.search(value):
         errors.append('Недопустимые символы (< > " { } | \\ и управляющие)')
 
-    subscriber_columns = {f'social_network_{i}_subscribers' for i in SOCIAL_NETWORK_GROUPS}
-    if field in subscriber_columns and value.strip():
+    is_subscribers_field = field.startswith('social_network_') and field.endswith('_subscribers')
+    if is_subscribers_field and value.strip():
         try:
             int(float(value.strip().replace(' ', '').replace(',', '.')))
         except (ValueError, TypeError):
@@ -219,7 +219,8 @@ def validate_contact_row(
 
     errors = {}
     warnings = {}
-    for field in CONTACT_IMPORT_COLUMNS:
+    fields_to_check = columns_for_session(social_groups_in_keys(normalized_row.keys()))
+    for field in fields_to_check:
         field_errors, field_warnings = _cell_issues(
             field, normalized_row.get(field, ''),
             present_columns=present_columns, row_has_id=row_has_id,
@@ -271,9 +272,11 @@ def validate_contact_rows(rows, present_columns=None):
 
 
 def normalize_row_for_import(row):
-    """Подготовка строки к ContactImport (trim строк)."""
-    normalized = {col: '' for col in CONTACT_IMPORT_COLUMNS}
-    for col in CONTACT_IMPORT_COLUMNS:
+    """Подготовка строки к ContactImport (trim строк). Включает столько групп
+    соцсетей, сколько реально есть в самой строке — без фиксированного числа."""
+    columns = columns_for_session(social_groups_in_keys(row.keys()))
+    normalized = {col: '' for col in columns}
+    for col in columns:
         value = row.get(col, '')
         if value is None:
             value = ''

@@ -8,7 +8,7 @@ from event.models import Contact
 from event.resources import ContactImport, find_producer
 
 from .action_import import preview_registrations, register_actions
-from .contact_columns import CONTACT_IMPORT_COLUMNS, REFERENCE_FIELD_MODELS
+from .contact_columns import REFERENCE_FIELD_MODELS, columns_for_session, social_groups_in_keys
 from .contact_validation import (
     load_reference_casing_maps,
     normalize_row_for_import,
@@ -317,13 +317,7 @@ def _effective_value(field, normalized, current_values, present_columns, is_upda
     return normalized.get(field, '')
 
 
-# Поля, которые реально уходят в ContactImport (без служебных id/producer_*/
-# event/status — регистрация на мероприятие обрабатывается отдельно, после
-# коммита карточек, см. register_actions).
-_DATASET_BASE_FIELDS = [
-    col for col in CONTACT_IMPORT_COLUMNS
-    if col not in ('id', 'producer_last_name', 'producer_first_name', 'event', 'status')
-]
+_NON_DATASET_BASE_FIELDS = ('id', 'producer_last_name', 'producer_first_name', 'event', 'status')
 
 
 def import_contact_rows(rows, user, confirmed_refs=None, present_columns=None):
@@ -347,8 +341,16 @@ def import_contact_rows(rows, user, confirmed_refs=None, present_columns=None):
     ensure_reference_values_exist(confirmed_refs)
     reference_casing_maps = load_reference_casing_maps()
 
+    # Соцсети — сколько групп реально в этой загрузке (по ключам самих строк,
+    # не фиксированное число, см. Фаза "снять лимит в 3 соцсети").
+    social_groups = social_groups_in_keys({key for row in rows for key in row.keys()})
+    dataset_base_fields = [
+        col for col in columns_for_session(social_groups)
+        if col not in _NON_DATASET_BASE_FIELDS
+    ]
+
     resource = ContactImport()
-    headers = _DATASET_BASE_FIELDS + ['producer', '_force_new', '_force_contact_id']
+    headers = dataset_base_fields + ['producer', '_force_new', '_force_contact_id']
     dataset = tablib.Dataset(headers=headers)
 
     for row in rows:
@@ -369,7 +371,7 @@ def import_contact_rows(rows, user, confirmed_refs=None, present_columns=None):
 
         base_values = [
             _effective_value(field, normalized, current_values, present_columns, is_update)
-            for field in _DATASET_BASE_FIELDS
+            for field in dataset_base_fields
         ]
 
         producer_last = _effective_value('producer_last_name', normalized, current_values, present_columns, is_update)
