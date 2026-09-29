@@ -8,6 +8,7 @@ from config import views
 urlpatterns = [
     path('table/', include('table.urls')),
     path('', views.home, name='home'),
+    path('health/', views.health, name='health'),
     path('logout/', views.custom_logout, name='logout'),
     path('admin/', admin.site.urls),
     path('event/', include('event.urls')),
