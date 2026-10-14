@@ -472,6 +472,32 @@
   </form>
 
   <script>
+    // Отправляем только изменённые ячейки одним полем row_changes: поле на
+    // каждую ячейку упирается в DATA_UPLOAD_MAX_NUMBER_FIELDS уже на паре
+    // тысяч строк. Остальные значения сервер берёт из сессии.
+    (function () {
+      var form = document.getElementById('staged-import-form');
+      var rowFieldRe = /^row_\d+__/;
+      var initial = new Map();
+      function current(el) {
+        return el.type === 'checkbox' ? (el.checked ? 'on' : '') : el.value;
+      }
+      form.querySelectorAll('[name^="row_"]').forEach(function (el) {
+        if (el.type !== 'hidden') initial.set(el, current(el));
+      });
+      form.addEventListener('formdata', function (event) {
+        var data = event.formData;
+        Array.from(data.keys()).forEach(function (key) {
+          if (rowFieldRe.test(key)) data.delete(key);
+        });
+        var changes = {};
+        initial.forEach(function (value, el) {
+          if (!el.disabled && current(el) !== value) changes[el.name] = current(el);
+        });
+        data.set('row_changes', JSON.stringify(changes));
+      });
+    })();
+
     (function () {
       var field = document.getElementById('bulk-field');
       var scope = document.getElementById('bulk-scope');

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
@@ -249,18 +250,51 @@ def _reference_datalists():
     }
 
 
-def _rows_from_post(request, row_count, present_columns):
+_ROW_FIELD_RE = re.compile(r'^row_(\d+)__(.+)$')
+
+
+def _rows_from_post(request, stored_rows, present_columns):
+    """Строки таблицы с учётом правок из формы. Браузер присылает только
+    изменённые ячейки одним JSON-полем row_changes (см. скрипт в
+    contact_review.html) — иначе на файле в пару тысяч строк форма упирается
+    в DATA_UPLOAD_MAX_NUMBER_FIELDS. Остальное берётся из сессии, куда
+    сохранено ровно то, что было отрисовано в таблице."""
     columns = _session_columns(present_columns)
+    raw_changes = request.POST.get('row_changes')
+    if raw_changes is None:
+        # Без JS форма приходит целиком, по полю на ячейку.
+        changes = request.POST
+        rows = [{'_row_number': row.get('_row_number'), 'excluded': False, 'match_choice': ''} for row in stored_rows]
+        for index, row in enumerate(rows):
+            row['excluded'] = changes.get(f'row_{index}__excluded') == 'on'
+            row['match_choice'] = changes.get(f'row_{index}__match_choice', '')
+            for col in columns:
+                row[col] = changes.get(f'row_{index}__{col}', '')
+        return rows
+
     rows = []
-    for index in range(row_count):
-        row = {
-            '_row_number': request.POST.get(f'row_{index}__row_number', index + 2),
-            'excluded': request.POST.get(f'row_{index}__excluded') == 'on',
-            'match_choice': request.POST.get(f'row_{index}__match_choice', ''),
-        }
-        for col in columns:
-            row[col] = request.POST.get(f'row_{index}__{col}', '')
+    for stored in stored_rows:
+        row = {col: stored.get(col, '') for col in columns}
+        row['_row_number'] = stored.get('_row_number')
+        row['excluded'] = bool(stored.get('excluded'))
+        row['match_choice'] = stored.get('match_choice', '')
         rows.append(row)
+
+    try:
+        changes = json.loads(raw_changes)
+    except ValueError:
+        changes = {}
+    allowed = set(columns) | {'match_choice'}
+    for name, value in (changes.items() if isinstance(changes, dict) else []):
+        m = _ROW_FIELD_RE.match(name)
+        if not m or int(m.group(1)) >= len(rows):
+            continue
+        row = rows[int(m.group(1))]
+        field = m.group(2)
+        if field == 'excluded':
+            row['excluded'] = value == 'on'
+        elif field in allowed:
+            row[field] = '' if value is None else str(value)
     return rows
 
 
@@ -390,12 +424,11 @@ def staged_contact_review_view(request):
         messages.warning(request, 'Сначала загрузите файл.')
         return HttpResponseRedirect(reverse('admin:staged_import_contacts'))
 
-    row_count = len(stored)
     present_columns = _present_columns_from_session(request)
 
     if request.method == 'POST':
         action = request.POST.get('action', 'validate')
-        rows = _rows_from_post(request, row_count, present_columns)
+        rows = _rows_from_post(request, stored, present_columns)
         _update_confirmed_refs_from_post(request)
         bulk_message = None
         if action == 'bulk_fill':
