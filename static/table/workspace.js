@@ -125,6 +125,27 @@
     }, true);
   }
 
+  const loadingOverlay = document.getElementById('zt-loading');
+  const loadingText = document.getElementById('zt-loading-text');
+
+  function showLoading(text) {
+    if (!loadingOverlay) return;
+    if (text) loadingText.textContent = text;
+    loadingOverlay.classList.add('is-visible');
+  }
+
+  function hideLoading() {
+    if (loadingOverlay) loadingOverlay.classList.remove('is-visible');
+  }
+
+  // Даём браузеру отрисовать лоадер до тяжёлой синхронной работы (setData
+  // на тысячи строк без virtualDom блокирует страницу).
+  function nextPaint() {
+    return new Promise(function (resolve) {
+      requestAnimationFrame(function () { setTimeout(resolve, 0); });
+    });
+  }
+
   function setStatus(msg, type) {
     statusBar.textContent = msg || '';
     statusBar.className = 'zt-status-bar' + (type ? ' is-' + type : '');
@@ -904,6 +925,17 @@
       return;
     }
     setStatus('Синхронизация…');
+    showLoading('Загружаем данные…');
+    try {
+      await loadDataInner();
+    } catch (err) {
+      setStatus('Ошибка загрузки: ' + err.message, 'error');
+    } finally {
+      hideLoading();
+    }
+  }
+
+  async function loadDataInner() {
     await preloadAutocomplete();
     const res = await fetch(apiUrl(cfg.dataset + '/'), { credentials: 'same-origin' });
     const payload = await res.json();
@@ -920,6 +952,8 @@
     activeFilterQuery = '';
     if (filterQuery) filterQuery.value = '';
     const rows = prepareRows(payload.data || []);
+    showLoading('Отрисовываем таблицу (' + rows.length + ' записей)…');
+    await nextPaint();
     await table.setData(rows);
     table.clearFilter();
     snapshotAllRows();
@@ -1417,6 +1451,18 @@
     if (sideDrawer.contains(e.target)) return;
     if (btnColumns.contains(e.target) || btnFilter.contains(e.target)) return;
     closeSidePanel();
+  });
+
+  document.querySelectorAll('.zt-tab[data-tab-label]').forEach(function (tab) {
+    tab.addEventListener('click', function (e) {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      // Новая вкладка — это переход на другую страницу: пока сервер отвечает,
+      // старая таблица остаётся на экране и выглядит зависшей.
+      showLoading('Открываем «' + tab.dataset.tabLabel + '»…');
+    });
+  });
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) hideLoading();
   });
 
   closeSidePanel();
