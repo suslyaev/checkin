@@ -20,6 +20,90 @@ FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>"{}|\\`\x00-\x08\x0b\x0c\x0e-\x1f]')
 MAX_FIELD_LENGTH = 300
 YO_PATTERN = re.compile('[ёЁ]')
 
+# Числовые поля приводятся к числу молча, а не предлагаются к исправлению:
+# в Excel-выгрузках тысячи часто разделены пробелом/неразрывным пробелом,
+# целые приходят как «1234.0», а отсутствие значения обозначают прочерком.
+NUMBER_DASHES = {'-', '–', '—', '−', '--'}
+_NUMBER_IGNORED_CHARS = re.compile(r"[\s']")
+_NUMBER_RE = re.compile(r'^(\d+(?:[.,]\d+)*)(k|к|тыс\.?|m|м|млн\.?)?$', re.IGNORECASE)
+_NUMBER_MULTIPLIERS = {'k': 1000, 'к': 1000, 'тыс': 1000, 'm': 1000000, 'м': 1000000, 'млн': 1000000}
+
+
+def parse_int_like(value):
+    """«12 345», «12\u00a0345», «12,345», «1234.0», «1,5к», «2 млн» -> int.
+    Пустая строка -> None. Не число -> ValueError. Прочерк здесь не
+    обрабатывается — что он означает, решает вызывающий код (0 или пусто)."""
+    text = _NUMBER_IGNORED_CHARS.sub('', str(value or ''))
+    if not text:
+        return None
+    m = _NUMBER_RE.match(text)
+    if not m:
+        raise ValueError(value)
+    digits, suffix = m.group(1), (m.group(2) or '').lower().rstrip('.')
+    separators = re.findall(r'[.,]', digits)
+    if separators:
+        parts = re.split(r'[.,]', digits)
+        if len(separators) == 1 and (suffix or len(parts[1]) != 3):
+            # Одиночный разделитель не по три цифры («1,5», «1234.0») или с
+            # суффиксом («1,5к») — десятичная дробь.
+            number = float('.'.join(parts))
+        elif len(set(separators)) == 2:
+            # «1,234.5» / «1.234,5» — последний разделитель десятичный.
+            number = float(''.join(parts[:-1]) + '.' + parts[-1])
+        else:
+            # «12,345», «1.234.567» — разделители тысяч.
+            if any(len(part) != 3 for part in parts[1:]):
+                raise ValueError(value)
+            number = float(''.join(parts))
+    else:
+        number = float(digits)
+    return int(round(number * _NUMBER_MULTIPLIERS.get(suffix, 1)))
+
+
+_ID_RE = re.compile(r'^(\d+)(?:\.0+)?$')
+
+
+def _normalize_subscribers(value):
+    """Возвращает нормализованное строковое значение или исходное, если это
+    не число (тогда ошибку покажет валидация). Прочерк — 0 подписчиков."""
+    raw = '' if value is None else str(value)
+    stripped = raw.strip()
+    if stripped in NUMBER_DASHES:
+        return '0'
+    try:
+        number = parse_int_like(stripped)
+    except ValueError:
+        return raw
+    return '' if number is None else str(number)
+
+
+def _normalize_id(value):
+    """ID — только целое: «1 234» и «1234.0» приводятся, дробь/«1к» остаются
+    как есть и уходят в ошибку валидации. Прочерк — ID не указан."""
+    raw = '' if value is None else str(value)
+    text = _NUMBER_IGNORED_CHARS.sub('', raw)
+    if text in NUMBER_DASHES:
+        return ''
+    m = _ID_RE.match(text)
+    return m.group(1) if m else raw
+
+
+def _is_subscribers_field(field):
+    return field.startswith('social_network_') and field.endswith('_subscribers')
+
+
+_STATUS_LOOKUP = {}
+
+
+def _normalize_status(value):
+    """«пришёл»/«ЗАЯВЛЕН»/«Приглашен» -> точное написание из STATUS_MODEL."""
+    if not _STATUS_LOOKUP:
+        _STATUS_LOOKUP.update({normalize_yo(label).lower(): label for label in STATUS_LABEL_TO_CODE})
+    stripped = (value or '').strip()
+    if not stripped:
+        return value
+    return _STATUS_LOOKUP.get(normalize_yo(stripped).lower(), value)
+
 
 def normalize_yo(value):
     """Приводит «ё» к «е» (обязательное приведение, не проверка)."""
@@ -83,6 +167,14 @@ def _apply_normalization(row, reference_casing_maps=None):
     for field in YO_NORMALIZE_FIELDS:
         if field in normalized:
             normalized[field] = normalize_yo(normalized[field])
+
+    if 'id' in normalized:
+        normalized['id'] = _normalize_id(normalized['id'])
+    for field in list(normalized.keys()):
+        if _is_subscribers_field(field):
+            normalized[field] = _normalize_subscribers(normalized[field])
+    if 'status' in normalized:
+        normalized['status'] = _normalize_status(normalized['status'])
 
     extra_notes = {}
 
@@ -165,11 +257,10 @@ def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, exist
     if field in NAME_FIELDS and value.strip() and FORBIDDEN_CHARS_PATTERN.search(value):
         errors.append('Недопустимые символы (< > " { } | \\ и управляющие)')
 
-    is_subscribers_field = field.startswith('social_network_') and field.endswith('_subscribers')
-    if is_subscribers_field and value.strip():
+    if _is_subscribers_field(field) and value.strip():
         try:
-            int(float(value.strip().replace(' ', '').replace(',', '.')))
-        except (ValueError, TypeError):
+            parse_int_like(value.strip())
+        except ValueError:
             errors.append('Должно быть числом')
 
     return errors, warnings

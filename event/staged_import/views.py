@@ -10,6 +10,7 @@ from django.urls import path, reverse
 from .contact_columns import STATUS_LABELS, columns_for_session, labels_for_session, social_groups_in_keys
 from .contact_import import (
     BASE_DIFF_FIELDS,
+    MATCH_CHOICE_NEW,
     REFERENCE_FIELD_MODELS,
     annotate_import_actions,
     collect_new_reference_values,
@@ -263,6 +264,93 @@ def _rows_from_post(request, row_count, present_columns):
     return rows
 
 
+BULK_SCOPE_EMPTY = 'empty'
+BULK_SCOPE_ERRORS = 'errors'
+BULK_SCOPE_EQUALS = 'equals'
+BULK_SCOPE_ALL = 'all'
+BULK_SCOPES = [
+    (BULK_SCOPE_EMPTY, 'где значение пустое'),
+    (BULK_SCOPE_ERRORS, 'где в этом столбце ошибка'),
+    (BULK_SCOPE_EQUALS, 'где значение равно…'),
+    (BULK_SCOPE_ALL, 'во всех строках'),
+]
+BULK_MATCH_NEW = 'new'
+BULK_MATCH_SINGLE = 'single'
+# ID массово не проставляется — он у каждой строки свой.
+BULK_EXCLUDED_FIELDS = {'id'}
+
+
+def _bulk_fill_columns(present_columns):
+    return [col for col in _session_columns(present_columns) if col not in BULK_EXCLUDED_FIELDS]
+
+
+def _apply_bulk_fill(request, rows, present_columns):
+    """Массово проставляет значение в одном столбце по всем активным строкам,
+    подходящим под условие. Если столбца не было в файле и проставляется
+    непустое значение — столбец становится «присутствующим» (например, файл
+    без «Наименования события», а событие выбрали для всех строк разом).
+    Возвращает (present_columns, число изменённых строк, ошибка или None)."""
+    field = request.POST.get('bulk_field', '')
+    scope = request.POST.get('bulk_scope', BULK_SCOPE_EMPTY)
+    value = request.POST.get('bulk_value', '').strip()
+    match_value = request.POST.get('bulk_match_value', '').strip()
+
+    if field not in _bulk_fill_columns(present_columns):
+        return present_columns, 0, 'Выберите столбец для массового изменения.'
+    if scope not in dict(BULK_SCOPES):
+        return present_columns, 0, 'Выберите, в каких строках менять значение.'
+
+    rows_with_errors = set()
+    if scope == BULK_SCOPE_ERRORS:
+        validated, _summary = validate_contact_rows(rows, present_columns=present_columns)
+        rows_with_errors = {i for i, row in enumerate(validated) if row['errors'].get(field)}
+
+    changed = 0
+    for index, row in enumerate(rows):
+        if row.get('excluded'):
+            continue
+        current = (row.get(field) or '').strip()
+        if scope == BULK_SCOPE_EMPTY and current:
+            continue
+        if scope == BULK_SCOPE_ERRORS and index not in rows_with_errors:
+            continue
+        if scope == BULK_SCOPE_EQUALS and current.lower() != match_value.lower():
+            continue
+        if current != value:
+            row[field] = value
+            changed += 1
+
+    if value and present_columns is not None and field not in present_columns:
+        present_columns = set(present_columns) | {field}
+        _save_present_columns_to_session(request, present_columns)
+    return present_columns, changed, None
+
+
+def _apply_bulk_match(request, rows, present_columns):
+    """Проставляет «Действие» всем строкам «Требует подтверждения», где оно
+    ещё не выбрано: создать нового, либо обновить карточку, если кандидат
+    ровно один. Возвращает (число изменённых строк, ошибка или None)."""
+    mode = request.POST.get('bulk_match_mode', '')
+    if mode not in (BULK_MATCH_NEW, BULK_MATCH_SINGLE):
+        return 0, 'Выберите действие для массового применения.'
+
+    validated, _summary = validate_contact_rows(rows, present_columns=present_columns)
+    validated, _counts = annotate_import_actions(validated)
+    changed = 0
+    for row, preview in zip(rows, validated):
+        if preview.get('import_action') != 'confirm' or (row.get('match_choice') or '').strip():
+            continue
+        candidates = preview.get('match_candidates') or []
+        if mode == BULK_MATCH_NEW:
+            row['match_choice'] = MATCH_CHOICE_NEW
+        elif len(candidates) == 1:
+            row['match_choice'] = str(candidates[0]['pk'])
+        else:
+            continue
+        changed += 1
+    return changed, None
+
+
 def staged_contact_upload_view(request):
     _require_contact_import_perm(request)
     form = ContactStagedUploadForm(request.POST or None, request.FILES or None)
@@ -309,6 +397,13 @@ def staged_contact_review_view(request):
         action = request.POST.get('action', 'validate')
         rows = _rows_from_post(request, row_count, present_columns)
         _update_confirmed_refs_from_post(request)
+        bulk_message = None
+        if action == 'bulk_fill':
+            present_columns, changed, bulk_error = _apply_bulk_fill(request, rows, present_columns)
+            bulk_message = bulk_error or f'Массовое изменение: обновлено строк — {changed}.'
+        elif action == 'bulk_match':
+            changed, bulk_error = _apply_bulk_match(request, rows, present_columns)
+            bulk_message = bulk_error or f'Действие проставлено в строках: {changed}.'
         validated, summary, extra = _full_preview(rows, request, present_columns)
         _save_rows_to_session(request, validated, present_columns)
 
@@ -349,6 +444,8 @@ def staged_contact_review_view(request):
                     return HttpResponseRedirect(reverse('admin:event_contact_changelist'))
                 except Exception as exc:
                     messages.error(request, f'Ошибка при загрузке: {exc}')
+        elif bulk_message:
+            messages.info(request, bulk_message)
         else:
             messages.info(request, 'Данные обновлены. Проверьте таблицу.')
 
@@ -359,6 +456,12 @@ def staged_contact_review_view(request):
 
     session_labels = _session_labels(present_columns)
     context = {
+        'bulk_columns': [
+            {'field': col, 'label': session_labels[col]} for col in _bulk_fill_columns(present_columns)
+        ],
+        'bulk_scopes': BULK_SCOPES,
+        'bulk_match_new': BULK_MATCH_NEW,
+        'bulk_match_single': BULK_MATCH_SINGLE,
         'title': 'Проверка данных перед загрузкой',
         'table_rows': _prepare_table_rows(stored, extra['new_reference_values'], present_columns),
         'column_labels': [session_labels[col] for col in _session_columns(present_columns)],

@@ -32,20 +32,48 @@
     .import-action-confirm { color: #996600; font-weight: 600; }
     .staged-import-table tr.row-confirm td { background: #fffdf5; }
     .match-choice-select { width: 220px; max-width: 100%; font-size: 12px; margin-top: 4px; }
+    /* Без min-width: 0 flex-элемент .content растягивается по ширине таблицы,
+       и обёртке ниже нечего прокручивать — скролл уезжает на всю страницу. */
+    #container > .main > .content {
+      min-width: 0;
+    }
+    /* Ограничена по высоте, чтобы горизонтальная полоса прокрутки была видна
+       сразу, а не только после прокрутки длинной таблицы до конца. */
     .staged-import-table-wrap {
-      overflow-x: auto;
+      overflow: auto;
+      max-height: calc(100vh - 160px);
       margin-bottom: 16px;
       border: 1px solid #ddd;
       border-radius: 6px;
     }
     .staged-import-table {
-      width: 100%;
-      border-collapse: collapse;
+      width: max-content;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
       font-size: 12px;
+    }
+    .staged-import-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .staged-import-table .sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: #fff;
+    }
+    .staged-import-table thead th.sticky-col {
+      z-index: 3;
+      background: #f5f5f5;
     }
     .staged-import-table th,
     .staged-import-table td {
-      border: 1px solid #ddd;
+      /* border-collapse: separate (нужен для sticky) — рисуем только правую и
+         нижнюю границы, чтобы не было двойных линий. */
+      border-right: 1px solid #ddd;
+      border-bottom: 1px solid #ddd;
       padding: 6px 8px;
       vertical-align: top;
     }
@@ -194,6 +222,34 @@
     .registration-preview.will_register { color: #1a7f37; }
     .registration-preview.will_update_status { color: #996600; }
     .registration-preview.already_registered { color: #888; }
+    .staged-import-panel.bulk {
+      background: #f8f8f8;
+    }
+    .bulk-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .bulk-row:last-child { margin-bottom: 0; }
+    .bulk-row select,
+    .bulk-row input[type="text"] { font-size: 12px; }
+    .bulk-row input[type="text"] { width: 220px; }
+    .bulk-row button {
+      padding: 5px 12px;
+      font-size: 12px;
+      border-radius: 4px;
+      border: 1px solid #417690;
+      background: #417690;
+      color: #fff;
+      cursor: pointer;
+    }
+    .bulk-hint { color: #666; font-size: 11px; }
+    .default-submit {
+      position: absolute;
+      left: -9999px;
+    }
   </style>
 {% endblock %}
 
@@ -224,6 +280,8 @@
 
   <form method="post" id="staged-import-form">
     {% csrf_token %}
+    {# Enter в любом поле таблицы — «Применить правки», а не массовое действие ниже. #}
+    <button type="submit" name="action" value="validate" class="default-submit" tabindex="-1" aria-hidden="true"></button>
 
     {% if new_reference_panels %}
       <div class="staged-import-panel pending">
@@ -257,11 +315,47 @@
         </ul>
       </div>
     {% endif %}
+
+    <div class="staged-import-panel bulk">
+      <h3>Массовое изменение</h3>
+      <div class="bulk-row">
+        <label>Столбец
+          <select name="bulk_field" id="bulk-field">
+            {% for col in bulk_columns %}
+              <option value="{{ col.field }}">{{ col.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <select name="bulk_scope" id="bulk-scope">
+          {% for value, label in bulk_scopes %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="bulk_match_value" id="bulk-match-value" placeholder="текущее значение" hidden>
+        <label>→ проставить
+          <input type="text" name="bulk_value" id="bulk-value" placeholder="новое значение">
+        </label>
+        <button type="submit" name="action" value="bulk_fill">Применить ко всем</button>
+        <span class="bulk-hint">исключённые строки не меняются; правки в таблице тоже сохранятся</span>
+      </div>
+      {% if summary.confirm_count %}
+        <div class="bulk-row">
+          <label>Действие для строк «Требует подтверждения», где не выбрано:
+            <select name="bulk_match_mode">
+              <option value="{{ bulk_match_new }}">Создать нового</option>
+              <option value="{{ bulk_match_single }}">Обновить карточку, если кандидат единственный</option>
+            </select>
+          </label>
+          <button type="submit" name="action" value="bulk_match">Применить ко всем</button>
+        </div>
+      {% endif %}
+    </div>
+
     <div class="staged-import-table-wrap">
       <table class="staged-import-table">
         <thead>
           <tr>
-            <th>№</th>
+            <th class="sticky-col">№</th>
             <th>Искл.</th>
             <th>Действие</th>
             {% for label in column_labels %}
@@ -272,7 +366,7 @@
         <tbody>
           {% for row in table_rows %}
             <tr class="{% if row.excluded %}row-excluded{% elif row.has_errors %}row-error{% elif row.needs_confirm %}row-confirm{% endif %}">
-              <td>{{ row.row_number }}</td>
+              <td class="sticky-col">{{ row.row_number }}</td>
               <td>
                 <input type="checkbox" name="row_{{ row.index }}__excluded" {% if row.excluded %}checked{% endif %}>
                 <input type="hidden" name="row_{{ row.index }}__row_number" value="{{ row.row_number }}">
@@ -303,6 +397,10 @@
                   {% elif cell.is_status %}
                     <select class="status-select" name="row_{{ row.index }}__{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>
                       <option value="" {% if not cell.value %}selected{% endif %}>—</option>
+                      {% if cell.value and cell.value not in status_labels %}
+                        {# Иначе браузер молча выберет «—» и неизвестный статус пропадёт при следующей отправке. #}
+                        <option value="{{ cell.value }}" selected>{{ cell.value }} (неизвестный)</option>
+                      {% endif %}
                       {% for label in status_labels %}
                         <option value="{{ label }}" {% if cell.value == label %}selected{% endif %}>{{ label }}</option>
                       {% endfor %}
@@ -366,5 +464,34 @@
         {% endfor %}
       </datalist>
     {% endfor %}
+    <datalist id="datalist-status">
+      {% for label in status_labels %}
+        <option value="{{ label }}"></option>
+      {% endfor %}
+    </datalist>
   </form>
+
+  <script>
+    (function () {
+      var field = document.getElementById('bulk-field');
+      var scope = document.getElementById('bulk-scope');
+      var matchValue = document.getElementById('bulk-match-value');
+      var value = document.getElementById('bulk-value');
+      if (!field) return;
+      function sync() {
+        var list = 'datalist-' + field.value;
+        if (document.getElementById(list)) {
+          value.setAttribute('list', list);
+          matchValue.setAttribute('list', list);
+        } else {
+          value.removeAttribute('list');
+          matchValue.removeAttribute('list');
+        }
+        matchValue.hidden = scope.value !== 'equals';
+      }
+      field.addEventListener('change', sync);
+      scope.addEventListener('change', sync);
+      sync();
+    })();
+  </script>
 {% endblock %}
