@@ -21,6 +21,7 @@ from .contact_import import (
 from .contact_validation import load_reference_casing_maps, resolve_reference_casing, validate_contact_rows
 from .forms import ContactStagedUploadForm
 from .parsers import parse_spreadsheet
+from .social_links import reflow_social_columns
 
 SESSION_KEY = 'staged_contact_import_rows'
 SESSION_REFS_KEY = 'staged_contact_import_confirmed_refs'
@@ -392,6 +393,7 @@ def staged_contact_upload_view(request):
     if request.method == 'POST' and form.is_valid():
         try:
             rows, present_columns = parse_spreadsheet(form.cleaned_data['file'])
+            rows, present_columns, reflowed_count = reflow_social_columns(rows, present_columns)
             _clear_session(request)
             _save_present_columns_to_session(request, present_columns)
             validated, summary, _extra = _full_preview(rows, request, present_columns)
@@ -404,6 +406,12 @@ def staged_contact_upload_view(request):
                 f'Ошибок: {summary["error_rows"]}, предупреждений: {summary["warning_rows"]}. '
                 f'Будет зарегистрировано на мероприятия: {summary["will_register_count"]}.',
             )
+            if reflowed_count:
+                messages.info(
+                    request,
+                    f'В строках: {reflowed_count} значения соцсетей стояли не под своими заголовками — '
+                    f'ссылки и подписчики разложены по столбцам, соцсеть определена по ссылке. Проверьте.',
+                )
             return HttpResponseRedirect(reverse('admin:staged_import_contacts_review'))
         except ValueError as exc:
             form.add_error('file', str(exc))
