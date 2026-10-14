@@ -18,7 +18,11 @@ NAME_SWAP_WARNING = 'Похоже, имя и фамилия перепутаны
 REFERENCE_CASING_NOTE = 'Приведено к уже существующему значению справочника: «{value}»'
 NO_ID_NO_COLUMN_ERROR = 'Обязательное поле (в файле нет этого столбца, а ID для сопоставления не указан)'
 
-FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>"{}|\\`\x00-\x08\x0b\x0c\x0e-\x1f]')
+# Кавычки (ники вроде «"TERRY"») допустимы; эти — почти всегда мусор в ФИО.
+FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>{}|\\]')
+# Невидимые управляющие символы (из Excel/копипаста) удаляются молча во всех
+# полях; табуляция и переводы строк остаются — они бывают в комментарии.
+CONTROL_CHARS_PATTERN = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 MAX_FIELD_LENGTH = 300
 YO_PATTERN = re.compile('[ёЁ]')
 
@@ -126,6 +130,9 @@ def _apply_normalization(row, reference_casing_maps=None):
     очистка мусора в полях соцсетей, приведение регистра справочных полей
     к уже существующему значению. Возвращает (row, extra_notes)."""
     normalized = dict(row)
+    for field, value in normalized.items():
+        if isinstance(value, str) and CONTROL_CHARS_PATTERN.search(value):
+            normalized[field] = CONTROL_CHARS_PATTERN.sub('', value)
     for field in YO_NORMALIZE_FIELDS:
         if field in normalized:
             normalized[field] = normalize_yo(normalized[field])
@@ -239,7 +246,7 @@ def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, exist
         errors.append(f'Длина больше {MAX_FIELD_LENGTH} символов')
 
     if field in NAME_FIELDS and value.strip() and FORBIDDEN_CHARS_PATTERN.search(value):
-        errors.append('Недопустимые символы (< > " { } | \\ и управляющие)')
+        errors.append('Недопустимые символы (< > { } | \\)')
 
     if _is_subscribers_field(field) and value.strip():
         try:
