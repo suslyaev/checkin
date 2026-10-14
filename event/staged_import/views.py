@@ -3,10 +3,14 @@ import os
 import re
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
+
+from event.models import CustomUser
 
 from .contact_columns import STATUS_LABELS, columns_for_session, labels_for_session, social_groups_in_keys
 from .contact_import import (
@@ -256,7 +260,12 @@ def _full_preview(rows, request, present_columns):
         'new_reference_values': new_reference_values,
         'new_reference_panels': new_reference_panels,
         'unresolved_producers': [
-            {'value': value, 'row_numbers': row_numbers}
+            {
+                'value': value,
+                'last_name': value.split(' ', 1)[0],
+                'first_name': value.split(' ', 1)[1] if ' ' in value else '',
+                'row_numbers': row_numbers,
+            }
             for value, row_numbers in sorted(unresolved_producers.items())
         ],
         'confirmed_refs': confirmed_refs,
@@ -422,6 +431,63 @@ def _apply_bulk_match(request, rows, present_columns):
     return changed, None
 
 
+PRODUCER_GROUP_NAME = 'Продюсер'
+
+
+def _can_create_producers(user):
+    return user.has_perm('event.add_customuser')
+
+
+def _normalize_phone(value):
+    """«8 (985) 170-02-71», «+7 985 170 02 71», «9851700271» -> «+79851700271».
+    Остальное — как ввели (без пробелов/скобок/дефисов), формат проверит
+    CustomUser.clean()."""
+    value = (value or '').strip()
+    digits = re.sub(r'\D', '', value)
+    if not value.startswith('+'):
+        if len(digits) == 11 and digits[0] in '78':
+            return '+7' + digits[1:]
+        if len(digits) == 10:
+            return '+7' + digits
+    return '+' + digits if digits else ''
+
+
+def _create_producer(request, index):
+    """Заводит пользователя-продюсера из панели «Продюсеры не найдены» —
+    так же, как форма добавления пользователя в админке (is_staff, роль),
+    только без пароля: его можно задать позже в карточке пользователя.
+    Возвращает (уровень сообщения, текст)."""
+    if not _can_create_producers(request.user):
+        raise PermissionDenied
+    prefix = f'new_producer_{index}_'
+    last_name = request.POST.get(prefix + 'last_name', '').strip()
+    first_name = request.POST.get(prefix + 'first_name', '').strip()
+    phone = _normalize_phone(request.POST.get(prefix + 'phone', ''))
+    group = Group.objects.filter(pk=request.POST.get(prefix + 'group') or None).first()
+
+    if not last_name:
+        return messages.ERROR, 'Чтобы завести продюсера, укажите фамилию.'
+    full_name = f'{last_name} {first_name}'.strip()
+    if not phone:
+        return messages.ERROR, f'Чтобы завести продюсера «{full_name}», укажите телефон — это его логин.'
+    if group is None:
+        return messages.ERROR, 'Выберите роль для нового пользователя.'
+
+    user = CustomUser(phone=phone, last_name=last_name, first_name=first_name or None, is_staff=True, is_active=True)
+    user.set_unusable_password()
+    try:
+        user.full_clean(exclude=['password', 'auth_token'])
+    except ValidationError as exc:
+        return messages.ERROR, f'Не удалось завести «{full_name}»: ' + '; '.join(exc.messages)
+    with transaction.atomic():
+        user.save()
+        user.groups.set([group])
+    return messages.SUCCESS, (
+        f'Заведён пользователь «{user}» ({phone}, роль «{group.name}») — '
+        f'продюсер подставится в карточки при загрузке. Пароль можно задать в карточке пользователя.'
+    )
+
+
 def staged_contact_upload_view(request):
     _require_contact_import_perm(request)
     form = ContactStagedUploadForm(request.POST or None, request.FILES or None)
@@ -475,7 +541,11 @@ def staged_contact_review_view(request):
         rows = _rows_from_post(request, stored, present_columns)
         _update_confirmed_refs_from_post(request)
         bulk_message = None
-        if action == 'bulk_fill':
+        if action.startswith('create_producer:'):
+            level, text = _create_producer(request, action.split(':', 1)[1])
+            messages.add_message(request, level, text)
+            action = 'create_producer'
+        elif action == 'bulk_fill':
             present_columns, changed, bulk_error = _apply_bulk_fill(request, rows, present_columns)
             bulk_message = bulk_error or f'Массовое изменение: обновлено строк — {changed}.'
         elif action == 'bulk_match':
@@ -523,6 +593,8 @@ def staged_contact_review_view(request):
                     messages.error(request, f'Ошибка при загрузке: {exc}')
         elif bulk_message:
             messages.info(request, bulk_message)
+        elif action == 'create_producer':
+            pass
         else:
             messages.info(request, 'Данные обновлены. Проверьте таблицу.')
 
@@ -547,6 +619,9 @@ def staged_contact_review_view(request):
         'summary': summary,
         'new_reference_panels': extra['new_reference_panels'],
         'unresolved_producers': extra['unresolved_producers'],
+        'can_create_producers': _can_create_producers(request.user),
+        'user_groups': Group.objects.order_by('name'),
+        'producer_group': Group.objects.filter(name=PRODUCER_GROUP_NAME).first(),
         'reference_datalists': _reference_datalists(),
         'status_labels': STATUS_LABELS,
         'upload_url': reverse('admin:staged_import_contacts'),

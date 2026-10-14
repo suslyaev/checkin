@@ -275,6 +275,55 @@
       margin-bottom: 2px;
     }
     .top-scroll > div { height: 1px; }
+    .producer-create {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin: 4px 0 8px;
+    }
+    .producer-create input,
+    .producer-create select { font-size: 12px; width: 150px; }
+    .producer-create button {
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      border: 1px solid #417690;
+      background: #417690;
+      color: #fff;
+      cursor: pointer;
+    }
+    .staged-import-loading {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.7);
+    }
+    .staged-import-loading.visible { display: flex; }
+    .staged-import-loading-box {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 24px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      font-size: 14px;
+      color: #333;
+    }
+    .staged-import-spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid #c3d7e6;
+      border-top-color: #417690;
+      border-radius: 50%;
+      animation: staged-import-spin 0.8s linear infinite;
+    }
+    @keyframes staged-import-spin { to { transform: rotate(360deg); } }
     .default-submit {
       position: absolute;
       left: -9999px;
@@ -283,6 +332,15 @@
 {% endblock %}
 
 {% block content %}
+  {# Видно с самого начала загрузки страницы: таблица на тысячи строк долго
+     скачивается и разбирается браузером. Скрывается скриптом в конце страницы,
+     и показывается снова при любой отправке формы. #}
+  <div class="staged-import-loading visible" id="staged-import-loading" role="status" aria-live="polite">
+    <div class="staged-import-loading-box">
+      <div class="staged-import-spinner"></div>
+      <div id="staged-import-loading-text">Загружаем таблицу ({{ summary.total }} строк)…</div>
+    </div>
+  </div>
   <ol class="staged-import-steps">
     <li>1. Загрузка файла</li>
     <li class="active">2. Проверка и правка</li>
@@ -336,10 +394,25 @@
 
     {% if unresolved_producers %}
       <div class="staged-import-panel info">
-        <h3>Продюсеры не найдены в системе — потребуется завести пользователей вручную</h3>
+        <h3>Продюсеры не найдены в системе{% if can_create_producers %} — можно завести здесь же{% else %} — потребуется завести пользователей вручную{% endif %}</h3>
         <ul>
           {% for item in unresolved_producers %}
-            <li>«{{ item.value }}» — <span class="row-numbers">строки: {% for n in item.row_numbers %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></li>
+            <li>
+              «{{ item.value }}» — <span class="row-numbers">строки: {% for n in item.row_numbers %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+              {% if can_create_producers %}
+                <div class="producer-create" data-producer-create>
+                  <input type="text" name="new_producer_{{ forloop.counter0 }}_last_name" value="{{ item.last_name }}" placeholder="Фамилия">
+                  <input type="text" name="new_producer_{{ forloop.counter0 }}_first_name" value="{{ item.first_name }}" placeholder="Имя">
+                  <input type="tel" name="new_producer_{{ forloop.counter0 }}_phone" placeholder="Телефон, +7…">
+                  <select name="new_producer_{{ forloop.counter0 }}_group">
+                    {% for group in user_groups %}
+                      <option value="{{ group.pk }}" {% if group == producer_group %}selected{% endif %}>{{ group.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" name="action" value="create_producer:{{ forloop.counter0 }}">Завести продюсера</button>
+                </div>
+              {% endif %}
+            </li>
           {% endfor %}
         </ul>
       </div>
@@ -527,6 +600,44 @@
       {% endfor %}
     </datalist>
   </form>
+
+  <script>
+    (function () {
+      var form = document.getElementById('staged-import-form');
+      var loading = document.getElementById('staged-import-loading');
+      var loadingText = document.getElementById('staged-import-loading-text');
+      var total = {{ summary.total|default:0 }};
+
+      function show(text) {
+        loadingText.textContent = text;
+        loading.classList.add('visible');
+      }
+
+      form.addEventListener('submit', function (event) {
+        var action = event.submitter && event.submitter.value;
+        var text = 'Применяем правки и перепроверяем ' + total + ' строк…';
+        if (action === 'import') text = 'Загружаем данные в базу…';
+        else if (action === 'bulk_fill' || action === 'bulk_match') text = 'Применяем массовое изменение к ' + total + ' строкам…';
+        else if (action && action.indexOf('create_producer:') === 0) text = 'Заводим продюсера и перепроверяем строки…';
+        // Отложенно: иначе браузер блокирует перерисовку до ухода со страницы.
+        setTimeout(function () { show(text); }, 0);
+      });
+      document.querySelectorAll('a[href*="cancel"], a.btn-secondary').forEach(function (link) {
+        link.addEventListener('click', function () { show('Открываем…'); });
+      });
+      // Возврат на страницу кнопкой «назад» из кэша браузера — без вечного лоадера.
+      window.addEventListener('pageshow', function () { loading.classList.remove('visible'); });
+
+      // Enter в полях «завести продюсера» — завести именно этого, а не «Применить правки».
+      document.querySelectorAll('[data-producer-create] input').forEach(function (input) {
+        input.addEventListener('keydown', function (event) {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          form.requestSubmit(input.closest('[data-producer-create]').querySelector('button'));
+        });
+      });
+    })();
+  </script>
 
   <script>
     // Фильтр строк, переход по проблемным строкам, массовое исключение и
