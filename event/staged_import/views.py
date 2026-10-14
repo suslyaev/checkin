@@ -170,6 +170,8 @@ def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
             'row_number': row.get('_row_number'),
             'excluded': row.get('excluded'),
             'has_errors': row.get('has_errors'),
+            'has_warnings': row.get('has_warnings'),
+            'has_new_reference': any(cell['is_new_reference'] for cell in cells),
             'import_action': row.get('import_action'),
             'import_action_label': row.get('import_action_label', '—'),
             'import_action_url': row.get('import_action_url'),
@@ -180,6 +182,24 @@ def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
             'cells': cells,
         })
     return table_rows
+
+
+def _issue_columns(table_rows, labels):
+    """Столбцы, где у активных строк есть ошибки/предупреждения, — для
+    фильтра «проблема в столбце …» на странице проверки."""
+    counts = {}
+    for row in table_rows:
+        if row['excluded']:
+            continue
+        for cell in row['cells']:
+            if cell['errors'] or cell['warnings']:
+                item = counts.setdefault(cell['field'], {'errors': 0, 'warnings': 0})
+                item['errors'] += bool(cell['errors'])
+                item['warnings'] += bool(cell['warnings'])
+    return [
+        {'field': field, 'label': labels.get(field, field), **item}
+        for field, item in counts.items()
+    ]
 
 
 def _prepare_new_reference_panels(new_reference_values, confirmed_refs):
@@ -315,6 +335,18 @@ BULK_MATCH_SINGLE = 'single'
 BULK_EXCLUDED_FIELDS = {'id'}
 
 
+def _bulk_row_indexes(request):
+    """Индексы строк, показанных фильтром на странице: массовые действия
+    тогда применяются только к ним. None — фильтр не включён, ко всем."""
+    raw = request.POST.get('bulk_rows')
+    if not raw:
+        return None
+    try:
+        return {int(index) for index in json.loads(raw)}
+    except (TypeError, ValueError):
+        return None
+
+
 def _bulk_fill_columns(present_columns):
     return [col for col in _session_columns(present_columns) if col not in BULK_EXCLUDED_FIELDS]
 
@@ -335,6 +367,7 @@ def _apply_bulk_fill(request, rows, present_columns):
     if scope not in dict(BULK_SCOPES):
         return present_columns, 0, 'Выберите, в каких строках менять значение.'
 
+    only_rows = _bulk_row_indexes(request)
     rows_with_errors = set()
     if scope == BULK_SCOPE_ERRORS:
         validated, _summary = validate_contact_rows(rows, present_columns=present_columns)
@@ -342,7 +375,7 @@ def _apply_bulk_fill(request, rows, present_columns):
 
     changed = 0
     for index, row in enumerate(rows):
-        if row.get('excluded'):
+        if row.get('excluded') or (only_rows is not None and index not in only_rows):
             continue
         current = (row.get(field) or '').strip()
         if scope == BULK_SCOPE_EMPTY and current:
@@ -371,8 +404,11 @@ def _apply_bulk_match(request, rows, present_columns):
 
     validated, _summary = validate_contact_rows(rows, present_columns=present_columns)
     validated, _counts = annotate_import_actions(validated)
+    only_rows = _bulk_row_indexes(request)
     changed = 0
-    for row, preview in zip(rows, validated):
+    for index, (row, preview) in enumerate(zip(rows, validated)):
+        if only_rows is not None and index not in only_rows:
+            continue
         if preview.get('import_action') != 'confirm' or (row.get('match_choice') or '').strip():
             continue
         candidates = preview.get('match_candidates') or []
@@ -496,7 +532,9 @@ def staged_contact_review_view(request):
         stored, summary, extra = _full_preview(stored, request, present_columns)
 
     session_labels = _session_labels(present_columns)
+    table_rows = _prepare_table_rows(stored, extra['new_reference_values'], present_columns)
     context = {
+        'issue_columns': _issue_columns(table_rows, session_labels),
         'bulk_columns': [
             {'field': col, 'label': session_labels[col]} for col in _bulk_fill_columns(present_columns)
         ],
@@ -504,7 +542,7 @@ def staged_contact_review_view(request):
         'bulk_match_new': BULK_MATCH_NEW,
         'bulk_match_single': BULK_MATCH_SINGLE,
         'title': 'Проверка данных перед загрузкой',
-        'table_rows': _prepare_table_rows(stored, extra['new_reference_values'], present_columns),
+        'table_rows': table_rows,
         'column_labels': [session_labels[col] for col in _session_columns(present_columns)],
         'summary': summary,
         'new_reference_panels': extra['new_reference_panels'],

@@ -246,6 +246,35 @@
       cursor: pointer;
     }
     .bulk-hint { color: #666; font-size: 11px; }
+    .staged-import-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .staged-import-filter select { font-size: 12px; }
+    .staged-import-filter button {
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      color: #333;
+      cursor: pointer;
+    }
+    .staged-import-filter .filter-count { color: #666; }
+    .staged-import-table tr.filtered-out { display: none; }
+    .staged-import-table tr.row-current td { box-shadow: inset 0 2px 0 #417690, inset 0 -2px 0 #417690; }
+    /* Дубль горизонтальной полосы прокрутки над таблицей: нижнюю мышью не
+       достать — колесо над таблицей крутит её саму, а не страницу. */
+    .top-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      margin-bottom: 2px;
+    }
+    .top-scroll > div { height: 1px; }
     .default-submit {
       position: absolute;
       left: -9999px;
@@ -335,7 +364,7 @@
         <label>→ проставить
           <input type="text" name="bulk_value" id="bulk-value" placeholder="новое значение">
         </label>
-        <button type="submit" name="action" value="bulk_fill">Применить ко всем</button>
+        <button type="submit" name="action" value="bulk_fill" data-bulk-button>Применить ко всем</button>
         <span class="bulk-hint">исключённые строки не меняются; правки в таблице тоже сохранятся</span>
       </div>
       {% if summary.confirm_count %}
@@ -346,11 +375,39 @@
               <option value="{{ bulk_match_single }}">Обновить карточку, если кандидат единственный</option>
             </select>
           </label>
-          <button type="submit" name="action" value="bulk_match">Применить ко всем</button>
+          <button type="submit" name="action" value="bulk_match" data-bulk-button>Применить ко всем</button>
         </div>
       {% endif %}
     </div>
 
+    <div class="staged-import-filter">
+      <label>Показать
+        <select id="row-filter">
+          <option value="all">все строки</option>
+          <option value="problems">требуют внимания (ошибки, подтверждение, новые значения)</option>
+          <option value="errors">с ошибками</option>
+          <option value="confirm">требуют выбора действия</option>
+          <option value="newref">с новыми значениями справочников</option>
+          <option value="warnings">с предупреждениями</option>
+          <option value="excluded">исключённые</option>
+        </select>
+      </label>
+      <label>проблема в столбце
+        <select id="column-filter">
+          <option value="">любом</option>
+          {% for col in issue_columns %}
+            <option value="{{ col.field }}">{{ col.label }} — ошибок {{ col.errors }}, предупр. {{ col.warnings }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <span class="filter-count" id="filter-count"></span>
+      <button type="button" id="prev-problem">↑ предыдущая проблема</button>
+      <button type="button" id="next-problem">↓ следующая проблема</button>
+      <button type="button" id="exclude-shown">Исключить показанные</button>
+      <button type="button" id="include-shown">Вернуть показанные</button>
+    </div>
+    <input type="hidden" name="bulk_rows" id="bulk-rows">
+    <div class="top-scroll" id="top-scroll"><div></div></div>
     <div class="staged-import-table-wrap">
       <table class="staged-import-table">
         <thead>
@@ -365,7 +422,7 @@
         </thead>
         <tbody>
           {% for row in table_rows %}
-            <tr class="{% if row.excluded %}row-excluded{% elif row.has_errors %}row-error{% elif row.needs_confirm %}row-confirm{% endif %}">
+            <tr class="{% if row.excluded %}row-excluded is-excluded{% else %}{% if row.has_errors %}row-error is-error{% elif row.needs_confirm %}row-confirm{% endif %}{% if row.needs_confirm %} is-confirm{% endif %}{% if row.has_warnings %} is-warning{% endif %}{% if row.has_new_reference %} is-newref{% endif %}{% endif %}" data-index="{{ row.index }}">
               <td class="sticky-col">{{ row.row_number }}</td>
               <td>
                 <input type="checkbox" name="row_{{ row.index }}__excluded" {% if row.excluded %}checked{% endif %}>
@@ -391,7 +448,7 @@
                 {% endif %}
               </td>
               {% for cell in row.cells %}
-                <td class="{{ cell.css }}">
+                <td class="{{ cell.css }}" data-field="{{ cell.field }}">
                   {% if cell.is_comment %}
                     <textarea name="row_{{ row.index }}__{{ cell.field }}" {% if not cell.in_file %}disabled{% endif %}>{{ cell.value }}</textarea>
                   {% elif cell.is_status %}
@@ -470,6 +527,145 @@
       {% endfor %}
     </datalist>
   </form>
+
+  <script>
+    // Фильтр строк, переход по проблемным строкам, массовое исключение и
+    // верхняя полоса прокрутки. Пока фильтр включён, массовые изменения
+    // применяются только к показанным строкам (bulk_rows).
+    (function () {
+      var form = document.getElementById('staged-import-form');
+      var wrap = document.querySelector('.staged-import-table-wrap');
+      var rowFilter = document.getElementById('row-filter');
+      var columnFilter = document.getElementById('column-filter');
+      var filterCount = document.getElementById('filter-count');
+      var bulkRows = document.getElementById('bulk-rows');
+      var rows = Array.from(wrap.querySelectorAll('tbody tr'));
+      var bulkButtons = Array.from(document.querySelectorAll('[data-bulk-button]'));
+      var storageKey = 'staged-import-filter';
+      var currentProblem = null;
+
+      function isProblem(tr) {
+        var c = tr.classList;
+        return c.contains('is-error') || c.contains('is-confirm') || c.contains('is-newref');
+      }
+
+      function matches(tr) {
+        var c = tr.classList;
+        var kind = rowFilter.value;
+        var ok;
+        if (kind === 'all') ok = true;
+        else if (kind === 'excluded') ok = c.contains('is-excluded');
+        else if (kind === 'problems') ok = isProblem(tr);
+        else if (kind === 'errors') ok = c.contains('is-error');
+        else if (kind === 'confirm') ok = c.contains('is-confirm');
+        else if (kind === 'newref') ok = c.contains('is-newref');
+        else if (kind === 'warnings') ok = c.contains('is-warning');
+        if (ok && columnFilter.value && kind !== 'excluded' && c.contains('is-excluded')) ok = false;
+        if (ok && columnFilter.value) {
+          var cell = tr.querySelector('td[data-field="' + columnFilter.value + '"]');
+          ok = !!cell && (cell.classList.contains('cell-error') || cell.classList.contains('cell-warning'));
+        }
+        return ok;
+      }
+
+      function filterActive() {
+        return rowFilter.value !== 'all' || columnFilter.value !== '';
+      }
+
+      function shownRows() {
+        return rows.filter(function (tr) { return !tr.classList.contains('filtered-out'); });
+      }
+
+      function applyFilter() {
+        rows.forEach(function (tr) { tr.classList.toggle('filtered-out', !matches(tr)); });
+        var shown = shownRows();
+        var active = filterActive();
+        filterCount.textContent = active ? 'показано строк: ' + shown.length + ' из ' + rows.length : '';
+        bulkRows.value = active
+          ? JSON.stringify(shown.map(function (tr) { return Number(tr.dataset.index); }))
+          : '';
+        bulkButtons.forEach(function (button) {
+          button.textContent = active ? 'Применить к показанным (' + shown.length + ')' : 'Применить ко всем';
+        });
+        try {
+          sessionStorage.setItem(storageKey, JSON.stringify({rows: rowFilter.value, column: columnFilter.value}));
+        } catch (e) {}
+        currentProblem = null;
+        syncTopScroll();
+      }
+
+      function goToProblem(step) {
+        var problems = shownRows().filter(isProblem);
+        if (!problems.length) return;
+        var pos = problems.indexOf(currentProblem);
+        pos = pos === -1 ? (step > 0 ? 0 : problems.length - 1) : (pos + step + problems.length) % problems.length;
+        if (currentProblem) currentProblem.classList.remove('row-current');
+        currentProblem = problems[pos];
+        currentProblem.classList.add('row-current');
+
+        var wrapRect = wrap.getBoundingClientRect();
+        if (wrapRect.top < 0 || wrapRect.top > window.innerHeight / 2) wrap.scrollIntoView({block: 'start'});
+        var headHeight = wrap.querySelector('thead').getBoundingClientRect().height;
+        wrap.scrollTop += currentProblem.getBoundingClientRect().top - wrap.getBoundingClientRect().top - headHeight;
+
+        var selector = columnFilter.value ? 'td[data-field="' + columnFilter.value + '"]' : 'td.cell-error, td.cell-new-reference, td.cell-warning';
+        var cell = currentProblem.querySelector(selector) || currentProblem.querySelector('.match-choice-select');
+        if (cell) {
+          var stickyWidth = currentProblem.querySelector('.sticky-col').getBoundingClientRect().width;
+          wrap.scrollLeft += cell.getBoundingClientRect().left - wrap.getBoundingClientRect().left - stickyWidth - 20;
+          var input = cell.matches('input, select, textarea') ? cell : cell.querySelector('input, select, textarea');
+          if (input) input.focus({preventScroll: true});
+        }
+        filterCount.textContent = (filterActive() ? 'показано строк: ' + shownRows().length + ' из ' + rows.length + '; ' : '')
+          + 'проблема ' + (pos + 1) + ' из ' + problems.length;
+      }
+
+      function setExcluded(value) {
+        var shown = shownRows();
+        var verb = value ? 'Исключить' : 'Вернуть';
+        if (!shown.length || !window.confirm(verb + ' показанные строки (' + shown.length + ')?')) return;
+        shown.forEach(function (tr) {
+          var checkbox = tr.querySelector('input[name$="__excluded"]');
+          if (checkbox) checkbox.checked = value;
+        });
+        form.requestSubmit(form.querySelector('.default-submit'));
+      }
+
+      // Верхняя полоса прокрутки, синхронная с таблицей.
+      var topScroll = document.getElementById('top-scroll');
+      var topInner = topScroll.firstElementChild;
+      function syncTopScroll() {
+        topInner.style.width = wrap.scrollWidth + 'px';
+        topScroll.style.display = wrap.scrollWidth > wrap.clientWidth ? '' : 'none';
+        topScroll.scrollLeft = wrap.scrollLeft;
+      }
+      topScroll.addEventListener('scroll', function () {
+        if (wrap.scrollLeft !== topScroll.scrollLeft) wrap.scrollLeft = topScroll.scrollLeft;
+      });
+      wrap.addEventListener('scroll', function () {
+        if (topScroll.scrollLeft !== wrap.scrollLeft) topScroll.scrollLeft = wrap.scrollLeft;
+      });
+      window.addEventListener('resize', syncTopScroll);
+
+      try {
+        var saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+        if (saved) {
+          rowFilter.value = saved.rows || 'all';
+          columnFilter.value = saved.column || '';
+          if (rowFilter.selectedIndex === -1) rowFilter.value = 'all';
+          if (columnFilter.selectedIndex === -1) columnFilter.value = '';
+        }
+      } catch (e) {}
+
+      rowFilter.addEventListener('change', applyFilter);
+      columnFilter.addEventListener('change', applyFilter);
+      document.getElementById('next-problem').addEventListener('click', function () { goToProblem(1); });
+      document.getElementById('prev-problem').addEventListener('click', function () { goToProblem(-1); });
+      document.getElementById('exclude-shown').addEventListener('click', function () { setExcluded(true); });
+      document.getElementById('include-shown').addEventListener('click', function () { setExcluded(false); });
+      applyFilter();
+    })();
+  </script>
 
   <script>
     // Отправляем только изменённые ячейки одним полем row_changes: поле на
