@@ -420,7 +420,7 @@
             {% endfor %}
           </tr>
         </thead>
-        <tbody>
+        <tbody>{# spaceless: на паре тысяч строк одни отступы весили ~10 МБ #}{% spaceless %}
           {% for row in table_rows %}
             <tr class="{% if row.excluded %}row-excluded is-excluded{% else %}{% if row.has_errors %}row-error is-error{% elif row.needs_confirm %}row-confirm{% endif %}{% if row.needs_confirm %} is-confirm{% endif %}{% if row.has_warnings %} is-warning{% endif %}{% if row.has_new_reference %} is-newref{% endif %}{% endif %}" data-index="{{ row.index }}">
               <td class="sticky-col">{{ row.row_number }}</td>
@@ -501,7 +501,7 @@
               {% endfor %}
             </tr>
           {% endfor %}
-        </tbody>
+        {% endspaceless %}</tbody>
       </table>
     </div>
 
