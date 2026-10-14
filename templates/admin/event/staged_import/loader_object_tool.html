@@ -1,0 +1,3 @@
+{% if perms.event.add_contact %}
+  <li><a href="{% url 'admin:staged_import_contacts' %}">Загрузчик</a></li>
+{% endif %}

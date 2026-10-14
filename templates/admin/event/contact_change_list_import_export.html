@@ -9,6 +9,7 @@
       <a href="?presumed_duplicates=yes">Возможные дубли</a>
     {% endif %}
   </li>
+  {% include "admin/event/staged_import/loader_object_tool.html" %}
   {% include "admin/import_export/change_list_import_item.html" %}
   {% include "admin/import_export/change_list_export_item.html" %}
   {{ block.super }}

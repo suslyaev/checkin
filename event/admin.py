@@ -69,6 +69,15 @@ class CustomAdminSite(admin.AdminSite):
         from event.staged_import.views import staged_import_urls
         return staged_import_urls(self) + super().get_urls()
 
+    def each_context(self, request):
+        # Табличный интерфейс /table/ — ссылкой в шапке рядом с «Открыть сайт»,
+        # а не отдельным разделом меню из одного пункта.
+        context = super().each_context(request)
+        context['attendly_table_url'] = (
+            reverse('table:workspace_root') if getattr(settings, 'ATTENDLY_TABLE_ENABLED', True) else None
+        )
+        return context
+
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
 
@@ -108,42 +117,6 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
-        # 4. Табличный интерфейс /table/
-        table_group = None
-        if getattr(settings, 'ATTENDLY_TABLE_ENABLED', True):
-            table_group = {
-                'name': 'Таблицы',
-                'app_label': 'attendly_table',
-                'app_url': reverse('table:workspace_root'),
-                'has_module_perms': True,
-                'models': [{
-                    'name': 'Таблицы',
-                    'object_name': 'AttendlyTable',
-                    'admin_url': reverse('table:workspace_root'),
-                    'add_url': None,
-                    'view_only': True,
-                    'perms': {'view': True},
-                }],
-            }
-
-        # 5. Пошаговая загрузка
-        upload_group = None
-        if request.user.has_perm('event.add_contact'):
-            upload_group = {
-                'name': 'Загрузка',
-                'app_label': 'event_upload',
-                'app_url': reverse('admin:staged_import_contacts'),
-                'has_module_perms': True,
-                'models': [{
-                    'name': 'Люди',
-                    'object_name': 'StagedContactImport',
-                    'admin_url': reverse('admin:staged_import_contacts'),
-                    'add_url': None,
-                    'view_only': True,
-                    'perms': {'view': True},
-                }],
-            }
-
         # Распределяем модели по группам
         for app in app_list:
             if app["app_label"] == "event":
@@ -166,7 +139,7 @@ class CustomAdminSite(admin.AdminSite):
                         access_group['models'].append(model_dict[model_name])
 
         # Добавляем только непустые группы
-        for group in [events_group, reference_group, table_group, upload_group, access_group]:
+        for group in [events_group, reference_group, access_group]:
             if group and group.get('models'):
                 custom_apps.append(group)
 
@@ -1354,6 +1327,7 @@ class ModuleInstanceAdmin(GuestsTableMixin, BaseAdminPage, ExportActionModelAdmi
 # Действие
 @admin.register(Action)
 class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
+    import_export_change_list_template = 'admin/event/action_change_list_import_export.html'
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
     list_filter = (ModuleInstanceFilter, ContactFilter, ProducerActionFilter, 'action_type', 'event__date_start')
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']
