@@ -10,6 +10,7 @@ from event.resources import ContactImport, find_producer
 from .action_import import preview_registrations, register_actions
 from .contact_columns import REFERENCE_FIELD_MODELS, columns_for_session, social_groups_in_keys
 from .contact_validation import (
+    clean_junk_chars,
     load_reference_casing_maps,
     normalize_row_for_import,
     normalize_yo,
@@ -284,8 +285,9 @@ def ensure_reference_values_exist(confirmed_refs):
 
 
 def _combined_producer(row):
-    last = (row.get('producer_last_name') or '').strip()
-    first = (row.get('producer_first_name') or '').strip()
+    # Как при коммите (normalize_row_for_import) — без мусорных символов.
+    last = clean_junk_chars('producer_last_name', row.get('producer_last_name') or '').strip()
+    first = clean_junk_chars('producer_first_name', row.get('producer_first_name') or '').strip()
     return f'{last} {first}'.strip()
 
 

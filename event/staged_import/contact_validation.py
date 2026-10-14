@@ -18,11 +18,17 @@ NAME_SWAP_WARNING = 'Похоже, имя и фамилия перепутаны
 REFERENCE_CASING_NOTE = 'Приведено к уже существующему значению справочника: «{value}»'
 NO_ID_NO_COLUMN_ERROR = 'Обязательное поле (в файле нет этого столбца, а ID для сопоставления не указан)'
 
-# Кавычки (ники вроде «"TERRY"») допустимы; эти — почти всегда мусор в ФИО.
-FORBIDDEN_CHARS_PATTERN = re.compile(r'[<>{}|\\]')
-# Невидимые управляющие символы (из Excel/копипаста) удаляются молча во всех
-# полях; табуляция и переводы строк остаются — они бывают в комментарии.
+# Явный мусор: в ФИО-полях < > \ (кавычки, скобки, | — допустимы), во всех
+# полях — невидимые управляющие символы из Excel/копипаста (табуляция и
+# переводы строк остаются — они бывают в комментарии). Не ошибка: в таблице
+# значение показывается как есть с предупреждением, вычищается при загрузке
+# (clean_junk_chars в normalize_row_for_import) — если чистить сразу, после
+# загрузки файла страница перепроверит уже чистые строки и предупреждение
+# так и не покажется.
+NAME_JUNK_CHARS_PATTERN = re.compile(r'[<>\\]')
 CONTROL_CHARS_PATTERN = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+NAME_JUNK_WARNING = 'Символы < > \\ будут удалены при загрузке'
+CONTROL_CHARS_WARNING = 'Невидимые служебные символы — будут удалены при загрузке'
 MAX_FIELD_LENGTH = 300
 YO_PATTERN = re.compile('[ёЁ]')
 
@@ -130,9 +136,6 @@ def _apply_normalization(row, reference_casing_maps=None):
     очистка мусора в полях соцсетей, приведение регистра справочных полей
     к уже существующему значению. Возвращает (row, extra_notes)."""
     normalized = dict(row)
-    for field, value in normalized.items():
-        if isinstance(value, str) and CONTROL_CHARS_PATTERN.search(value):
-            normalized[field] = CONTROL_CHARS_PATTERN.sub('', value)
     for field in YO_NORMALIZE_FIELDS:
         if field in normalized:
             normalized[field] = normalize_yo(normalized[field])
@@ -229,7 +232,7 @@ def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, exist
         # опознаётся по ID (тогда ФИО подставится из карточки при коммите).
         col_present = present_columns is None or field in present_columns
         if col_present:
-            if not value.strip():
+            if not clean_junk_chars(field, value).strip():
                 errors.append('Обязательное поле')
         elif not row_has_id:
             errors.append(NO_ID_NO_COLUMN_ERROR)
@@ -245,8 +248,10 @@ def _cell_issues(field, raw_value, present_columns=None, row_has_id=False, exist
     if value.strip() and len(value) > MAX_FIELD_LENGTH:
         errors.append(f'Длина больше {MAX_FIELD_LENGTH} символов')
 
-    if field in NAME_FIELDS and value.strip() and FORBIDDEN_CHARS_PATTERN.search(value):
-        errors.append('Недопустимые символы (< > { } | \\)')
+    if field in YO_NORMALIZE_FIELDS and NAME_JUNK_CHARS_PATTERN.search(value):
+        warnings.append(NAME_JUNK_WARNING)
+    if CONTROL_CHARS_PATTERN.search(value):
+        warnings.append(CONTROL_CHARS_WARNING)
 
     if _is_subscribers_field(field) and value.strip():
         try:
@@ -353,6 +358,14 @@ def validate_contact_rows(rows, present_columns=None):
     return validated, summary
 
 
+def clean_junk_chars(field, value):
+    """Удаляет явный мусор (см. NAME_JUNK_CHARS_PATTERN/CONTROL_CHARS_PATTERN)."""
+    value = CONTROL_CHARS_PATTERN.sub('', value)
+    if field in YO_NORMALIZE_FIELDS:
+        value = NAME_JUNK_CHARS_PATTERN.sub('', value)
+    return value
+
+
 def normalize_row_for_import(row):
     """Подготовка строки к ContactImport (trim строк). Включает столько групп
     соцсетей, сколько реально есть в самой строке — без фиксированного числа."""
@@ -364,7 +377,7 @@ def normalize_row_for_import(row):
             value = ''
         if not isinstance(value, str):
             value = str(value)
-        normalized[col] = value.strip()
+        normalized[col] = clean_junk_chars(col, value).strip()
     if not normalized['middle_name']:
         normalized['middle_name'] = ''
     return normalized
