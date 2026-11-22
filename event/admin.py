@@ -138,6 +138,14 @@ class CustomAdminSite(admin.AdminSite):
                     if model_name in model_dict:
                         access_group['models'].append(model_dict[model_name])
 
+        # Группы прав (django.contrib.auth) — пункт меню только для суперадмина
+        if request.user.is_superuser:
+            for app in app_list:
+                if app["app_label"] == "auth":
+                    access_group['models'].extend(
+                        model for model in app["models"] if model["object_name"] == "Group"
+                    )
+
         # Добавляем только непустые группы
         for group in [events_group, reference_group, access_group]:
             if group and group.get('models'):
