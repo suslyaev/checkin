@@ -180,12 +180,53 @@ def _prepare_table_rows(validated_rows, new_reference_values, present_columns):
             'import_action_label': row.get('import_action_label', '—'),
             'import_action_url': row.get('import_action_url'),
             'needs_confirm': row.get('import_action') == 'confirm',
+            'auto_matched': row.get('auto_matched', False),
+            'import_action_pk': row.get('import_action_pk'),
             'match_choice': row.get('match_choice', ''),
             'match_candidates': row.get('match_candidates', []),
             'registration_preview': row.get('_registration_preview'),
             'cells': cells,
         })
     return table_rows
+
+
+ROW_FILTERS = [
+    ('all', 'все строки'),
+    ('problems', 'требуют внимания (ошибки, подтверждение, новые значения)'),
+    ('errors', 'с ошибками'),
+    ('confirm', 'требуют выбора действия'),
+    ('auto', 'найдены по ФИО без отчества — проверить'),
+    ('newref', 'с новыми значениями справочников'),
+    ('warnings', 'с предупреждениями'),
+    ('excluded', 'исключённые'),
+]
+
+
+def _row_filter_options(table_rows):
+    """Варианты фильтра «Показать» со счётчиками; пустые не показываем, чтобы
+    не гонять фильтр по тысячам строк ради нуля результатов. Условия те же,
+    что у классов is-* строки в contact_review.html."""
+    counts = dict.fromkeys((value for value, _label in ROW_FILTERS), 0)
+    for row in table_rows:
+        counts['all'] += 1
+        if row['excluded']:
+            counts['excluded'] += 1
+            continue
+        flags = {
+            'errors': row['has_errors'],
+            'confirm': row['needs_confirm'],
+            'auto': row['auto_matched'],
+            'newref': row['has_new_reference'],
+            'warnings': row['has_warnings'],
+        }
+        for key, flag in flags.items():
+            counts[key] += bool(flag)
+        counts['problems'] += bool(flags['errors'] or flags['confirm'] or flags['newref'])
+    return [
+        {'value': value, 'label': label, 'count': counts[value]}
+        for value, label in ROW_FILTERS
+        if value == 'all' or counts[value]
+    ]
 
 
 def _issue_columns(table_rows, labels):
@@ -233,6 +274,7 @@ def _full_preview(rows, request, present_columns):
     summary['create_count'] = action_summary['create']
     summary['update_count'] = action_summary['update']
     summary['confirm_count'] = action_summary['confirm']
+    summary['auto_matched_count'] = action_summary['auto_matched']
 
     new_reference_values = collect_new_reference_values(validated)
     confirmed_refs = _confirmed_refs_from_session(request)
@@ -339,7 +381,7 @@ BULK_SCOPES = [
     (BULK_SCOPE_ALL, 'во всех строках'),
 ]
 BULK_MATCH_NEW = 'new'
-BULK_MATCH_SINGLE = 'single'
+BULK_MATCH_NEW_INCLUDING_AUTO = 'new_all'
 # ID массово не проставляется — он у каждой строки свой.
 BULK_EXCLUDED_FIELDS = {'id'}
 
@@ -404,11 +446,12 @@ def _apply_bulk_fill(request, rows, present_columns):
 
 
 def _apply_bulk_match(request, rows, present_columns):
-    """Проставляет «Действие» всем строкам «Требует подтверждения», где оно
-    ещё не выбрано: создать нового, либо обновить карточку, если кандидат
-    ровно один. Возвращает (число изменённых строк, ошибка или None)."""
+    """Проставляет «Создать нового» строкам, где действие не выбрано вручную:
+    «Требует подтверждения» (несколько кандидатов), а в режиме new_all — ещё и
+    строкам, сопоставленным по ФИО автоматически (единственный кандидат).
+    Возвращает (число изменённых строк, ошибка или None)."""
     mode = request.POST.get('bulk_match_mode', '')
-    if mode not in (BULK_MATCH_NEW, BULK_MATCH_SINGLE):
+    if mode not in (BULK_MATCH_NEW, BULK_MATCH_NEW_INCLUDING_AUTO):
         return 0, 'Выберите действие для массового применения.'
 
     validated, _summary = validate_contact_rows(rows, present_columns=present_columns)
@@ -418,15 +461,14 @@ def _apply_bulk_match(request, rows, present_columns):
     for index, (row, preview) in enumerate(zip(rows, validated)):
         if only_rows is not None and index not in only_rows:
             continue
-        if preview.get('import_action') != 'confirm' or (row.get('match_choice') or '').strip():
+        if (row.get('match_choice') or '').strip():
             continue
-        candidates = preview.get('match_candidates') or []
-        if mode == BULK_MATCH_NEW:
-            row['match_choice'] = MATCH_CHOICE_NEW
-        elif len(candidates) == 1:
-            row['match_choice'] = str(candidates[0]['pk'])
-        else:
+        is_target = preview.get('import_action') == 'confirm' or (
+            mode == BULK_MATCH_NEW_INCLUDING_AUTO and preview.get('auto_matched')
+        )
+        if not is_target:
             continue
+        row['match_choice'] = MATCH_CHOICE_NEW
         changed += 1
     return changed, None
 
@@ -503,7 +545,8 @@ def staged_contact_upload_view(request):
             messages.info(
                 request,
                 f'Загружено строк: {summary["total"]}. '
-                f'Создать: {summary["create_count"]}, обновить: {summary["update_count"]}, '
+                f'Создать: {summary["create_count"]}, обновить: {summary["update_count"]} '
+                f'(из них найдены по ФИО без отчества: {summary["auto_matched_count"]} — проверьте), '
                 f'требуют подтверждения: {summary["confirm_count"]}. '
                 f'Ошибок: {summary["error_rows"]}, предупреждений: {summary["warning_rows"]}. '
                 f'Будет зарегистрировано на мероприятия: {summary["will_register_count"]}.',
@@ -606,13 +649,14 @@ def staged_contact_review_view(request):
     session_labels = _session_labels(present_columns)
     table_rows = _prepare_table_rows(stored, extra['new_reference_values'], present_columns)
     context = {
+        'row_filter_options': _row_filter_options(table_rows),
         'issue_columns': _issue_columns(table_rows, session_labels),
         'bulk_columns': [
             {'field': col, 'label': session_labels[col]} for col in _bulk_fill_columns(present_columns)
         ],
         'bulk_scopes': BULK_SCOPES,
         'bulk_match_new': BULK_MATCH_NEW,
-        'bulk_match_single': BULK_MATCH_SINGLE,
+        'bulk_match_new_all': BULK_MATCH_NEW_INCLUDING_AUTO,
         'title': 'Проверка данных перед загрузкой',
         'table_rows': table_rows,
         'column_labels': [session_labels[col] for col in _session_columns(present_columns)],

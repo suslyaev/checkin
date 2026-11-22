@@ -33,8 +33,8 @@ def build_contact_match_index():
     exact_index: (фамилия, имя, отчество) -> pk — для строк с указанным отчеством (п.2.1).
     candidates_index: (фамилия, имя) -> [{'pk', 'label', 'url'}] — все контакты с такой
     фамилией и именем, независимо от отчества карточки — используется только когда
-    отчество во входной строке пустое (п.2.2), и никогда не приводит к автоматической
-    привязке без подтверждения пользователя.
+    отчество во входной строке пустое (п.2.2): единственный кандидат предлагается
+    сразу (выбор можно поменять), из нескольких пользователь выбирает сам.
     existing_pks: множество всех ID карточек — для сопоставления по колонке id (Фаза 3).
     """
     exact_index = {}
@@ -162,7 +162,6 @@ def resolve_contact_import_action(row, exact_index, candidates_index, existing_p
             'match_candidates': [],
         }
 
-    # Отчество не указано — никогда не привязываем автоматически (п.2.2).
     if not candidates:
         return {
             'action': 'create',
@@ -170,6 +169,22 @@ def resolve_contact_import_action(row, exact_index, candidates_index, existing_p
             'contact_pk': None,
             'contact_url': None,
             'match_candidates': [],
+        }
+
+    # Отчество не указано, а карточка с такими фамилией и именем ровно одна —
+    # предлагаем обновить её сразу (выбор в списке можно поменять), чтобы не
+    # открывать список на каждой из тысяч строк. Строку отмечаем auto_matched:
+    # её видно отдельным фильтром и счётчиком, чтобы проверить. Если кандидатов
+    # несколько, угадать нельзя — строка ждёт выбора, как раньше.
+    if len(candidates) == 1:
+        pk = candidates[0]['pk']
+        return {
+            'action': 'update',
+            'label': f'Обновить (#{pk}, найден по ФИО)',
+            'contact_pk': pk,
+            'contact_url': candidates[0]['url'],
+            'match_candidates': candidates,
+            'auto_matched': True,
         }
 
     return {
@@ -218,7 +233,7 @@ def _fetch_current_values(pks):
 
 def annotate_import_actions(rows):
     exact_index, candidates_index, existing_pks = build_contact_match_index()
-    counts = {'create': 0, 'update': 0, 'confirm': 0}
+    counts = {'create': 0, 'update': 0, 'confirm': 0, 'auto_matched': 0}
 
     for row in rows:
         preview = resolve_contact_import_action(row, exact_index, candidates_index, existing_pks)
@@ -227,11 +242,14 @@ def annotate_import_actions(rows):
         row['import_action_pk'] = preview['contact_pk']
         row['import_action_url'] = preview['contact_url']
         row['match_candidates'] = preview['match_candidates']
+        row['auto_matched'] = preview.get('auto_matched', False)
 
         if row.get('excluded') or row.get('has_errors'):
             continue
         if preview['action'] in counts:
             counts[preview['action']] += 1
+        if row['auto_matched']:
+            counts['auto_matched'] += 1
 
     update_pks = {row['import_action_pk'] for row in rows if row.get('import_action') == 'update' and row.get('import_action_pk')}
     current_values_by_pk = _fetch_current_values(update_pks)
