@@ -9,6 +9,13 @@
     <div class="zt-grid-wrap">
       <div id="status-bar" class="zt-status-bar"></div>
       <div id="attendly-table"></div>
+      {# Видно сразу при открытии страницы; скрывает workspace.js после загрузки данных. #}
+      <div id="zt-loading" class="zt-loading is-visible" role="status" aria-live="polite">
+        <div class="zt-loading-box">
+          <div class="zt-spinner"></div>
+          <span id="zt-loading-text">Загружаем «{{ active_tab.label }}»…</span>
+        </div>
+      </div>
     </div>
     <aside class="zt-drawer" id="zt-side-drawer" hidden>
       <div id="zt-panel-columns" class="zt-drawer-panel" hidden>
@@ -91,7 +98,7 @@
   <footer class="zt-footer">
     <nav class="zt-tabs" aria-label="Таблицы">
       {% for tab in tabs %}
-        <a href="{% url 'table:workspace' tab.id %}"
+        <a href="{% url 'table:workspace' tab.id %}" data-tab-label="{{ tab.label }}"
            class="zt-tab{% if tab.id == active_tab.id %} is-active{% endif %}">
           {{ tab.label }}
         </a>

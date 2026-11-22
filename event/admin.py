@@ -10,6 +10,8 @@ from .models import (
     CompanyContact,
     CategoryContact,
     TypeGuestContact,
+    KnownFirstName,
+    KnownLastName,
     SocialNetwork,
     InfoContact,
     Contact,
@@ -38,6 +40,7 @@ from .contact_duplicates import (
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from import_export.admin import ExportActionModelAdmin, ExportActionMixin, ImportExportModelAdmin, ImportExportActionModelAdmin
+from import_export.forms import ExportForm
 from .resources import ContactImport, EventExport
 from admin_auto_filters.filters import AutocompleteFilter, AutocompleteFilterFactory
 from django.db.models import Count, Exists, OuterRef, Q
@@ -65,6 +68,15 @@ class CustomAdminSite(admin.AdminSite):
     def get_urls(self):
         from event.staged_import.views import staged_import_urls
         return staged_import_urls(self) + super().get_urls()
+
+    def each_context(self, request):
+        # Табличный интерфейс /table/ — ссылкой в шапке рядом с «Открыть сайт»,
+        # а не отдельным разделом меню из одного пункта.
+        context = super().each_context(request)
+        context['attendly_table_url'] = (
+            reverse('table:workspace_root') if getattr(settings, 'ATTENDLY_TABLE_ENABLED', True) else None
+        )
+        return context
 
     def index(self, request, extra_context=None):
         return redirect(reverse("admin:event_moduleinstance_changelist"))
@@ -105,43 +117,6 @@ class CustomAdminSite(admin.AdminSite):
             'models': []
         }
 
-        # 4. Табличный интерфейс /table/
-        table_group = None
-        if getattr(settings, 'ATTENDLY_TABLE_ENABLED', True):
-            table_group = {
-                'name': 'Таблицы',
-                'app_label': 'attendly_table',
-                'app_url': reverse('table:workspace_root'),
-                'has_module_perms': True,
-                'models': [{
-                    'name': 'Таблицы',
-                    'object_name': 'AttendlyTable',
-                    'admin_url': reverse('table:workspace_root'),
-                    'add_url': None,
-                    'view_only': True,
-                    'perms': {'view': True},
-                }],
-            }
-
-        # 5. Пошаговая загрузка (временно скрыто в меню)
-        STAGED_IMPORT_MENU_ENABLED = False
-        upload_group = None
-        if STAGED_IMPORT_MENU_ENABLED and request.user.has_perm('event.add_contact'):
-            upload_group = {
-                'name': 'Загрузка',
-                'app_label': 'event_upload',
-                'app_url': reverse('admin:staged_import_contacts'),
-                'has_module_perms': True,
-                'models': [{
-                    'name': 'Люди',
-                    'object_name': 'StagedContactImport',
-                    'admin_url': reverse('admin:staged_import_contacts'),
-                    'add_url': None,
-                    'view_only': True,
-                    'perms': {'view': True},
-                }],
-            }
-
         # Распределяем модели по группам
         for app in app_list:
             if app["app_label"] == "event":
@@ -154,7 +129,7 @@ class CustomAdminSite(admin.AdminSite):
                         events_group['models'].append(model_dict[model_name])
 
                 # Справочники
-                for model_name in ['CompanyContact', 'CategoryContact', 'TypeGuestContact', 'SocialNetwork']:
+                for model_name in ['CompanyContact', 'CategoryContact', 'TypeGuestContact', 'SocialNetwork', 'KnownFirstName', 'KnownLastName']:
                     if model_name in model_dict:
                         reference_group['models'].append(model_dict[model_name])
 
@@ -163,8 +138,16 @@ class CustomAdminSite(admin.AdminSite):
                     if model_name in model_dict:
                         access_group['models'].append(model_dict[model_name])
 
+        # Группы прав (django.contrib.auth) — пункт меню только для суперадмина
+        if request.user.is_superuser:
+            for app in app_list:
+                if app["app_label"] == "auth":
+                    access_group['models'].extend(
+                        model for model in app["models"] if model["object_name"] == "Group"
+                    )
+
         # Добавляем только непустые группы
-        for group in [events_group, reference_group, table_group, upload_group, access_group]:
+        for group in [events_group, reference_group, access_group]:
             if group and group.get('models'):
                 custom_apps.append(group)
 
@@ -449,6 +432,13 @@ class CommunityMemberForContactInline(admin.TabularInline):
 # Человек
 @admin.register(Contact)
 class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
+    # Обычная форма экспорта (только выбор формата файла) вместо дефолтной
+    # SelectableFieldsExportForm — та строит чекбоксы полей ДО экспорта, по
+    # статически объявленным на ContactExport полям, а колонки соцсетей у
+    # него динамические (см. ContactExport.before_export) и на момент показа
+    # формы ещё не существуют. С чекбоксами их результат тихо отфильтровывался
+    # бы из выгрузки, даже если галочка "экспортировать всё" отмечена.
+    export_form_class = ExportForm
     change_list_template = 'admin/event/contact_change_list.html'
     import_export_change_list_template = 'admin/event/contact_change_list_import_export.html'
     actions = ['merge_duplicates_action', 'delete_selected']
@@ -570,7 +560,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                     format_html(
                         'Показаны <strong>предположительные дубли</strong> для '
                         '<a href="{}">{}</a> ({} {}). '
-                        'Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
+                        'Совпадения: фамилия+имя, никнейм, контакт в соцсетях. '
                         'Отметьте нужные строки → «Объединить дубли». '
                         '<a href="{}">Показать весь справочник</a>.',
                         change_url,
@@ -594,7 +584,7 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
                 request,
                 format_html(
                     'Показаны все карточки с <strong>возможными дублями</strong> '
-                    '({} {}). Совпадения: фамилия+имя, имя+отчество, никнейм, контакт в соцсетях. '
+                    '({} {}). Совпадения: фамилия+имя, никнейм, контакт в соцсетях. '
                     'Отметьте нужные строки → «Объединить дубли». '
                     '<a href="{}">Показать весь справочник</a>.',
                     count,
@@ -796,6 +786,25 @@ class ContactAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionMode
     checkin_events_list.short_description = "Посещено"
 
 
+class MatchReasonConflictFilter(admin.SimpleListFilter):
+    """Фильтр списка пар-дублей по причине совпадения."""
+    title = 'Причина совпадения'
+    parameter_name = 'match_reason'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('фамилия и имя', 'Фамилия и имя'),
+            ('никнейм', 'Никнейм'),
+            ('контакт в соцсетях', 'Контакт в соцсетях'),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        return queryset.filter(match_reason__icontains=value)
+
+
 # Возможные дубли (worklist пар, найденных пересчётом)
 @admin.register(ContactDuplicateConflict)
 class ContactDuplicateConflictAdmin(BaseAdminPage):
@@ -803,7 +812,7 @@ class ContactDuplicateConflictAdmin(BaseAdminPage):
     list_display = ('contact_a_link', 'contact_b_link', 'match_reason', 'status', 'merge_link', 'update_date')
     list_display_links = ('contact_a_link', 'contact_b_link')
     list_editable = ('status',)
-    list_filter = ('status',)
+    list_filter = ('status', MatchReasonConflictFilter)
     ordering = ['-create_date']
 
     def get_queryset(self, request):
@@ -1000,6 +1009,22 @@ class TypeGuestContactAdmin(BaseAdminPage):
 
     class Media:
         js = ('js/admin.js',) # Костыль для замены УДАЛЕНО на УДАЛИТЬ
+
+# Известное имя (для проверки при загрузке "имя/фамилия не перепутаны")
+@admin.register(KnownFirstName)
+class KnownFirstNameAdmin(BaseAdminPage):
+    list_display = ('id', 'name', 'comment')
+    list_editable = ('name', 'comment')
+    search_fields = ['name']
+    ordering = ['name']
+
+# Известная фамилия (для проверки при загрузке "имя/фамилия не перепутаны")
+@admin.register(KnownLastName)
+class KnownLastNameAdmin(BaseAdminPage):
+    list_display = ('id', 'name', 'comment')
+    list_editable = ('name', 'comment')
+    search_fields = ['name']
+    ordering = ['name']
 
 # Событие
 @admin.register(ModuleInstance)
@@ -1310,6 +1335,7 @@ class ModuleInstanceAdmin(GuestsTableMixin, BaseAdminPage, ExportActionModelAdmi
 # Действие
 @admin.register(Action)
 class ActionAdmin(BaseAdminPage, ImportExportModelAdmin, ImportExportActionModelAdmin):
+    import_export_change_list_template = 'admin/event/action_change_list_import_export.html'
     list_display = ('contact', 'photo_contact', 'event', 'update_date', 'get_buttons_action')
     list_filter = (ModuleInstanceFilter, ContactFilter, ProducerActionFilter, 'action_type', 'event__date_start')
     search_fields = ['contact__last_name', 'contact__first_name', 'contact__middle_name']

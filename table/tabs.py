@@ -2,10 +2,10 @@
 
 TABS = [
     {
-        'id': 'actions',
-        'label': 'Действия',
-        'permission': 'event.view_action',
-        'dataset': 'actions',
+        'id': 'events',
+        'label': 'Мероприятия',
+        'permission': 'event.view_moduleinstance',
+        'dataset': 'events',
     },
     {
         'id': 'contacts',
@@ -14,10 +14,10 @@ TABS = [
         'dataset': 'contacts',
     },
     {
-        'id': 'events',
-        'label': 'Мероприятия',
-        'permission': 'event.view_moduleinstance',
-        'dataset': 'events',
+        'id': 'actions',
+        'label': 'Действия',
+        'permission': 'event.view_action',
+        'dataset': 'actions',
     },
     {
         'id': 'companies',
@@ -39,7 +39,9 @@ TABS = [
     },
 ]
 
-DEFAULT_TAB = 'actions'
+# Самая маленькая таблица — открывается быстро; «Действия» на тысячи строк
+# грузятся заметно дольше и открываются только по клику.
+DEFAULT_TAB = 'events'
 
 
 def get_visible_tabs(user):

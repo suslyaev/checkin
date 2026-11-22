@@ -1,9 +1,12 @@
+import copy
+
 from import_export import resources, fields
 from django.db import transaction
-from import_export.widgets import ForeignKeyWidget
-from django.db.models import Q
+from import_export.widgets import CharWidget, ForeignKeyWidget
+from django.db.models import Count, Max, Q
 
 from .models import Contact, InfoContact, SocialNetwork, ModuleInstance, CompanyContact, CategoryContact, TypeGuestContact, Action, CustomUser, CommunityMember
+from .staged_import.contact_columns import social_field_label, social_groups_in_keys
 
 
 class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
@@ -15,77 +18,104 @@ class ForeignKeyGetOrCreateWidget(ForeignKeyWidget):
         except self.model.DoesNotExist:
             return self.model.objects.create(**{self.field: value})
 
+def find_producer(value):
+    """Ищет CustomUser по значению поля "Продюсер" (Фамилия[, Имя]).
+
+    Общая логика для ProducerWidget (реальное сохранение при импорте) и
+    для staged-загрузчика (event/staged_import/contact_import.py), которому
+    нужно то же самое сопоставление только для отчёта "продюсеры не найдены",
+    без побочных эффектов.
+    """
+    if not value:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+
+    parts = value.split()
+
+    # Если в поле указана одна часть - считаем, что это фамилия (старое поведение)
+    if len(parts) == 1:
+        last_name = parts[0]
+        try:
+            producer = CustomUser.objects.get(last_name=last_name)
+            print(f"Найден продюсер по фамилии: {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров с фамилией '{last_name}', пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            print(f"Продюсер не найден по фамилии: {last_name}")
+            return None
+
+    # Если частей две и больше - пробуем интерпретировать как Фамилия Имя и Имя Фамилия
+    if len(parts) >= 2:
+        p1, p2 = parts[0], parts[1]
+
+        # 1) Пытаемся найти как Фамилия Имя
+        try:
+            producer = CustomUser.objects.get(last_name=p1, first_name=p2)
+            print(f"Найден продюсер по ФИО (Фамилия Имя): {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Фамилия Имя), пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            pass
+
+        # 2) Пытаемся найти как Имя Фамилия
+        try:
+            producer = CustomUser.objects.get(last_name=p2, first_name=p1)
+            print(f"Найден продюсер по ФИО (Имя Фамилия): {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Имя Фамилия), пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            pass
+
+        # 3) Фоллбек: пробуем как раньше, только по фамилии (первая часть)
+        try:
+            producer = CustomUser.objects.get(last_name=p1)
+            print(f"Найден продюсер по фамилии (фоллбек): {producer.last_name} {producer.first_name}")
+            return producer
+        except CustomUser.MultipleObjectsReturned:
+            print(f"Найдено несколько продюсеров с фамилией '{p1}' (фоллбек), пропускаю")
+            return None
+        except CustomUser.DoesNotExist:
+            print(f"Продюсер не найден ни по ФИО, ни по фамилии: '{value}'")
+            return None
+
+    # На всякий случай, если формат совсем неожиданный
+    print(f"Неверный формат значения продюсера: '{value}'")
+    return None
+
+
 class ProducerWidget(ForeignKeyWidget):
     def clean(self, value, row=None, *args, **kwargs):
-        if not value:
-            return None
-        # Очищаем значение
-        value = str(value).strip()
-        if not value:
-            return None
-
-        parts = value.split()
-
-        # Если в поле указана одна часть - считаем, что это фамилия (старое поведение)
-        if len(parts) == 1:
-            last_name = parts[0]
-            try:
-                producer = CustomUser.objects.get(last_name=last_name)
-                print(f"Найден продюсер по фамилии: {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров с фамилией '{last_name}', пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                print(f"Продюсер не найден по фамилии: {last_name}")
-                return None
-
-        # Если частей две и больше - пробуем интерпретировать как Фамилия Имя и Имя Фамилия
-        if len(parts) >= 2:
-            p1, p2 = parts[0], parts[1]
-
-            # 1) Пытаемся найти как Фамилия Имя
-            try:
-                producer = CustomUser.objects.get(last_name=p1, first_name=p2)
-                print(f"Найден продюсер по ФИО (Фамилия Имя): {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Фамилия Имя), пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                pass
-
-            # 2) Пытаемся найти как Имя Фамилия
-            try:
-                producer = CustomUser.objects.get(last_name=p2, first_name=p1)
-                print(f"Найден продюсер по ФИО (Имя Фамилия): {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров по ФИО '{p1} {p2}' (Имя Фамилия), пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                pass
-
-            # 3) Фоллбек: пробуем как раньше, только по фамилии (первая часть)
-            try:
-                producer = CustomUser.objects.get(last_name=p1)
-                print(f"Найден продюсер по фамилии (фоллбек): {producer.last_name} {producer.first_name}")
-                return producer
-            except CustomUser.MultipleObjectsReturned:
-                print(f"Найдено несколько продюсеров с фамилией '{p1}' (фоллбек), пропускаю")
-                return None
-            except CustomUser.DoesNotExist:
-                print(f"Продюсер не найден ни по ФИО, ни по фамилии: '{value}'")
-                return None
-
-        # На всякий случай, если формат совсем неожиданный
-        print(f"Неверный формат значения продюсера: '{value}'")
-        return None
+        return find_producer(value)
 
 class ContactImport(resources.ModelResource):
     social_network_name = fields.Field(column_name='social_network_name')
     social_network_id = fields.Field(column_name='social_network_id')
     social_network_subscribers = fields.Field(column_name='social_network_subscribers')
+
+    # allow_blank=False: пустая строка -> None, а не '' (поля nullable). Иначе
+    # виджет по умолчанию всегда приводит None к '' даже у пустых карточек, и
+    # skip_unchanged считает "обновлено" при перезаливке файла без единой правки,
+    # потому что None (в базе) и '' (после виджета) не равны.
+    middle_name = fields.Field(
+        column_name='middle_name', attribute='middle_name',
+        widget=CharWidget(allow_blank=False),
+    )
+    nickname = fields.Field(
+        column_name='nickname', attribute='nickname',
+        widget=CharWidget(allow_blank=False),
+    )
+    comment = fields.Field(
+        column_name='comment', attribute='comment',
+        widget=CharWidget(allow_blank=False),
+    )
 
     company = fields.Field(
         column_name='company',
@@ -118,10 +148,19 @@ class ContactImport(resources.ModelResource):
         skip_unchanged = True
 
     def get_instance(self, instance_loader, row):
+        # Служебные поля от staged-загрузчика (event/staged_import/): там сопоставление
+        # с существующей карточкой уже решено пользователем (см. contact_import.py),
+        # поэтому здесь просто выполняем его решение, не угадывая заново по ФИО.
+        force_contact_id = row.get('_force_contact_id')
+        if force_contact_id:
+            return Contact.objects.filter(pk=force_contact_id).first()
+        if row.get('_force_new'):
+            return None
+
         last_name = row.get('last_name', '').strip()
         first_name = row.get('first_name', '').strip()
         middle_name = row.get('middle_name')
-        
+
         # Преобразуем middle_name в None если это пустая строка или None
         if not middle_name or middle_name == 'None' or middle_name.strip() == '':
             middle_name = None
@@ -151,37 +190,105 @@ class ContactImport(resources.ModelResource):
         for key, value in row.items():
             if isinstance(value, str):
                 row[key] = value.strip()
+
+        # Строка подтверждённо привязана к существующей карточке (см.
+        # event/staged_import/contact_import.py), но отчество в файле не указано —
+        # не затираем уже известное отчество карточки пустым значением.
+        force_contact_id = row.get('_force_contact_id')
+        if force_contact_id and not (row.get('middle_name') or '').strip():
+            existing_middle_name = Contact.objects.filter(
+                pk=force_contact_id
+            ).values_list('middle_name', flat=True).first()
+            if existing_middle_name:
+                row['middle_name'] = existing_middle_name
+
+        # Эти поля в модели nullable (middle_name/nickname/comment), в базе у
+        # незаполненных карточек там None. Если оставить '', skip_unchanged
+        # сравнивает None-в-базе с ''-из-файла как РАЗНЫЕ значения и репортит
+        # "обновлено" даже когда файл залит без единой правки, см. баг.
+        for key in ('middle_name', 'nickname', 'comment'):
+            if row.get(key) == '':
+                row[key] = None
+
         return row
 
+    def _resolve_saved_instance(self, row):
+        """Находит уже сохранённую (после save_instance) карточку по строке импорта.
+
+        В отличие от get_instance, не возвращает None для _force_new — строка row
+        обрабатывается уже после сохранения, поэтому карточка точно есть в базе.
+        """
+        force_contact_id = row.get('_force_contact_id')
+        if force_contact_id:
+            return Contact.objects.filter(pk=force_contact_id).first()
+
+        last_name = row.get('last_name', '').strip()
+        first_name = row.get('first_name', '').strip()
+        middle_name = row.get('middle_name')
+        if not middle_name or middle_name == 'None' or middle_name.strip() == '':
+            middle_name = None
+
+        if not last_name or not first_name:
+            return None
+
+        qs = Contact.objects.filter(last_name=last_name, first_name=first_name)
+        if middle_name:
+            qs = qs.filter(middle_name=middle_name)
+        else:
+            qs = qs.filter(Q(middle_name__isnull=True) | Q(middle_name=''))
+        return qs.order_by('-pk').first()
+
     def after_import_row(self, row, row_result, **kwargs):
-        # Обработка соцсетей после сохранения контакта
-        social_name = row.get('social_network_name')
-        social_id = row.get('social_network_id')
-        social_subscribers = row.get('social_network_subscribers')
-        
-        # Преобразуем подписчиков в число
-        if social_subscribers:
-            try:
-                social_subscribers = int(float(str(social_subscribers)))
-            except (ValueError, TypeError):
+        # Обработка соцсетей после сохранения контакта — сколько групп реально
+        # в строке (см. event/staged_import/contact_columns.py), столько и
+        # обрабатываем, без фиксированного числа.
+        instance = None
+        for i in sorted(social_groups_in_keys(row.keys())):
+            social_name = row.get(f'social_network_{i}_name')
+            social_id = row.get(f'social_network_{i}_id')
+            social_subscribers = row.get(f'social_network_{i}_subscribers')
+
+            if not (social_name and social_id):
+                continue
+
+            if social_subscribers:
+                try:
+                    social_subscribers = int(float(str(social_subscribers)))
+                except (ValueError, TypeError):
+                    social_subscribers = None
+            else:
                 social_subscribers = None
-        
-        if social_name and social_id:
-            instance = self.get_instance(None, row)
-            if instance:
-                social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
-                info_contact, created = InfoContact.objects.get_or_create(
-                    contact=instance,
-                    social_network=social_network,
-                    defaults={'external_id': social_id, 'subscribers': social_subscribers}
-                )
-                if not created:
-                    info_contact.external_id = social_id
-                    info_contact.subscribers = social_subscribers
-                    info_contact.save()
+
+            if instance is None:
+                instance = self._resolve_saved_instance(row)
+                if not instance:
+                    break
+
+            social_network, _ = SocialNetwork.objects.get_or_create(name=social_name)
+            info_contact, created = InfoContact.objects.get_or_create(
+                contact=instance,
+                social_network=social_network,
+                defaults={'external_id': social_id, 'subscribers': social_subscribers}
+            )
+            if not created:
+                info_contact.external_id = social_id
+                info_contact.subscribers = social_subscribers
+                info_contact.save()
         return row_result
 
 class ContactExport(resources.ModelResource):
+    """
+    Заголовки соцсетей ("Соцсеть N"/"Ссылка N"/"Подписчики N") намеренно
+    совпадают с тем, что понимает загрузчик (event/staged_import/) — можно
+    выгрузить, обрезать лишние столбцы и залить обратно тем же файлом.
+
+    Число групп соцсетей не фиксировано — перед конкретной выгрузкой
+    (before_export) считаем максимум соцсетей среди выгружаемых контактов и
+    ровно на столько групп динамически добавляем колонки. Из-за этого разные
+    выгрузки (весь список / один отфильтрованный контакт) могут иметь разное
+    число столбцов — это ожидаемо, таблице всё равно нужно одно и то же число
+    колонок в каждой строке одной конкретной выгрузки.
+    """
     id = fields.Field(attribute='id', column_name='ID')
     last_name = fields.Field(attribute='last_name', column_name='Фамилия')
     first_name = fields.Field(attribute='first_name', column_name='Имя')
@@ -193,39 +300,66 @@ class ContactExport(resources.ModelResource):
     producer__last_name = fields.Field(attribute='producer__last_name', column_name='Фамилия продюсера')
     producer__first_name = fields.Field(attribute='producer__first_name', column_name='Имя продюсера')
     comment = fields.Field(attribute='comment', column_name='Комментарий')
-    social_networks = fields.Field(attribute='social_networks', column_name='Соцсети')
 
     class Meta:
         model = Contact
         fields = ('id', 'last_name', 'first_name', 'middle_name',
                     'nickname', 'company__name', 'category__name', 'type_guest__name',
-                    'producer__last_name', 'producer__first_name', 'comment',
-                    'social_networks')
+                    'producer__last_name', 'producer__first_name', 'comment')
 
-    def dehydrate_social_networks(self, obj):
-        """
-        Формирует строку с соцсетями для выгрузки в формате:
-        VK (151627)
-        https://vk.com/...
+    def before_export(self, queryset, **kwargs):
+        if queryset is None:
+            queryset = self.get_queryset()
 
-        Instagram (105400)
-        https://www.instagram.com/...
+        max_groups = InfoContact.objects.filter(
+            contact__in=queryset, community__isnull=True
+        ).values('contact_id').annotate(n=Count('id')).aggregate(m=Max('n'))['m'] or 0
 
-        И т.д.
-        """
-        social_networks = InfoContact.objects.filter(contact=obj).select_related('social_network')
-        parts = []
-        for s in social_networks:
-            if s.social_network and s.subscribers:
-                title = f"{s.social_network.name} ({s.subscribers})"
-            elif s.social_network:
-                title = s.social_network.name
-            else:
-                title = '—'
-            link = s.external_id or ""
-            parts.append(f"{title}\n{link}")
-        return '\n\n'.join(parts)
-    
+        if max_groups:
+            # self.fields — per-instance копия (см. Resource.__init__), а вот
+            # self._meta — общий на весь класс объект, его нельзя мутировать
+            # напрямую (иначе одна выгрузка может повлиять на другую).
+            self._meta = copy.copy(self._meta)
+            new_field_names = []
+            for i in range(1, max_groups + 1):
+                for part in ('name', 'id', 'subscribers'):
+                    field_name = f'social_network_{i}_{part}'
+                    if field_name in self.fields:
+                        continue
+                    self.fields[field_name] = fields.Field(column_name=social_field_label(i, part))
+                    setattr(
+                        self, f'dehydrate_{field_name}',
+                        (lambda idx, p: lambda obj: self._dehydrate_social(obj, idx - 1, p))(i, part),
+                    )
+                    new_field_names.append(field_name)
+            if new_field_names:
+                self._meta.fields = tuple(self._meta.fields) + tuple(new_field_names)
+
+        super().before_export(queryset, **kwargs)
+
+    def _social_networks(self, obj):
+        """Все соцсети контакта (кэш на объекте — иначе запрос на каждую
+        карточку при выгрузке списка)."""
+        if not hasattr(obj, '_cached_social_networks'):
+            obj._cached_social_networks = list(
+                InfoContact.objects.filter(contact=obj).select_related('social_network').order_by('id')
+            )
+        return obj._cached_social_networks
+
+    def _dehydrate_social(self, obj, index, part):
+        socials = self._social_networks(obj)
+        if index >= len(socials):
+            return ''
+        info = socials[index]
+        if part == 'name':
+            return info.social_network.name if info.social_network else ''
+        if part == 'id':
+            return info.external_id or ''
+        if part == 'subscribers':
+            return info.subscribers if info.subscribers is not None else ''
+        return ''
+
+
 class EventExport(resources.ModelResource):
     name = fields.Field(attribute='name', column_name='Наименование')
     address = fields.Field(attribute='address', column_name='Адрес')
@@ -331,7 +465,10 @@ class ActionImport(resources.ModelResource):
             )
 
 class ActionExport(resources.ModelResource):
-    id = fields.Field(attribute='id', column_name='ID')
+    # ID самой записи регистрации никому не нужен — выгружаем ID карточки
+    # человека (тот же смысл, что и в ContactExport), чтобы обрезанную
+    # выгрузку действий тоже можно было надёжно сопоставить по ID при загрузке.
+    id = fields.Field(attribute='contact__id', column_name='ID')
     event__name = fields.Field(attribute='event__name', column_name='Наименование события')
     contact__last_name = fields.Field(attribute='contact__last_name', column_name='Фамилия')
     contact__first_name = fields.Field(attribute='contact__first_name', column_name='Имя')
@@ -358,7 +495,51 @@ class ActionExport(resources.ModelResource):
                   'contact__producer',
                   'action_type_display', 'create_date', 'update_date', 'create_user', 'update_user', 'social_networks',
                   'communities_ids', 'communities_names', 'communities_socials')
-        
+
+    def filter_export(self, queryset, **kwargs):
+        # Без select_related каждое поле контакта/продюсера/create_user/update_user
+        # тянуло свой SQL-запрос НА КАЖДУЮ строку (N+1) — на выгрузке в тысячи
+        # записей это и есть причина зависания страницы экспорта.
+        return queryset.select_related(
+            'contact', 'contact__company', 'contact__category', 'contact__type_guest',
+            'contact__producer', 'event', 'create_user', 'update_user',
+        )
+
+    def before_export(self, queryset, **kwargs):
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        contact_ids = list(queryset.values_list('contact_id', flat=True).distinct())
+
+        # Собственные соцсети контактов — одним запросом на всю выгрузку вместо
+        # одного запроса на каждую строку (dehydrate_social_networks).
+        self._own_socials_by_contact = {}
+        for info in InfoContact.objects.filter(
+            contact_id__in=contact_ids, community__isnull=True
+        ).select_related('social_network').order_by('contact_id', 'id'):
+            self._own_socials_by_contact.setdefault(info.contact_id, []).append(info)
+
+        # Членство в сообществах — тоже одним запросом (dehydrate_communities_ids/names).
+        self._communities_by_contact = {}
+        community_ids = set()
+        for member in CommunityMember.objects.filter(
+            contact_id__in=contact_ids
+        ).select_related('community').order_by('contact_id', 'id'):
+            self._communities_by_contact.setdefault(member.contact_id, []).append(member)
+            if member.community_id:
+                community_ids.add(member.community_id)
+
+        # Соцсети самих сообществ — одним запросом на все встретившиеся сообщества
+        # (dehydrate_communities_socials).
+        self._socials_by_community = {}
+        if community_ids:
+            for info in InfoContact.objects.filter(
+                community_id__in=community_ids, contact__isnull=True
+            ).select_related('social_network').order_by('community_id', 'id'):
+                self._socials_by_community.setdefault(info.community_id, []).append(info)
+
+        super().before_export(queryset, **kwargs)
+
     def dehydrate_contact__producer(self, obj):
         """Формирует список менеджеров в формате Фамилия Имя или телефон"""
         if obj.contact.producer:
@@ -391,7 +572,7 @@ class ActionExport(resources.ModelResource):
 
         И т.д.
         """
-        social_networks = InfoContact.objects.filter(contact=obj.contact, community__isnull=True)
+        social_networks = self._own_socials_by_contact.get(obj.contact_id, [])
         parts = []
         for s in social_networks:
             title = f"{s.social_network.name} ({s.subscribers})" if s.social_network and s.subscribers else (s.social_network.name if s.social_network else '—')
@@ -401,16 +582,12 @@ class ActionExport(resources.ModelResource):
 
     def dehydrate_communities_ids(self, obj):
         """ID сообществ, в которых состоит человек (через запятую)."""
-        if not obj.contact_id:
-            return ""
-        ids = CommunityMember.objects.filter(contact=obj.contact).values_list('community_id', flat=True)
-        return ", ".join(str(pk) for pk in ids)
+        members = self._communities_by_contact.get(obj.contact_id, [])
+        return ", ".join(str(m.community_id) for m in members if m.community_id)
 
     def dehydrate_communities_names(self, obj):
         """Названия сообществ, в которых состоит человек (через запятую)."""
-        if not obj.contact_id:
-            return ""
-        members = CommunityMember.objects.filter(contact=obj.contact).select_related('community')
+        members = self._communities_by_contact.get(obj.contact_id, [])
         return ", ".join(m.community.name for m in members if m.community)
 
     def dehydrate_communities_socials(self, obj):
@@ -418,23 +595,14 @@ class ActionExport(resources.ModelResource):
         Соцсети сообществ, в которых состоит человек.
         Формат: Соцсеть (подписчики) ссылка, каждый блок через перенос строки.
         """
-        if not obj.contact_id:
-            return ""
-        community_ids = list(
-            CommunityMember.objects.filter(contact=obj.contact).values_list('community_id', flat=True)
-        )
-        if not community_ids:
-            return ""
-        infos = InfoContact.objects.filter(
-            community_id__in=community_ids,
-            contact__isnull=True
-        ).select_related('social_network')
+        members = self._communities_by_contact.get(obj.contact_id, [])
         parts = []
-        for s in infos:
-            sn_name = s.social_network.name if s.social_network else "—"
-            subs = f" ({s.subscribers:,})" if s.subscribers is not None else ""
-            link = s.external_id or ""
-            parts.append(f"{sn_name}{subs} {link}".strip())
+        for member in members:
+            for s in self._socials_by_community.get(member.community_id, []):
+                sn_name = s.social_network.name if s.social_network else "—"
+                subs = f" ({s.subscribers:,})" if s.subscribers is not None else ""
+                link = s.external_id or ""
+                parts.append(f"{sn_name}{subs} {link}".strip())
         return "\n".join(parts)
     
     def dehydrate_action_type_display(self, obj):

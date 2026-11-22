@@ -1,5 +1,5 @@
 from django.urls import reverse
-from django.utils.html import format_html
+from django.utils.html import escape, format_html
 from django.utils.safestring import mark_safe
 from django.utils import timezone
 
@@ -61,7 +61,7 @@ def get_object_link(a, type):
     link = f"""
     <a href="{obj_url}" 
         onclick="window.open(this.href, 'popup', 'width=900,height=600'); return false;">
-        {obj_name}
+        {escape(obj_name)}
     </a>
     """
     # Добавляем дату после имени, например, в круглых скобках
